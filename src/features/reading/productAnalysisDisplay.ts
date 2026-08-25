@@ -71,15 +71,42 @@ export function displayDegenerativeFindingsStatus(status: string | null): string
   return "Estado de hallazgos degenerativos no reconocido.";
 }
 
+/** Stage 78: vocabulario real de revisión profesional — deliberadamente no clínico. */
 const REVIEW_STATUS_TEXT: Record<string, string> = {
   pending: "Pendiente de revisión.",
-  in_review: "En revisión.",
-  completed: "Revisión completada.",
+  accepted: "Aceptado por el profesional.",
+  observed: "Observado por el profesional.",
+  rejected: "Rechazado por el profesional.",
 };
 
 export function displayReviewStatus(review: { required: boolean; status: string }): string {
   if (!review.required) return "No requiere revisión profesional.";
   return REVIEW_STATUS_TEXT[review.status] ?? "Pendiente de revisión.";
+}
+
+/** Etiquetas de los tres botones de acción (stage 78-F) — mismo vocabulario que `REVIEW_STATUS_TEXT`. */
+export const REVIEW_ACTION_LABELS = {
+  accepted: "Aceptar",
+  observed: "Observar",
+  rejected: "Rechazar",
+} as const;
+
+export const REVIEW_REJECT_CONFIRMATION_TEXT = "¿Confirmás que querés rechazar este análisis?";
+
+/** `null` cuando no hay identidad autenticada disponible — nunca un nombre inventado (stage 78). */
+export function displayReviewedBy(reviewedBy: string | null): string | null {
+  return reviewedBy && reviewedBy.trim() ? reviewedBy : null;
+}
+
+export const CORRECTION_FIELD_LABELS: Record<"areaMm2" | "majorAxisMm" | "minorAxisMm", string> = {
+  areaMm2: "Área",
+  majorAxisMm: "Eje mayor",
+  minorAxisMm: "Eje menor",
+};
+
+/** El valor automático nunca se oculta — se muestra siempre junto al corregido (stage 78-G). */
+export function formatMeasurementFieldValue(field: "areaMm2" | "majorAxisMm" | "minorAxisMm", value: number | null): string {
+  return field === "areaMm2" ? formatAreaMm2(value) : formatLengthMm(value);
 }
 
 export const MORPHOMETRY_DISCLAIMER = "Mediciones automáticas sujetas a revisión profesional.";

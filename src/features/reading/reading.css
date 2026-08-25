@@ -2215,9 +2215,13 @@
     line-height: 1.45;
   }
 
-  /* ---- Análisis de producto Post-E50 (stage 77) ---- */
+  /* ---- Análisis de producto Post-E50 (stage 77/78) ---- */
   .rr-product-analysis { display: flex; flex-direction: column; gap: 10px; }
   .rr-product-analysis-body { display: flex; flex-direction: column; gap: 10px; }
+  .rr-product-analysis-measurement { border-top: 1px solid var(--line); padding-top: 6px; }
+  .rr-product-analysis-review { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .rr-product-analysis-review-form { display: flex; flex-direction: column; gap: 6px; }
+  .rr-product-analysis-review-form textarea { min-height: 60px; font: inherit; }
 
   /* ---- Marcado del receso subarticular ---- */
   .rr-roi {

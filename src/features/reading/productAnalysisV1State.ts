@@ -32,6 +32,14 @@ export type ProductAnalysisUiState = {
   history: ProductAnalysisResult[];
   selected?: ProductAnalysisResult;
   error?: ProductAnalysisError;
+  /**
+   * Stage 78: true while a review/correction PATCH/POST is in flight. Kept separate from
+   * `phase` so reviewing a persisted run never gets confused with re-analyzing the Study (77's
+   * "Analizar estudio" flow) — they are independent actions with independent double-submit
+   * guards (`canSubmit` vs `canMutate`).
+   */
+  mutating: boolean;
+  mutationError?: ProductAnalysisError;
 };
 
 export type ProductAnalysisAction =
@@ -44,10 +52,13 @@ export type ProductAnalysisAction =
   | { type: "detail_requested"; analysisId: string }
   | { type: "detail_loaded"; result: ProductAnalysisResult }
   | { type: "detail_failed"; error: ProductAnalysisError }
-  | { type: "select_from_history"; analysisId: string };
+  | { type: "select_from_history"; analysisId: string }
+  | { type: "mutation_requested" }
+  | { type: "mutation_succeeded"; result: ProductAnalysisResult }
+  | { type: "mutation_failed"; error: ProductAnalysisError };
 
 export function initialProductAnalysisUiState(): ProductAnalysisUiState {
-  return { phase: "idle", history: [] };
+  return { phase: "idle", history: [], mutating: false };
 }
 
 function isBackendApiErrorShaped(error: unknown): error is BackendApiError {
@@ -88,6 +99,11 @@ export function canRetry(state: ProductAnalysisUiState): boolean {
   return state.phase === "error";
 }
 
+/** Stage 78-U: double-submit guard for review/correction actions, independent of `canSubmit`. */
+export function canMutate(state: ProductAnalysisUiState): boolean {
+  return !state.mutating;
+}
+
 export function productAnalysisReducer(state: ProductAnalysisUiState, action: ProductAnalysisAction): ProductAnalysisUiState {
   switch (action.type) {
     case "history_requested":
@@ -125,6 +141,18 @@ export function productAnalysisReducer(state: ProductAnalysisUiState, action: Pr
       const found = state.history.find((item) => item.analysisRunId === action.analysisId);
       return found ? { ...state, selected: found } : state;
     }
+    case "mutation_requested":
+      return { ...state, mutating: true, mutationError: undefined };
+    case "mutation_succeeded":
+      return {
+        ...state,
+        mutating: false,
+        mutationError: undefined,
+        selected: action.result,
+        history: state.history.map((item) => (item.analysisRunId === action.result.analysisRunId ? action.result : item)),
+      };
+    case "mutation_failed":
+      return { ...state, mutating: false, mutationError: action.error };
     default:
       return state;
   }

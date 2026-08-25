@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useReducer } from "react";
-import { getProductAnalyses, getProductAnalysis, startProductAnalysis } from "../../productAnalysisV1Api";
-import type { ProductAnalysisStartRequest } from "../../contracts/productAnalysisV1Types";
 import {
+  correctProductAnalysisMeasurement,
+  getProductAnalyses,
+  getProductAnalysis,
+  reviewProductAnalysisDiscLevel,
+  reviewProductAnalysisRun,
+  startProductAnalysis,
+} from "../../productAnalysisV1Api";
+import type {
+  ProductAnalysisCorrectionRequest,
+  ProductAnalysisReviewRequest,
+  ProductAnalysisStartRequest,
+} from "../../contracts/productAnalysisV1Types";
+import {
+  canMutate,
   canRetry,
   canSubmit,
   classifyProductAnalysisError,
@@ -11,7 +23,8 @@ import {
 
 /**
  * Orquesta el análisis de producto Post-E50 para un Study (`caseId`): carga el historial al
- * entrar, permite lanzar un análisis nuevo, y permite abrir el detalle de uno persistido.
+ * entrar, permite lanzar un análisis nuevo, abrir el detalle de uno persistido, y (stage 78)
+ * revisar/corregir un análisis ya persistido.
  *
  * Nunca llama a FastAPI directamente — todo pasa por `productAnalysisV1Api.ts`, que sólo habla
  * con Spring Boot. El componente que use este hook sólo necesita conocer `caseId`.
@@ -66,13 +79,62 @@ export function useProductAnalysisV1(caseId: string) {
     void analyze();
   }, [analyze, state]);
 
+  /** Stage 78-B: acepta/observa/rechaza la corrida completa. 78-U: doble click no dispara dos revisiones. */
+  const reviewRun = useCallback(
+    async (analysisId: string, request: ProductAnalysisReviewRequest) => {
+      if (!canMutate(state)) return;
+      dispatch({ type: "mutation_requested" });
+      try {
+        const result = await reviewProductAnalysisRun(caseId, analysisId, request);
+        dispatch({ type: "mutation_succeeded", result });
+      } catch (error) {
+        dispatch({ type: "mutation_failed", error: classifyProductAnalysisError(error) });
+      }
+    },
+    [caseId, state],
+  );
+
+  /** Stage 78-C: acepta/observa/rechaza un nivel discal puntual. */
+  const reviewDiscLevel = useCallback(
+    async (analysisId: string, discLevelId: string, request: ProductAnalysisReviewRequest) => {
+      if (!canMutate(state)) return;
+      dispatch({ type: "mutation_requested" });
+      try {
+        const result = await reviewProductAnalysisDiscLevel(caseId, analysisId, discLevelId, request);
+        dispatch({ type: "mutation_succeeded", result });
+      } catch (error) {
+        dispatch({ type: "mutation_failed", error: classifyProductAnalysisError(error) });
+      }
+    },
+    [caseId, state],
+  );
+
+  /** Stage 78-D: agrega una corrección; el valor automático permanece visible junto al corregido. */
+  const correctMeasurement = useCallback(
+    async (analysisId: string, measurementId: string, request: ProductAnalysisCorrectionRequest) => {
+      if (!canMutate(state)) return;
+      dispatch({ type: "mutation_requested" });
+      try {
+        const result = await correctProductAnalysisMeasurement(caseId, analysisId, measurementId, request);
+        dispatch({ type: "mutation_succeeded", result });
+      } catch (error) {
+        dispatch({ type: "mutation_failed", error: classifyProductAnalysisError(error) });
+      }
+    },
+    [caseId, state],
+  );
+
   return {
     state,
     canSubmit: canSubmit(state),
     canRetry: canRetry(state),
+    canMutate: canMutate(state),
     analyze,
     openAnalysis,
     retry,
+    reviewRun,
+    reviewDiscLevel,
+    correctMeasurement,
     reloadHistory: loadHistory,
   };
 }

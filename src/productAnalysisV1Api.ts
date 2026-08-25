@@ -1,19 +1,22 @@
 import { multiplanarRequest } from "./multiplanarApi";
 import type {
+  ProductAnalysisCorrectionRequest,
   ProductAnalysisDiscLevel,
   ProductAnalysisHistory,
   ProductAnalysisMeasurement,
+  ProductAnalysisMeasurementCorrection,
   ProductAnalysisResult,
   ProductAnalysisReview,
+  ProductAnalysisReviewRequest,
   ProductAnalysisStartRequest,
   ProductAnalysisStatus,
 } from "./contracts/productAnalysisV1Types";
 
 /**
- * Cliente para `POST/GET /api/studies/{caseId}/product-analys(is|es)` (Backend Post-E50, etapas
- * 75/76). Nunca envía `sagittalInputId`/`axialInputId` — el Backend los resuelve internamente
- * desde el Study — y nunca llama a FastAPI directamente: siempre pasa por `multiplanarRequest`,
- * que habla exclusivamente con Spring Boot.
+ * Cliente para `POST/GET/PATCH /api/studies/{caseId}/product-analys(is|es)` (Backend Post-E50,
+ * etapas 75/76/78). Nunca envía `sagittalInputId`/`axialInputId` — el Backend los resuelve
+ * internamente desde el Study — y nunca llama a FastAPI directamente: siempre pasa por
+ * `multiplanarRequest`, que habla exclusivamente con Spring Boot.
  */
 
 export class ProductAnalysisV1ContractError extends Error {
@@ -49,6 +52,13 @@ function nullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function requiredNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new ProductAnalysisV1ContractError(`Contrato de análisis de producto inválido: ${field} no es un número válido.`);
+  }
+  return value;
+}
+
 function requiredBoolean(value: unknown, field: string): boolean {
   if (typeof value !== "boolean") {
     throw new ProductAnalysisV1ContractError(`Contrato de análisis de producto inválido: ${field} no es booleano.`);
@@ -63,10 +73,25 @@ function requiredStatus(value: unknown): ProductAnalysisStatus {
   throw new ProductAnalysisV1ContractError("Contrato de análisis de producto inválido: status desconocido.");
 }
 
+function parseCorrection(value: unknown): ProductAnalysisMeasurementCorrection {
+  const raw = asRecord(value);
+  if (!raw) throw new ProductAnalysisV1ContractError("Contrato de análisis de producto inválido: correction mal formada.");
+  return {
+    field: requiredText(raw.field, "corrections[].field") as ProductAnalysisMeasurementCorrection["field"],
+    originalValue: nullableNumber(raw.originalValue),
+    correctedValue: requiredNumber(raw.correctedValue, "corrections[].correctedValue"),
+    unit: requiredText(raw.unit, "corrections[].unit"),
+    comment: nullableText(raw.comment),
+    reviewedBy: nullableText(raw.reviewedBy),
+    createdAt: requiredText(raw.createdAt, "corrections[].createdAt"),
+  };
+}
+
 function parseMeasurement(value: unknown): ProductAnalysisMeasurement {
   const raw = asRecord(value);
   if (!raw) throw new ProductAnalysisV1ContractError("Contrato de análisis de producto inválido: measurement mal formado.");
   return {
+    measurementId: requiredText(raw.measurementId, "measurements[].measurementId"),
     plane: nullableText(raw.plane),
     level: nullableText(raw.level),
     structure: requiredText(raw.structure, "measurements[].structure"),
@@ -74,6 +99,19 @@ function parseMeasurement(value: unknown): ProductAnalysisMeasurement {
     majorAxisMm: nullableNumber(raw.majorAxisMm),
     minorAxisMm: nullableNumber(raw.minorAxisMm),
     reviewRequired: requiredBoolean(raw.reviewRequired, "measurements[].reviewRequired"),
+    corrections: asArray(raw.corrections).map(parseCorrection),
+  };
+}
+
+function parseReview(value: unknown): ProductAnalysisReview {
+  const raw = asRecord(value);
+  if (!raw) throw new ProductAnalysisV1ContractError("Contrato de análisis de producto inválido: falta review.");
+  return {
+    required: requiredBoolean(raw.required, "review.required"),
+    status: requiredText(raw.status, "review.status"),
+    comment: nullableText(raw.comment),
+    reviewedBy: nullableText(raw.reviewedBy),
+    reviewedAt: nullableText(raw.reviewedAt),
   };
 }
 
@@ -81,6 +119,7 @@ function parseDiscLevel(value: unknown): ProductAnalysisDiscLevel {
   const raw = asRecord(value);
   if (!raw) throw new ProductAnalysisV1ContractError("Contrato de análisis de producto inválido: discLevel mal formado.");
   return {
+    discLevelId: requiredText(raw.discLevelId, "discLevels[].discLevelId"),
     level: nullableText(raw.level),
     localizationStatus: nullableText(raw.localizationStatus),
     localizationValidated: requiredBoolean(raw.localizationValidated, "discLevels[].localizationValidated"),
@@ -92,15 +131,7 @@ function parseDiscLevel(value: unknown): ProductAnalysisDiscLevel {
     degenerativeFindingsStatus: nullableText(raw.degenerativeFindingsStatus),
     automaticInferenceEnabled: requiredBoolean(raw.automaticInferenceEnabled, "discLevels[].automaticInferenceEnabled"),
     measurements: asArray(raw.measurements).map(parseMeasurement),
-  };
-}
-
-function parseReview(value: unknown): ProductAnalysisReview {
-  const raw = asRecord(value);
-  if (!raw) throw new ProductAnalysisV1ContractError("Contrato de análisis de producto inválido: falta review.");
-  return {
-    required: requiredBoolean(raw.required, "review.required"),
-    status: requiredText(raw.status, "review.status"),
+    review: parseReview(raw.review),
   };
 }
 
@@ -157,6 +188,57 @@ export async function getProductAnalyses(caseId: string): Promise<ProductAnalysi
 export async function getProductAnalysis(caseId: string, analysisId: string): Promise<ProductAnalysisResult> {
   const raw = await multiplanarRequest<unknown>(
     `/api/studies/${encodeURIComponent(caseId)}/product-analyses/${encodeURIComponent(analysisId)}`,
+  );
+  return parseProductAnalysisResult(raw);
+}
+
+/** Nunca incluye reviewedBy — el Backend lo deriva del principal autenticado, nunca de este body. */
+export function buildReviewRequestBody(request: ProductAnalysisReviewRequest): Record<string, unknown> {
+  const body: Record<string, unknown> = { status: request.status };
+  if (request.comment) body.comment = request.comment;
+  return body;
+}
+
+/** Stage 78-B: acepta/observa/rechaza la corrida completa. */
+export async function reviewProductAnalysisRun(caseId: string, analysisId: string, request: ProductAnalysisReviewRequest): Promise<ProductAnalysisResult> {
+  const raw = await multiplanarRequest<unknown>(
+    `/api/studies/${encodeURIComponent(caseId)}/product-analyses/${encodeURIComponent(analysisId)}/review`,
+    { method: "PATCH", body: JSON.stringify(buildReviewRequestBody(request)) },
+  );
+  return parseProductAnalysisResult(raw);
+}
+
+/** Stage 78-C: acepta/observa/rechaza un nivel discal puntual, sin afectar la revisión de la corrida. */
+export async function reviewProductAnalysisDiscLevel(
+  caseId: string,
+  analysisId: string,
+  discLevelId: string,
+  request: ProductAnalysisReviewRequest,
+): Promise<ProductAnalysisResult> {
+  const raw = await multiplanarRequest<unknown>(
+    `/api/studies/${encodeURIComponent(caseId)}/product-analyses/${encodeURIComponent(analysisId)}/disc-levels/${encodeURIComponent(discLevelId)}/review`,
+    { method: "PATCH", body: JSON.stringify(buildReviewRequestBody(request)) },
+  );
+  return parseProductAnalysisResult(raw);
+}
+
+/** Nunca incluye `unit` — el Backend la deriva de `field`, nunca de este body. */
+export function buildCorrectionRequestBody(request: ProductAnalysisCorrectionRequest): Record<string, unknown> {
+  const body: Record<string, unknown> = { field: request.field, correctedValue: request.correctedValue };
+  if (request.comment) body.comment = request.comment;
+  return body;
+}
+
+/** Stage 78-D: agrega una corrección; el valor original de la IA nunca se sobrescribe. */
+export async function correctProductAnalysisMeasurement(
+  caseId: string,
+  analysisId: string,
+  measurementId: string,
+  request: ProductAnalysisCorrectionRequest,
+): Promise<ProductAnalysisResult> {
+  const raw = await multiplanarRequest<unknown>(
+    `/api/studies/${encodeURIComponent(caseId)}/product-analyses/${encodeURIComponent(analysisId)}/measurements/${encodeURIComponent(measurementId)}/corrections`,
+    { method: "POST", body: JSON.stringify(buildCorrectionRequestBody(request)) },
   );
   return parseProductAnalysisResult(raw);
 }

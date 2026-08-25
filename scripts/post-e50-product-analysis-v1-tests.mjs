@@ -66,11 +66,25 @@ function backendApiError(status, message = "error") {
 }
 
 function review(overrides = {}) {
-  return { required: true, status: "pending", ...overrides };
+  return { required: true, status: "pending", comment: null, reviewedBy: null, reviewedAt: null, ...overrides };
+}
+
+function correction(overrides = {}) {
+  return {
+    field: "areaMm2",
+    originalValue: 120.5,
+    correctedValue: 110.0,
+    unit: "mm2",
+    comment: null,
+    reviewedBy: "doctor-1",
+    createdAt: "2026-08-25T10:00:00Z",
+    ...overrides,
+  };
 }
 
 function measurement(overrides = {}) {
   return {
+    measurementId: "measurement-1",
     plane: "sagittal",
     level: "L4-L5",
     structure: "disc",
@@ -78,12 +92,14 @@ function measurement(overrides = {}) {
     majorAxisMm: 12.345678,
     minorAxisMm: 8.4,
     reviewRequired: true,
+    corrections: [],
     ...overrides,
   };
 }
 
 function discLevel(overrides = {}) {
   return {
+    discLevelId: "level-1",
     level: "L4-L5",
     localizationStatus: "localized",
     localizationValidated: true,
@@ -95,6 +111,7 @@ function discLevel(overrides = {}) {
     degenerativeFindingsStatus: null,
     automaticInferenceEnabled: false,
     measurements: [measurement()],
+    review: review(),
     ...overrides,
   };
 }
