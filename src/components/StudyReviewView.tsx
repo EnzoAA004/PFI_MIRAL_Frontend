@@ -30,6 +30,7 @@ import {
 import { DegenerativeFindingsPanel } from "../features/reading/DegenerativeFindingsPanel";
 import { parseDegenerativeFindings, viewerPointToImagePixels, type DegenerativeFinding, type FindingSide } from "../features/reading/degenerativeFindings";
 import { DiscDegenerativeFindingsPanel } from "../features/reading/DiscDegenerativeFindingsPanel";
+import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Panel";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
 import { GovernanceNotice } from "../features/reading/GovernanceNotice";
 import { WorkspaceGovernanceNotice } from "../features/reading/WorkspaceGovernanceNotice";
@@ -2175,6 +2176,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                     findings={discDegenerativeSnapshot.findings}
                     unavailableReason={discDegenerativeSnapshot.unavailable}
                   />
+
+                  {displayRun.caseId && <ProductAnalysisV1Panel caseId={displayRun.caseId} />}
 
                   <DegenerativeFindingsPanel
                     findings={visibleDegenerativeFindings}

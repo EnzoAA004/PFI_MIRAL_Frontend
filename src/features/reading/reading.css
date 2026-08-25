@@ -2215,6 +2215,10 @@
     line-height: 1.45;
   }
 
+  /* ---- Análisis de producto Post-E50 (stage 77) ---- */
+  .rr-product-analysis { display: flex; flex-direction: column; gap: 10px; }
+  .rr-product-analysis-body { display: flex; flex-direction: column; gap: 10px; }
+
   /* ---- Marcado del receso subarticular ---- */
   .rr-roi {
     display: flex;
