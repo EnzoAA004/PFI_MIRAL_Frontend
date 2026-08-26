@@ -2223,6 +2223,17 @@
   .rr-product-analysis-review-form { display: flex; flex-direction: column; gap: 6px; }
   .rr-product-analysis-review-form textarea { min-height: 60px; font: inherit; }
 
+  /* ---- Asistente contextual (stage 80) ---- */
+  .chat-panel { display: flex; flex-direction: column; gap: 10px; }
+  .chat-messages { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+  .chat-message { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); }
+  .chat-message p { margin: 0; white-space: pre-wrap; }
+  .chat-message-user { background: var(--surface-subtle); align-self: flex-end; }
+  .chat-message-assistant { background: transparent; }
+  .chat-suggested-questions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .chat-input-row textarea { flex: 1; min-height: 44px; font: inherit; }
+
   /* ---- Marcado del receso subarticular ---- */
   .rr-roi {
     display: flex;

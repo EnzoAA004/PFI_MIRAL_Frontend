@@ -32,6 +32,7 @@ import { parseDegenerativeFindings, viewerPointToImagePixels, type DegenerativeF
 import { DiscDegenerativeFindingsPanel } from "../features/reading/DiscDegenerativeFindingsPanel";
 import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Panel";
 import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
+import { ChatPanel } from "../features/reading/ChatPanel";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
 import { GovernanceNotice } from "../features/reading/GovernanceNotice";
 import { WorkspaceGovernanceNotice } from "../features/reading/WorkspaceGovernanceNotice";
@@ -2231,6 +2232,16 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                       caseId={displayRun.caseId}
                       subjectRef={selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null}
                     />
+                  </div>
+                </details>
+              )}
+
+              {displayRun.caseId && (
+                <details className="rr-more-section">
+                  <summary>Asistente</summary>
+                  <div className="rr-more-section-body">
+                    <p className="rr-section-title">Asistente contextual</p>
+                    <ChatPanel caseId={displayRun.caseId} />
                   </div>
                 </details>
               )}
