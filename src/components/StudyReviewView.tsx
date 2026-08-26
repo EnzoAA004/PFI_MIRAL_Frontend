@@ -33,6 +33,7 @@ import { DiscDegenerativeFindingsPanel } from "../features/reading/DiscDegenerat
 import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Panel";
 import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
 import { ChatPanel } from "../features/reading/ChatPanel";
+import { displayReportMetric, displayReportPlane, displayReportStatus, formatReportValue, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
 import { GovernanceNotice } from "../features/reading/GovernanceNotice";
 import { WorkspaceGovernanceNotice } from "../features/reading/WorkspaceGovernanceNotice";
@@ -49,6 +50,8 @@ import { parseSlicePixelsMeta, type SlicePixelsMeta } from "../features/reading/
 import { coordinateEvidence, parseVolumeGeometry, referenceLineOn, slicePlaneAt } from "../features/reading/referenceLine";
 import { annotatedSlices, annotationToLandmark, displayAnnotationScope, formatMeasurement, isAnnotationVisible, landmarkToAnnotation, measureDistance, withLandmarkAnnotations, type Annotation, type AnnotationScope } from "../features/reading/annotations";
 import { updateStudyMetadata } from "../studyApi";
+import { fetchStudyReportExport, getStudyReport } from "../studyReportApi";
+import type { StudyReport } from "../contracts/studyReportTypes";
 import { displayModelKey, displayPrimaryPlane, displayStudyDate, displaySubjectRef } from "../studyDisplay";
 import { emptyStudyMetadataDraft, normalizeStudyMetadataInput, priorityToBackend, subjectRefErrorMessage, validateSubjectRef, type StudyMetadataDraft } from "../studyMetadata";
 import { studyRunToMriViewerModel } from "../viewModels/mriViewerViewModel";
@@ -504,6 +507,38 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     modelKey: run.modelKey ?? selectedDetail?.study?.modelKey ?? undefined,
     review: run.review ?? selectedDetail?.review,
   };
+  const [studyReport, setStudyReport] = useState<StudyReport | null>(null);
+  const [studyReportPhase, setStudyReportPhase] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [studyReportError, setStudyReportError] = useState("");
+  const [studyReportRefresh, setStudyReportRefresh] = useState(0);
+  const [studyReportExportError, setStudyReportExportError] = useState("");
+
+  useEffect(() => {
+    setStudyReport(null);
+    setStudyReportPhase("idle");
+    setStudyReportError("");
+    setStudyReportExportError("");
+  }, [displayRun.caseId, displayRun.runId]);
+
+  useEffect(() => {
+    if (panelTab !== "more" || !displayRun.caseId) return;
+    let cancelled = false;
+    setStudyReportPhase("loading");
+    setStudyReportError("");
+    getStudyReport(displayRun.caseId)
+      .then((report) => {
+        if (cancelled) return;
+        setStudyReport(report);
+        setStudyReportPhase("ready");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setStudyReport(null);
+        setStudyReportPhase("error");
+        setStudyReportError(error instanceof Error ? error.message : "No se pudo cargar el informe estructurado.");
+      });
+    return () => { cancelled = true; };
+  }, [panelTab, displayRun.caseId, studyReportRefresh]);
 
   // El proxy 3D se reabre desde el snapshot durable del backend
   // (canonicalRun/metricsSnapshot), nunca desde el AI Module en vivo. Usa el mismo
@@ -1546,6 +1581,17 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     if (ventana.document.readyState === "complete") ventana.print();
   }
 
+  async function exportBackendStudyReport(format: "json" | "pdf") {
+    if (!displayRun.caseId) return;
+    setStudyReportExportError("");
+    try {
+      const download = await fetchStudyReportExport(displayRun.caseId, format);
+      downloadBlob(download.filename, download.blob);
+    } catch (error) {
+      setStudyReportExportError(error instanceof Error ? error.message : "No se pudo exportar el informe estructurado.");
+    }
+  }
+
   /*
    * Las anotaciones se guardan junto con la revisión y no en cada trazo: el
    * revisor mide y descarta varias veces mientras lee, y persistir cada
@@ -2357,61 +2403,79 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
               <details className="rr-more-section">
                 <summary>Informe / exportación</summary>
                 <div className="rr-more-section-body">
-                <p className="rr-section-title">Informe por nivel</p>
-                <p className="rr-note">
-                  Cubre los dos planos del estudio. {structuredReport.flaggedTotal > 0
-                    ? `${structuredReport.flaggedTotal} medición${structuredReport.flaggedTotal === 1 ? "" : "es"} fuera del rango de referencia.`
-                    : "Ninguna medición fuera del rango de referencia."}
-                </p>
+                <p className="rr-section-title">Informe estructurado</p>
+                <p className="rr-note">{REPORT_SAFETY_TEXT}</p>
+                {studyReportPhase === "loading" && <p className="rr-note">Cargando informe desde Backend...</p>}
+                {studyReportPhase === "error" && <p className="rr-note rr-export-error">{studyReportError}</p>}
+                {studyReport && (
+                  <div className="rr-backend-report" data-testid="backend-study-report">
+                    <dl className="rr-tech">
+                      <dt>Contrato</dt><dd>{studyReport.schemaVersion}</dd>
+                      <dt>Estado</dt><dd>{displayReportStatus(studyReport.reportStatus)}</dd>
+                      <dt>Study</dt><dd>{studyReport.caseId}</dd>
+                      <dt>Run efectivo</dt><dd>{studyReport.analysis.analysisRunId ?? "No disponible"}</dd>
+                      <dt>Revisión</dt><dd>{studyReport.review.reviewStatus}</dd>
+                    </dl>
 
-                <ol className="rr-report">
-                  {structuredReport.levels.map((level) => (
-                    <li className={`rr-report-level${level.evaluated ? "" : " is-empty"}${level.flagged ? " is-flagged" : ""}`} key={level.level}>
-                      <strong>{level.level}</strong>
-                      {/*
-                        Un nivel sin medir se declara. Omitirlo lo dejaría leer como si
-                        no hubiera nada que informar ahí, que es una afirmación que la
-                        corrida no hizo.
-                      */}
-                      {level.evaluated
-                        ? <ul>{level.entries.map((entry) => <li key={entry.id}>{entryText(entry)}</li>)}</ul>
-                        : <p className="rr-note">No evaluado en esta corrida.</p>}
-                    </li>
-                  ))}
-                </ol>
+                    <p className="rr-section-title">Niveles</p>
+                    {studyReport.discLevels.length ? (
+                      <ul className="rr-report-loose">
+                        {studyReport.discLevels.map((level) => (
+                          <li key={level.discLevelResultId}>
+                            {(level.level ?? "Sin nivel")} · localización {level.localizationStatus ?? "no informada"} · axial {level.axialPairingStatus ?? "no informado"} · revisión {level.reviewStatus}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <p className="rr-note">No hay niveles estructurados para una corrida completed/partial utilizable.</p>}
 
-                {structuredReport.studyWide.length > 0 && (
-                  <>
-                    <p className="rr-section-title">Del estudio</p>
-                    <ul className="rr-report-loose">
-                      {structuredReport.studyWide.map((entry) => <li key={entry.id}>{entryText(entry)}</li>)}
-                    </ul>
-                  </>
+                    <p className="rr-section-title">Mediciones efectivas</p>
+                    {studyReport.measurements.length ? (
+                      <ul className="rr-report-loose">
+                        {studyReport.measurements.slice(0, 8).map((measurement, index) => (
+                          <li key={`${measurement.level}-${measurement.plane}-${measurement.structure}-${measurement.metric}-${index}`}>
+                            {reportMeasurementLine(measurement)}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <p className="rr-note">Sin mediciones efectivas disponibles.</p>}
+                    {studyReport.measurements.length > 8 && <p className="rr-note">Se muestran 8 de {studyReport.measurements.length}. El JSON/PDF incluye el reporte completo.</p>}
+
+                    <p className="rr-section-title">Medición seleccionada</p>
+                    {studyReport.measurements[0]
+                      ? (
+                        <dl className="rr-tech">
+                          <dt>Nivel</dt><dd>{studyReport.measurements[0].level ?? "Sin nivel"}</dd>
+                          <dt>Plano</dt><dd>{displayReportPlane(studyReport.measurements[0].plane)}</dd>
+                          <dt>Métrica</dt><dd>{displayReportMetric(studyReport.measurements[0].metric)}</dd>
+                          <dt>IA</dt><dd>{formatReportValue(studyReport.measurements[0].automaticValue, studyReport.measurements[0].unit)}</dd>
+                          <dt>Efectivo</dt><dd>{formatReportValue(studyReport.measurements[0].effectiveValue, studyReport.measurements[0].unit)}</dd>
+                        </dl>
+                      )
+                      : <p className="rr-note">Sin medición seleccionada por el reporte.</p>}
+
+                    {(studyReport.warnings.length > 0 || studyReport.limitations.length > 0) && (
+                      <>
+                        <p className="rr-section-title">Warnings / limitations</p>
+                        <ul className="rr-report-loose">
+                          {[...studyReport.warnings, ...studyReport.limitations].map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+                        </ul>
+                      </>
+                    )}
+                  </div>
                 )}
 
-                {structuredReport.unassigned.length > 0 && (
-                  <>
-                    <p className="rr-section-title">Sin nivel asignado</p>
-                    <p className="rr-note">Medidas que la corrida no pudo asociar a un nivel. No es lo mismo que no aplicar a ninguno.</p>
-                    <ul className="rr-report-loose">
-                      {structuredReport.unassigned.map((entry) => <li key={entry.id}>{entryText(entry)}</li>)}
-                    </ul>
-                  </>
-                )}
-
-                <p className="rr-section-title">Exportar</p>
+                <p className="rr-section-title">Exportar desde Backend</p>
                 <div className="rr-report-actions">
-                  <button onClick={printReport} type="button">PDF</button>
-                  <button onClick={() => { void exportHtml(); }} type="button">HTML</button>
-                  <button onClick={() => { void exportCsv(); }} type="button">CSV</button>
-                  <button onClick={() => { void exportJson(); }} type="button">JSON</button>
+                  <button onClick={() => { void exportBackendStudyReport("pdf"); }} type="button">PDF</button>
+                  <button onClick={() => { void exportBackendStudyReport("json"); }} type="button">JSON</button>
+                  <button onClick={() => setStudyReportRefresh((value) => value + 1)} type="button">Actualizar</button>
                 </div>
+                {studyReportExportError && <p className="rr-note rr-export-error">{studyReportExportError}</p>}
 
                 {/*
-                  DICOM va aparte de los tres de arriba a propósito. HTML, CSV y JSON son
-                  el informe para leer o para procesar acá; estos dos son los objetos que
-                  otro sistema puede abrir sobre la misma imagen. Mezclarlos en una fila
-                  los haría parecer cuatro formatos del mismo informe.
+                  DICOM va aparte del reporte técnico. PDF/JSON son el informe estructurado
+                  del Backend; estos dos son objetos interoperables que otro visor puede abrir
+                  sobre la misma imagen.
                 */}
                 <p className="rr-section-title">Exportar en DICOM</p>
                 <p className="rr-note">

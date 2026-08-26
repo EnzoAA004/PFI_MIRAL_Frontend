@@ -40,6 +40,7 @@
     "test:e2e:ui-pr2": "node scripts/playwright-ui-pr2-e2e.mjs",
     "test:e2e:post-e50-new-analysis": "node scripts/playwright-post-e50-new-analysis-e2e.mjs",
     "test:e2e:post-e50-full-flow": "node scripts/playwright-post-e50-full-product-flow-e2e.mjs",
+    "test:e2e:post-e50-structured-report": "node scripts/playwright-post-e50-structured-report-e2e.mjs",
     "preview": "vite preview",
     "test:annotations": "node scripts/reading-annotations-tests.mjs",
     "test:routes": "node scripts/routes-tests.mjs",
@@ -65,7 +66,9 @@
     "test:post-e50-contextual-chat": "node scripts/post-e50-contextual-chat-tests.mjs",
     "test:post-e50-patient-history": "node scripts/post-e50-patient-history-tests.mjs",
     "test:post-e50-patient-list": "node scripts/post-e50-patient-list-tests.mjs",
-    "test:post-e50-new-analysis-flow": "node scripts/post-e50-new-analysis-flow-tests.mjs"  },
+    "test:post-e50-new-analysis-flow": "node scripts/post-e50-new-analysis-flow-tests.mjs",
+    "test:post-e50-structured-report": "node scripts/post-e50-structured-report-tests.mjs"
+  },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.0",
     "lucide-react": "^1.23.0",
