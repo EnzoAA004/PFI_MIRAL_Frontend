@@ -51,7 +51,10 @@ export function LongitudinalComparisonPanel({ caseId, subjectRef }: Props) {
           aria-label="Estudio de referencia"
           value={state.selectedBaselineCaseId ?? ""}
           onChange={(event) => void selectBaseline(event.target.value)}
-          disabled={state.phase === "loading_candidates"}
+          // 81-G: también deshabilitado mientras carga una comparación -- sin esto, re-elegir
+          // baseline rápido dispara pedidos superpuestos (el último en responder "gana" sin orden
+          // garantizado).
+          disabled={state.phase === "loading_candidates" || state.phase === "loading_comparison"}
         >
           <option value="">Seleccionar estudio…</option>
           {state.candidates.map((candidate) => (

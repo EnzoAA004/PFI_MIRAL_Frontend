@@ -16,10 +16,16 @@ export type ChatMessage = {
   promptVersion: string | null;
 };
 
+/**
+ * Stage 81-C: `conversationId` es opcional. `undefined`/`null` inicia una conversación nueva
+ * (comportamiento de stage 80, sin cambios). Un valor existente continúa esa conversación --
+ * el Backend valida que pertenezca al Study antes de agregar el turno.
+ */
 export type ChatRequest = {
   question: string;
   analysisId?: string;
   baselineCaseId?: string;
+  conversationId?: string;
 };
 
 /** `humanReviewRequired`/`notClinicalDiagnosis` son siempre `true` — los define el Backend, nunca el modelo. */

@@ -34,6 +34,9 @@ const display = load("src/features/reading/chatDisplay.ts", [
   "CHAT_SENDING_TEXT",
   "SUGGESTED_QUESTIONS",
   "displayContextSource",
+  "CHAT_NEW_CONVERSATION_LABEL",
+  "CHAT_CONVERSATIONS_EMPTY_TEXT",
+  "displayConversationLabel",
 ]);
 
 const state = load("src/features/reading/chatState.ts", [
@@ -44,6 +47,7 @@ const state = load("src/features/reading/chatState.ts", [
   "conversationLoaded",
   "canSend",
   "shouldSubmitQuestion",
+  "newConversationStarted",
 ]);
 
 const errorState = load("src/features/reading/productAnalysisV1State.ts", ["classifyProductAnalysisError"]);
@@ -241,4 +245,65 @@ check("extra. requestFailed conserva el mensaje del usuario ya enviado", () => {
   assert.equal(failed.phase, "error");
 });
 
-console.log(`Post-E50 contextual chat (stage 80): ${passed} tests OK`);
+// ---- Stage 81-C/81-D: multi-turn chat + history selector ----
+
+check("26. multi-turno: conversationId se conserva entre preguntas sucesivas", () => {
+  const afterFirst = state.answerReceived(state.initialChatUiState(), chatResponse({ conversationId: "conv-1" }));
+  const secondSent = state.questionSent(afterFirst, "segunda pregunta");
+  assert.equal(secondSent.conversationId, "conv-1", "el conversationId no debe perderse al enviar el siguiente turno");
+});
+
+check("27. multi-turno: una segunda respuesta se agrega a la misma lista de mensajes, no la reemplaza", () => {
+  const firstSent = state.questionSent(state.initialChatUiState(), "primera pregunta");
+  const afterFirst = state.answerReceived(firstSent, chatResponse({ conversationId: "conv-1" }));
+  const secondSent = state.questionSent(afterFirst, "segunda pregunta");
+  const afterSecond = state.answerReceived(secondSent, chatResponse({ conversationId: "conv-1", messageId: "msg-2", answer: "segunda respuesta" }));
+  assert.equal(afterSecond.messages.length, 4);
+  assert.equal(afterSecond.messages[3].content, "segunda respuesta");
+});
+
+check("28. Nueva conversación: newConversationStarted vuelve al estado inicial (sin conversationId)", () => {
+  const afterFirst = state.answerReceived(state.initialChatUiState(), chatResponse({ conversationId: "conv-1" }));
+  const reset = state.newConversationStarted();
+  assert.equal(reset.conversationId, undefined);
+  assert.equal(reset.messages.length, 0);
+  assert.notEqual(afterFirst.conversationId, reset.conversationId);
+});
+
+check("29. displayConversationLabel: una conversación de hoy se etiqueta 'Hoy HH:MM'", () => {
+  const now = new Date(2026, 7, 25, 18, 10);
+  const label = display.displayConversationLabel(new Date(2026, 7, 25, 18, 10).toISOString(), now);
+  assert.match(label, /^Hoy \d{2}:\d{2}$/);
+});
+
+check("30. displayConversationLabel: una conversación de otro día incluye la fecha", () => {
+  const now = new Date(2026, 7, 25, 12, 0);
+  const label = display.displayConversationLabel(new Date(2026, 7, 24, 22, 15).toISOString(), now);
+  assert.match(label, /^24\/08 \d{2}:\d{2}$/);
+});
+
+check("31. displayConversationLabel: una fecha inválida nunca rompe -- devuelve el string original", () => {
+  assert.equal(display.displayConversationLabel("no-es-una-fecha"), "no-es-una-fecha");
+});
+
+check("32. CHAT_NEW_CONVERSATION_LABEL y CHAT_CONVERSATIONS_EMPTY_TEXT existen y no son texto clínico", () => {
+  assert.ok(display.CHAT_NEW_CONVERSATION_LABEL.length > 0);
+  assert.ok(display.CHAT_CONVERSATIONS_EMPTY_TEXT.length > 0);
+  const forbidden = /diagn[oó]stic|tratamiento|normal\b/i;
+  assert.equal(forbidden.test(display.CHAT_NEW_CONVERSATION_LABEL), false);
+  assert.equal(forbidden.test(display.CHAT_CONVERSATIONS_EMPTY_TEXT), false);
+});
+
+check("33. reload de una conversación distinta reemplaza conversationId y mensajes, no los combina", () => {
+  const afterFirst = state.answerReceived(state.initialChatUiState(), chatResponse({ conversationId: "conv-1" }));
+  const reloaded = state.conversationLoaded(afterFirst, {
+    conversationId: "conv-2",
+    caseId: "case-1",
+    createdAt: "2026-08-25T10:00:00Z",
+    messages: [{ id: "m1", role: "USER", content: "otra conversacion", createdAt: "t", model: null, provider: null, promptVersion: null }],
+  });
+  assert.equal(reloaded.conversationId, "conv-2");
+  assert.equal(reloaded.messages.length, 1);
+});
+
+console.log(`Post-E50 contextual chat (stages 80-81): ${passed} tests OK`);

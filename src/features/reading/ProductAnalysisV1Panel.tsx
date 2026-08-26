@@ -205,6 +205,7 @@ function AnalysisResultBody({
 
                 <ReviewSection
                   label="Revisión de este nivel"
+                  idSuffix={discLevel.discLevelId}
                   review={discLevel.review}
                   mutating={mutating}
                   onDecision={(decision, comment) => onReviewDiscLevel(discLevel.discLevelId, decision, comment)}
@@ -317,11 +318,13 @@ function MeasurementFieldRow({
 
 function ReviewSection({
   label,
+  idSuffix,
   review,
   mutating,
   onDecision,
 }: {
   label: string;
+  idSuffix?: string;
   review: ProductAnalysisReview;
   mutating: boolean;
   onDecision: (decision: ReviewDecision, comment?: string) => void;
@@ -329,6 +332,11 @@ function ReviewSection({
   const [pendingAction, setPendingAction] = useState<"observed" | "rejected" | null>(null);
   const [comment, setComment] = useState("");
   const reviewedBy = displayReviewedBy(review.reviewedBy);
+  // 81-P: `label` es un texto fijo reutilizado en cada nivel de disco -- usar sólo `label` como id
+  // produce ids de DOM duplicados cuando hay varios `<details>` abiertos a la vez, rompiendo la
+  // asociación label/textarea para todos menos el primero. `idSuffix` (p.ej. discLevelId) lo hace
+  // único por instancia; "run" es el fallback para la única instancia sin un nivel asociado.
+  const fieldId = `review-comment-${idSuffix ?? "run"}`;
 
   return (
     <div className="rr-product-analysis-review">
@@ -339,11 +347,11 @@ function ReviewSection({
 
       {pendingAction ? (
         <div className="rr-product-analysis-review-form">
-          <label className="rr-note" htmlFor={`review-comment-${label}`}>
+          <label className="rr-note" htmlFor={fieldId}>
             {pendingAction === "rejected" ? "Motivo del rechazo" : "Comentario de la observación"}
           </label>
           <textarea
-            id={`review-comment-${label}`}
+            id={fieldId}
             value={comment}
             onChange={(event) => setComment(event.target.value)}
           />

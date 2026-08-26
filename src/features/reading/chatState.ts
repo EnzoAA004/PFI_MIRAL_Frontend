@@ -70,6 +70,15 @@ export function canSend(state: ChatUiState): boolean {
 }
 
 /**
+ * Stage 81-D: "Nueva conversación" -- vuelve al estado inicial (sin `conversationId`), de forma
+ * que la próxima pregunta enviada inicie una conversación nueva en el Backend en vez de continuar
+ * la actual.
+ */
+export function newConversationStarted(): ChatUiState {
+  return initialChatUiState();
+}
+
+/**
  * Sólo rechaza una pregunta en blanco client-side (80-M ya valida longitud server-side, y el
  * Frontend no le agrega un segundo límite arbitrario -- una pregunta larga se envía igual y, si
  * excede el máximo del Backend, vuelve como un 400 controlado).

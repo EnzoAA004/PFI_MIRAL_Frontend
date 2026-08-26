@@ -2223,8 +2223,10 @@
   .rr-product-analysis-review-form { display: flex; flex-direction: column; gap: 6px; }
   .rr-product-analysis-review-form textarea { min-height: 60px; font: inherit; }
 
-  /* ---- Asistente contextual (stage 80) ---- */
+  /* ---- Asistente contextual (stage 80/81) ---- */
   .chat-panel { display: flex; flex-direction: column; gap: 10px; }
+  .chat-conversations-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .chat-conversations-bar select { flex: 1; min-width: 160px; }
   .chat-messages { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
   .chat-message { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); }
   .chat-message p { margin: 0; white-space: pre-wrap; }

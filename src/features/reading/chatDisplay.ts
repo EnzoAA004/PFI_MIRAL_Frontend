@@ -32,3 +32,27 @@ const CONTEXT_SOURCE_LABELS: Record<string, string> = {
 export function displayContextSource(source: string): string {
   return CONTEXT_SOURCE_LABELS[source] ?? source;
 }
+
+export const CHAT_NEW_CONVERSATION_LABEL = "Nueva conversación";
+
+export const CHAT_CONVERSATIONS_EMPTY_TEXT = "Todavía no hay conversaciones anteriores.";
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+/**
+ * Stage 81-D: etiqueta corta para el selector de conversaciones -- "Hoy HH:MM" si es de hoy,
+ * "DD/MM HH:MM" en otro caso. Nunca lanza sobre una fecha inválida: cae al ISO crudo.
+ */
+export function displayConversationLabel(createdAtIso: string, now: Date = new Date()): string {
+  const createdAt = new Date(createdAtIso);
+  if (Number.isNaN(createdAt.getTime())) return createdAtIso;
+  const time = `${pad2(createdAt.getHours())}:${pad2(createdAt.getMinutes())}`;
+  const sameDay =
+    createdAt.getFullYear() === now.getFullYear() &&
+    createdAt.getMonth() === now.getMonth() &&
+    createdAt.getDate() === now.getDate();
+  if (sameDay) return `Hoy ${time}`;
+  return `${pad2(createdAt.getDate())}/${pad2(createdAt.getMonth() + 1)} ${time}`;
+}
