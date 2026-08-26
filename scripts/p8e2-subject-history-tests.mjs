@@ -309,9 +309,8 @@ test("M PatientDetailView fue retirado (Stage 85 -- huerfano desde Stage 84, ver
   assert.ok(!existsSync(join(root, "src/components/PatientDetailView.tsx")));
 });
 
-test("N patientApi.ts sigue vivo para el selector de paciente de Nuevo analisis, no para /pacientes", () => {
-  const source = readFileSync(join(root, "src/patientApi.ts"), "utf8");
-  assert.match(source, /export function isValidPatientId/);
+test("N [actualizado Stage 86] patientApi.ts fue retirado -- Nuevo analisis tambien dejo de depender de /api/patients", () => {
+  assert.ok(!existsSync(join(root, "src/patientApi.ts")));
   const patientsView = readFileSync(join(root, "src/components/PatientsView.tsx"), "utf8");
   assert.doesNotMatch(patientsView, /from ["']\.\.\/patientApi["']/);
 });
