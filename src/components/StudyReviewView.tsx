@@ -31,6 +31,7 @@ import { DegenerativeFindingsPanel } from "../features/reading/DegenerativeFindi
 import { parseDegenerativeFindings, viewerPointToImagePixels, type DegenerativeFinding, type FindingSide } from "../features/reading/degenerativeFindings";
 import { DiscDegenerativeFindingsPanel } from "../features/reading/DiscDegenerativeFindingsPanel";
 import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Panel";
+import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
 import { GovernanceNotice } from "../features/reading/GovernanceNotice";
 import { WorkspaceGovernanceNotice } from "../features/reading/WorkspaceGovernanceNotice";
@@ -2220,6 +2221,19 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   </button>
                 </div>
               </details>
+
+              {displayRun.caseId && (
+                <details className="rr-more-section">
+                  <summary>Evolución</summary>
+                  <div className="rr-more-section-body">
+                    <p className="rr-section-title">Comparación entre estudios</p>
+                    <LongitudinalComparisonPanel
+                      caseId={displayRun.caseId}
+                      subjectRef={selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null}
+                    />
+                  </div>
+                </details>
+              )}
 
               <details className="rr-more-section" open>
                 <summary>Anotaciones</summary>
