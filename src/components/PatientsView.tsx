@@ -1,24 +1,44 @@
-import { useEffect, useState } from "react";
-import { searchPatients, type PatientSummary } from "../patientApi";
+import { useEffect, useMemo, useState } from "react";
+import type { SubjectSummary } from "../appTypes";
+import { displayStudyDate } from "../studyDisplay";
+import { fetchSubjectList } from "../subjectHistoryApi";
 import { OperationsPageHeader } from "./OperationsPageHeader";
 
 interface PatientsViewProps {
-  onOpenPatient: (patientId: string) => void;
+  onOpenPatient: (subjectRef: string) => void;
 }
 
 type PatientListState =
-  | { status: "loading"; patients: PatientSummary[] }
-  | { status: "ready"; patients: PatientSummary[] }
-  | { status: "error"; patients: PatientSummary[] };
+  | { status: "loading"; patients: SubjectSummary[] }
+  | { status: "ready"; patients: SubjectSummary[] }
+  | { status: "error"; patients: SubjectSummary[] };
 
-function displayCreatedAt(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Fecha no disponible";
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+/**
+ * Stage 85-Q: mismo vocabulario post-e50 (completed/partial/failed) que el resto del producto --
+ * mapeo local, nunca el enum crudo. Sigue el mismo patrón que `PatientHistoryView.tsx` (Stage 84)
+ * para el mismo vocabulario, no una convención nueva.
+ */
+const ANALYSIS_STATUS_LABELS: Record<string, string> = {
+  completed: "Completado",
+  partial: "Parcial",
+  failed: "Fallido",
+};
+
+const REVIEW_STATUS_LABELS: Record<string, string> = {
+  pending: "Pendiente",
+  accepted: "Aceptada",
+  observed: "Observada",
+  rejected: "Rechazada",
+};
+
+function displayAnalysisStatus(value: string | null): string {
+  if (!value) return "Sin análisis";
+  return ANALYSIS_STATUS_LABELS[value] ?? value;
+}
+
+function displayReviewStatusLabel(value: string | null): string {
+  if (!value) return "—";
+  return REVIEW_STATUS_LABELS[value] ?? value;
 }
 
 export function PatientsView({ onOpenPatient }: PatientsViewProps) {
@@ -28,45 +48,38 @@ export function PatientsView({ onOpenPatient }: PatientsViewProps) {
 
   useEffect(() => {
     let cancelled = false;
-    const timeout = window.setTimeout(() => {
-      setState((current) => ({ status: "loading", patients: current.patients }));
-      void searchPatients(query, 100)
-        .then((patients) => {
-          if (!cancelled) setState({ status: "ready", patients });
-        })
-        .catch(() => {
-          if (!cancelled) setState({ status: "error", patients: [] });
-        });
-    }, 300);
+    setState((current) => ({ status: "loading", patients: current.patients }));
+    void fetchSubjectList()
+      .then((patients) => {
+        if (!cancelled) setState({ status: "ready", patients });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: "error", patients: [] });
+      });
     return () => {
       cancelled = true;
-      window.clearTimeout(timeout);
     };
-  }, [query, retryNonce]);
+  }, [retryNonce]);
 
-  const normalizedQuery = query.trim();
+  const normalizedQuery = query.trim().toLowerCase();
+  // Stage 85-H: se busca por caseId, que ya se muestra en todo el producto -- nunca por
+  // subjectRef, que Stage 85-I decide no exponer como texto visible en esta pantalla.
+  const visiblePatients = useMemo(() => {
+    if (!normalizedQuery) return state.patients;
+    return state.patients.filter((patient) => patient.latestCaseId.toLowerCase().includes(normalizedQuery));
+  }, [state.patients, normalizedQuery]);
+
   const initialEmpty = state.status === "ready" && !normalizedQuery && state.patients.length === 0;
-  const searchEmpty = state.status === "ready" && Boolean(normalizedQuery) && state.patients.length === 0;
+  const searchEmpty = state.status === "ready" && Boolean(normalizedQuery) && visiblePatients.length === 0 && state.patients.length > 0;
 
   return (
     <div className="view-stack patient-directory-view">
-      {/*
-        El mismo encabezado que la lista de trabajo, y por el mismo motivo: la
-        barra lateral ya dice "Pacientes", así que el antetítulo lo repetía, y
-        el título de la tarjeta interna ("Índice de pacientes") era el tercer
-        nombre para la misma pantalla en veinte píxeles de alto.
-
-        Lo que sí se conserva como bajada es de dónde salen los datos: que la
-        lista venga del registro de pacientes y no de las referencias de los
-        estudios no se deduce mirándola, y es justamente la distinción que
-        PATIENT-PR2 introdujo.
-      */}
       <OperationsPageHeader
-        title="Pacientes registrados"
-        description="Del registro de pacientes, no derivado de las referencias de los estudios."
+        title="Pacientes"
+        description="Agrupado por referencia longitudinal de estudios, no una lista de pacientes registrados aparte."
         meta={(
           <span className="patient-directory-total" aria-live="polite">
-            {state.status === "ready" ? state.patients.length : "—"} {normalizedQuery ? "resultados" : "registrados"}
+            {state.status === "ready" ? visiblePatients.length : "—"} {normalizedQuery ? "resultados" : "pacientes"}
           </span>
         )}
       />
@@ -74,12 +87,12 @@ export function PatientsView({ onOpenPatient }: PatientsViewProps) {
       <section className="panel-card patient-directory-panel">
         <div className="patient-directory-search">
           <label className="worklist-search-input" htmlFor="patient-directory-query">
-            <span>Buscar por referencia</span>
+            <span>Buscar por caso</span>
             <input
               autoComplete="off"
               id="patient-directory-query"
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="PAC-001"
+              placeholder="CASE-001"
               type="search"
               value={query}
             />
@@ -104,27 +117,34 @@ export function PatientsView({ onOpenPatient }: PatientsViewProps) {
           )}
           {initialEmpty && (
             <div className="clinical-empty-state">
-              <h3>No hay pacientes registrados todavía</h3>
-              <p>Los pacientes se crean de forma de-identificada desde Nuevo análisis.</p>
+              <h3>No hay pacientes con historial longitudinal disponible.</h3>
             </div>
           )}
           {searchEmpty && (
             <div className="clinical-empty-state">
               <h3>No se encontraron pacientes</h3>
-              <p>Probá con otro prefijo de referencia.</p>
+              <p>Probá con otro identificador de caso.</p>
               <button className="ghost-button" onClick={() => setQuery("")} type="button">Ver todos</button>
             </div>
           )}
-          {state.status === "ready" && state.patients.length > 0 && (
-            <ul className="patient-directory-list" aria-label="Pacientes registrados">
-              {state.patients.map((patient) => (
-                <li key={patient.id}>
+          {state.status === "ready" && visiblePatients.length > 0 && (
+            <ul className="patient-directory-list" aria-label="Pacientes">
+              {visiblePatients.map((patient) => (
+                <li key={patient.subjectRef}>
                   <div>
-                    <strong>{patient.patientReference}</strong>
-                    <span>Paciente de-identificado · registrado el {displayCreatedAt(patient.createdAt)}</span>
+                    <strong>Paciente</strong>
+                    <span>
+                      {patient.studyCount === 1 ? "1 estudio" : `${patient.studyCount} estudios`}
+                      {" · "}Último: {displayStudyDate(patient.latestStudyDate)}
+                      {" · "}Caso: {patient.latestCaseId}
+                    </span>
+                    <span>
+                      Análisis: {displayAnalysisStatus(patient.latestAnalysisStatus)}
+                      {patient.latestAnalysisStatus ? ` · Revisión: ${displayReviewStatusLabel(patient.latestReviewStatus)}` : ""}
+                    </span>
                   </div>
-                  <button className="ghost-button" onClick={() => onOpenPatient(patient.id)} type="button">
-                    Ver paciente
+                  <button className="ghost-button" onClick={() => onOpenPatient(patient.subjectRef)} type="button">
+                    Abrir historial
                   </button>
                 </li>
               ))}

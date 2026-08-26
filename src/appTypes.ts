@@ -618,6 +618,20 @@ export type PatientHistoryGovernance = {
   notClinicalDiagnosis?: boolean;
 };
 
+/**
+ * Stage 85: una fila de la lista de pacientes -- una proyección agregada sobre `Study.subjectRef`,
+ * nunca una entidad Patient. `subjectRef` viaja para poder navegar (ver `pathForPatient`) pero no
+ * se muestra como nombre visible (ver `PatientsView`, política 85-I).
+ */
+export type SubjectSummary = {
+  subjectRef: string;
+  studyCount: number;
+  latestStudyDate: string | null;
+  latestCaseId: string;
+  latestAnalysisStatus: string | null;
+  latestReviewStatus: string | null;
+};
+
 export type PatientHistoryResponse = {
   status: string;
   source?: "postgres-domain" | string;

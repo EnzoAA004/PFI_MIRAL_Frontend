@@ -3,11 +3,16 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 
+/**
+ * Stage 85-X: this file used to also cover `PatientsView.tsx`'s pre-Stage-85 search UI and
+ * `PatientDetailView.tsx` in full. Stage 85 replaced `PatientsView.tsx`'s data source (now the
+ * subject-list projection, see `post-e50-patient-list-tests.mjs`) and deleted `PatientDetailView.tsx`
+ * (confirmed orphaned -- `App.tsx` has routed `/pacientes/:id` to `PatientHistoryPage` since Stage
+ * 84, and grep found no other consumer). What survives here is `patientApi.ts`'s own parsing
+ * contract, which is still live: `PatientSelector.tsx`/`NewAnalysisDrawer.tsx` (the "Nuevo análisis"
+ * patient-selection step) and `patientStudyAssociation.ts` still import from it.
+ */
 const patientApiSource = readFileSync("src/patientApi.ts", "utf8");
-const patientsViewSource = readFileSync("src/components/PatientsView.tsx", "utf8");
-const patientDetailSource = readFileSync("src/components/PatientDetailView.tsx", "utf8");
-const appSource = readFileSync("src/App.tsx", "utf8");
-const routesSource = readFileSync("src/routes.ts", "utf8");
 
 class ContractError extends Error {
   constructor(message, path) {
@@ -30,29 +35,7 @@ exports.isValidPatientId = isValidPatientId;`, sandbox);
   return sandbox.exports;
 }
 
-function loadPatientDetailHelpers() {
-  const source = patientDetailSource
-    .replace(/import[\s\S]*?from "[^\"]+";\r?\n/g, "")
-    .replace(/export /g, "");
-  const js = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText;
-  const sandbox = {
-    exports: {},
-    console,
-    Intl,
-    Date,
-    require: (id) => id === "react/jsx-runtime" ? { jsx: () => ({}), jsxs: () => ({}), Fragment: "Fragment" } : {},
-  };
-  vm.runInNewContext(`${js}
-exports.sortPatientStudies = sortPatientStudies;
-exports.displayPatientStudyDate = displayPatientStudyDate;
-exports.displayPatientStudyStatus = displayPatientStudyStatus;`, sandbox);
-  return sandbox.exports;
-}
-
 const api = loadPatientApi();
-const detail = loadPatientDetailHelpers();
 const patientId = "11111111-1111-4111-8111-111111111111";
 
 function patient(overrides = {}) {
@@ -108,117 +91,9 @@ test("5 parser fail-closed rechaza payload Patient incompleto", () => {
   assert.throws(() => api.parsePatient({ id: patientId }), ContractError);
 });
 
-test("6 la lista busca con el cliente Patient compartido", () => {
-  assert.match(patientsViewSource, /searchPatients\(query, 100\)/);
-});
-
-test("7 la busqueda tiene debounce y no dispara por render", () => {
-  assert.match(patientsViewSource, /window\.setTimeout/);
-  assert.match(patientsViewSource, /}, 300\)/);
-});
-
-test("8 la lista muestra loading accesible", () => {
-  assert.match(patientsViewSource, /aria-busy=\{state\.status === "loading"\}/);
-  assert.match(patientsViewSource, /Consultando pacientes/);
-});
-
-test("9 la lista tiene empty state inicial", () => {
-  assert.match(patientsViewSource, /No hay pacientes registrados todav/);
-});
-
-test("10 la lista tiene error y retry", () => {
-  assert.match(patientsViewSource, /No se pudo cargar la lista de pacientes/);
-  assert.match(patientsViewSource, /setRetryNonce/);
-});
-
-test("11 la busqueda se puede limpiar", () => {
-  assert.match(patientsViewSource, /setQuery\(""\)/);
-  assert.match(patientsViewSource, /Limpiar b/);
-});
-
-test("12 la lista no hace N+1 de Studies", () => {
-  assert.doesNotMatch(patientsViewSource, /getPatientStudies|getPatient\(/);
-});
-
-test("13 la seleccion es explicita y navega por patientId", () => {
-  assert.match(patientsViewSource, /onOpenPatient\(patient\.id\)/);
-});
-
-test("14 UUID no se muestra como nombre principal", () => {
-  assert.match(patientsViewSource, /<strong>\{patient\.patientReference\}<\/strong>/);
-  assert.doesNotMatch(patientsViewSource, />\{patient\.id\}</);
-  assert.doesNotMatch(patientDetailSource, />\{patientId\}</);
-});
-
-test("15 Patient Detail carga identidad real", () => {
-  assert.match(patientDetailSource, /getPatient\(patientId\)/);
-});
-
-test("16 Patient Detail carga Studies por patientId", () => {
-  assert.match(patientDetailSource, /getPatientStudies\(patientId\)/);
-});
-
-test("17 UUID invalido se resuelve sin request", () => {
+test("6 UUID de Patient valida formato antes de pedir al Backend", () => {
   assert.equal(api.isValidPatientId("no-es-uuid"), false);
-  assert.match(patientDetailSource, /if \(!isValidPatientId\(patientId\)\)/);
-});
-
-test("18 400 y 404 producen Patient no encontrado", () => {
-  assert.match(patientDetailSource, /error\.status === 400 \|\| error\.status === 404/);
-  assert.match(patientDetailSource, /Paciente no encontrado/);
-});
-
-test("19 Patient con cero Studies tiene estado valido", () => {
-  assert.match(patientDetailSource, /state\.studies\.length === 0/);
-  assert.match(patientDetailSource, /todav/);
-});
-
-test("20 Patient con multiples Studies renderiza toda la respuesta", () => {
-  assert.match(patientDetailSource, /state\.studies\.map\(\(study\)/);
-});
-
-test("21 timeline ordena fechas descendentes y deja null al final", () => {
-  const sorted = detail.sortPatientStudies([
-    study({ id: "null", caseId: "CASE-NULL", studyDate: null }),
-    study({ id: "old", caseId: "CASE-OLD", studyDate: "2025-03-03" }),
-    study({ id: "new", caseId: "CASE-NEW", studyDate: "2026-08-12" }),
-  ]);
-  assert.deepEqual(Array.from(sorted, (entry) => entry.caseId), ["CASE-NEW", "CASE-OLD", "CASE-NULL"]);
-});
-
-test("22 Study sin fecha clinica no usa createdAt como fecha", () => {
-  assert.equal(detail.displayPatientStudyDate(null), "Fecha no informada");
-  assert.doesNotMatch(patientDetailSource, /study\.createdAt/);
-});
-
-test("23 abrir Study usa caseId", () => {
-  assert.match(patientDetailSource, /onOpenStudy\(study\.caseId\)/);
-  assert.match(appSource, /pathForStudy\(caseId\)/);
-});
-
-test("24 Patient nunca se deriva de subjectRef", () => {
-  assert.doesNotMatch(patientsViewSource, /subjectRef|buildPatients|StudyRow/);
-  assert.doesNotMatch(patientDetailSource, /subjectRef|fetchSubjectHistory/);
-});
-
-test("25 Study legacy null no fabrica Patient", () => {
-  assert.doesNotMatch(appSource, /buildPatients|PatientHistoryView|fetchSubjectHistory/);
-  assert.match(appSource, /<PatientsView/);
-});
-
-test("26 dos Studies del endpoint Patient aparecen juntos aunque no tengan subjectRef", () => {
-  const parsed = api.parsePatientStudies([
-    study({ id: "one", caseId: "CASE-ONE" }),
-    study({ id: "two", caseId: "CASE-TWO" }),
-  ], patientId);
-  assert.deepEqual(Array.from(parsed, (entry) => entry.caseId), ["CASE-ONE", "CASE-TWO"]);
-});
-
-test("27 rutas Patient y Study conservan identidades separadas", () => {
-  assert.match(routesSource, /\/pacientes/);
-  assert.match(routesSource, /\/estudio/);
-  assert.match(appSource, /pathForPatient\(patientId\)/);
-  assert.match(appSource, /pathForStudy\(caseId\)/);
+  assert.equal(api.isValidPatientId(patientId), true);
 });
 
 console.log(`PATIENT-PR4 tests passed: ${count}`);

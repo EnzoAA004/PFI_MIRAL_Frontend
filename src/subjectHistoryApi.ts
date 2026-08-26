@@ -3,7 +3,7 @@ import { authHeaders, refreshDoctorSession } from "./authClient";
 import { validateVisibleDataOrigin } from "./dataMode";
 import { toSafeFrontendError } from "./security/safeError";
 import { generateTraceId } from "./security/traceId";
-import type { Measurement, MeasurementSeries, MeasurementSeriesKey, PatientHistoryGovernance, PatientHistoryResponse, PatientHistorySummary, PatientStudy, PatientStudyProductAnalysis, PersistedReviewCorrection, Plane, Priority, ReviewStatus } from "./appTypes";
+import type { Measurement, MeasurementSeries, MeasurementSeriesKey, PatientHistoryGovernance, PatientHistoryResponse, PatientHistorySummary, PatientStudy, PatientStudyProductAnalysis, PersistedReviewCorrection, Plane, Priority, ReviewStatus, SubjectSummary } from "./appTypes";
 import { applyCorrectionsToMeasurements, normalizePersistedCorrection } from "./studyApi";
 
 function mapPriority(value?: string): Priority {
@@ -249,6 +249,41 @@ export async function fetchSubjectHistory(subjectRef: string): Promise<PatientHi
   }
   if (!response.ok) throw historyApiError(path, response, await readError(response));
   return normalizeSubjectHistoryResponse(await response.json(), subjectRef);
+}
+
+function normalizeSubjectSummary(value: unknown, path: string): SubjectSummary {
+  const record = asRecord(value);
+  const subjectRef = record && optionalString(record, "subjectRef");
+  const latestCaseId = record && optionalString(record, "latestCaseId");
+  if (!record || !subjectRef || !latestCaseId || typeof record.studyCount !== "number") {
+    throw contractError(record, path);
+  }
+  return {
+    subjectRef,
+    studyCount: record.studyCount,
+    latestStudyDate: optionalString(record, "latestStudyDate"),
+    latestCaseId,
+    latestAnalysisStatus: optionalString(record, "latestAnalysisStatus"),
+    latestReviewStatus: optionalString(record, "latestReviewStatus"),
+  };
+}
+
+/** Stage 85-B: la lista de pacientes -- proyección agregada sobre `Study.subjectRef`, nunca una entidad Patient. */
+export async function fetchSubjectList(): Promise<SubjectSummary[]> {
+  const path = "/api/subjects";
+  const traceId = generateTraceId("frontend-history");
+  const requestInit = (): RequestInit => ({
+    headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...authHeaders() },
+  });
+  let response = await fetch(`${API_BASE_URL}${path}`, requestInit());
+  if (response.status === 401) {
+    await refreshDoctorSession();
+    response = await fetch(`${API_BASE_URL}${path}`, requestInit());
+  }
+  if (!response.ok) throw historyApiError(path, response, await readError(response));
+  const payload = await response.json();
+  if (!Array.isArray(payload)) throw contractError(undefined, path);
+  return payload.map((entry) => normalizeSubjectSummary(entry, path));
 }
 
 async function subjectGet(subjectRef: string, path: string): Promise<unknown> {

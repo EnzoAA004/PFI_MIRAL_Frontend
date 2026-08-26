@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
@@ -134,10 +134,10 @@ test("P8-E2.1 C no se envia PUT para reemplazar solo subjectRef existente", () =
   assert.match(saveFunction, /La referencia de-identificada ya fue asignada y no puede reemplazarse/);
 });
 
-test("P8-E2.1 D la nueva lista de Patients no agrupa por subjectRef", () => {
+test("P8-E2.1 D [actualizado Stage 85] la lista de Pacientes SI agrupa por subjectRef via la proyeccion del Backend, deliberadamente", () => {
   const source = readFileSync(join(root, "src/components/PatientsView.tsx"), "utf8");
-  assert.match(source, /searchPatients\(query, 100\)/);
-  assert.doesNotMatch(source, /subjectRef|buildPatients|StudyRow/);
+  assert.match(source, /fetchSubjectList\(\)/);
+  assert.doesNotMatch(source, /searchPatients|buildPatients|StudyRow/);
 });
 
 test("P8-E2.1 E los Studies legacy no fabrican Patients en Frontend", () => {
@@ -305,16 +305,15 @@ test("L no se deriva referencia desde caseId, archivo o inputId", () => {
   assert.doesNotMatch(timeline, /subjectRef:\s*normalizedCaseId|subjectRef:\s*file|subjectRef:\s*uploads/);
 });
 
-test("M Patient Detail no usa el endpoint legacy de subjectRef", () => {
-  const source = readFileSync(join(root, "src/components/PatientDetailView.tsx"), "utf8");
-  assert.match(source, /getPatientStudies\(patientId\)/);
-  assert.doesNotMatch(source, /subjectRef|fetchSubjectHistory/);
+test("M PatientDetailView fue retirado (Stage 85 -- huerfano desde Stage 84, ver PatientHistoryPage)", () => {
+  assert.ok(!existsSync(join(root, "src/components/PatientDetailView.tsx")));
 });
 
-test("N la identidad visible del Patient es patientReference", () => {
-  const source = readFileSync(join(root, "src/components/PatientDetailView.tsx"), "utf8");
-  assert.match(source, /state\.patient\.patientReference/);
-  assert.doesNotMatch(source, />\{patientId\}</);
+test("N patientApi.ts sigue vivo para el selector de paciente de Nuevo analisis, no para /pacientes", () => {
+  const source = readFileSync(join(root, "src/patientApi.ts"), "utf8");
+  assert.match(source, /export function isValidPatientId/);
+  const patientsView = readFileSync(join(root, "src/components/PatientsView.tsx"), "utf8");
+  assert.doesNotMatch(patientsView, /from ["']\.\.\/patientApi["']/);
 });
 
 test("O el endpoint legacy de subjects se conserva aislado", () => {
