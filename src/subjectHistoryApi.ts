@@ -3,7 +3,7 @@ import { authHeaders, refreshDoctorSession } from "./authClient";
 import { validateVisibleDataOrigin } from "./dataMode";
 import { toSafeFrontendError } from "./security/safeError";
 import { generateTraceId } from "./security/traceId";
-import type { Measurement, PatientHistoryGovernance, PatientHistoryResponse, PatientHistorySummary, PatientStudy, PersistedReviewCorrection, Plane, Priority, ReviewStatus } from "./appTypes";
+import type { Measurement, MeasurementSeries, MeasurementSeriesKey, PatientHistoryGovernance, PatientHistoryResponse, PatientHistorySummary, PatientStudy, PatientStudyProductAnalysis, PersistedReviewCorrection, Plane, Priority, ReviewStatus } from "./appTypes";
 import { applyCorrectionsToMeasurements, normalizePersistedCorrection } from "./studyApi";
 
 function mapPriority(value?: string): Priority {
@@ -99,6 +99,32 @@ function normalizeCorrections(value: unknown): PersistedReviewCorrection[] {
   });
 }
 
+/**
+ * Stage 84-D/84-H: `null` cuando el Study no tiene un análisis efectivo (estado normal, no un
+ * error) -- fail-closed en cualquier otro caso: un objeto mal formado nunca se completa con
+ * defaults inventados, se descarta como si no hubiese análisis.
+ */
+function normalizeProductAnalysis(value: unknown): PatientStudyProductAnalysis | null {
+  if (value === null || value === undefined) return null;
+  const record = asRecord(value);
+  if (!record) return null;
+  const analysisRunId = optionalString(record, "analysisRunId");
+  const status = optionalString(record, "status");
+  const reviewStatus = optionalString(record, "reviewStatus");
+  if (!analysisRunId || !status || !reviewStatus) return null;
+  const warnings = Array.isArray(record.warnings) ? record.warnings.filter((entry): entry is string => typeof entry === "string") : [];
+  return {
+    analysisRunId,
+    status,
+    reviewStatus,
+    measurementCount: typeof record.measurementCount === "number" ? record.measurementCount : 0,
+    correctedMeasurementCount: typeof record.correctedMeasurementCount === "number" ? record.correctedMeasurementCount : 0,
+    warnings,
+    humanReviewRequired: record.humanReviewRequired === true,
+    notClinicalDiagnosis: record.notClinicalDiagnosis === true,
+  };
+}
+
 function normalizeHistoryStudy(value: unknown, index: number, path: string): PatientStudy {
   const record = asRecord(value) ?? {};
   const caseId = optionalString(record, "caseId");
@@ -123,6 +149,7 @@ function normalizeHistoryStudy(value: unknown, index: number, path: string): Pat
     corrections,
     createdAt: optionalString(record, "createdAt") || undefined,
     updatedAt: optionalString(record, "updatedAt") || undefined,
+    productAnalysis: normalizeProductAnalysis(record.productAnalysis),
   };
 }
 
@@ -222,4 +249,60 @@ export async function fetchSubjectHistory(subjectRef: string): Promise<PatientHi
   }
   if (!response.ok) throw historyApiError(path, response, await readError(response));
   return normalizeSubjectHistoryResponse(await response.json(), subjectRef);
+}
+
+async function subjectGet(subjectRef: string, path: string): Promise<unknown> {
+  const traceId = generateTraceId("frontend-history");
+  const requestInit = (): RequestInit => ({
+    headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...authHeaders() },
+  });
+  let response = await fetch(`${API_BASE_URL}${path}`, requestInit());
+  if (response.status === 401) {
+    await refreshDoctorSession();
+    response = await fetch(`${API_BASE_URL}${path}`, requestInit());
+  }
+  if (!response.ok) throw historyApiError(path, response, await readError(response));
+  return response.json();
+}
+
+function normalizeSeriesKey(value: unknown, path: string): MeasurementSeriesKey {
+  const record = asRecord(value);
+  const plane = record && optionalString(record, "plane");
+  const structure = record && optionalString(record, "structure");
+  const metric = record && optionalString(record, "metric");
+  const unit = record && optionalString(record, "unit");
+  if (!record || !plane || !structure || !metric || !unit) throw contractError(record, path);
+  return { level: optionalString(record, "level"), plane, structure, metric, unit };
+}
+
+/** Stage 84-M: sólo keys con datos suficientes para una serie -- ver PatientMeasurementSeriesService. */
+export async function fetchAvailableMeasurementSeriesKeys(subjectRef: string): Promise<MeasurementSeriesKey[]> {
+  const path = `/api/subjects/${encodeURIComponent(subjectRef)}/measurement-series/keys`;
+  const payload = await subjectGet(subjectRef, path);
+  if (!Array.isArray(payload)) throw contractError(undefined, path);
+  return payload.map((entry) => normalizeSeriesKey(entry, path));
+}
+
+/** Stage 84-I: un valor de medición a través de N Studies -- nunca calculado en el Frontend. */
+export async function fetchMeasurementSeries(subjectRef: string, key: MeasurementSeriesKey): Promise<MeasurementSeries> {
+  const params = new URLSearchParams({ plane: key.plane, structure: key.structure, metric: key.metric });
+  if (key.level) params.set("level", key.level);
+  const path = `/api/subjects/${encodeURIComponent(subjectRef)}/measurement-series?${params.toString()}`;
+  const payload = await subjectGet(subjectRef, path);
+  const record = asRecord(payload);
+  if (!record || !Array.isArray(record.points)) throw contractError(record, path);
+  const points = record.points.map((entry) => {
+    const point = asRecord(entry);
+    const caseId = point && optionalString(point, "caseId");
+    if (!point || !caseId) throw contractError(point, path);
+    return {
+      caseId,
+      studyDate: optionalString(point, "studyDate"),
+      automaticValue: typeof point.automaticValue === "number" ? point.automaticValue : null,
+      correctedValue: typeof point.correctedValue === "number" ? point.correctedValue : null,
+      effectiveValue: typeof point.effectiveValue === "number" ? point.effectiveValue : null,
+      effectiveSource: optionalString(point, "effectiveSource") ?? "ai_original",
+    };
+  });
+  return { key: normalizeSeriesKey(record.key, path), points };
 }

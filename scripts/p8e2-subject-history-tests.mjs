@@ -350,10 +350,14 @@ test("S StudyReviewView abre formulario real y refresca después del éxito", ()
   assert.match(source, /onStudyMetadataUpdated\?\.\(caseId\)/);
 });
 
-test("T App no usa historial legacy como fallback longitudinal", () => {
+test("T [Stage 84] App usa PatientHistoryPage en /pacientes/:id, no PatientDetailView (que llamaba a /api/patients, endpoint inexistente)", () => {
   const source = readFileSync(join(root, "src/App.tsx"), "utf8");
-  assert.doesNotMatch(source, /patientHistoryResponse|PatientHistoryView|historyTarget/);
-  assert.match(source, /<PatientDetailView/);
+  // App.tsx no importa PatientHistoryView/fetchSubjectHistory directamente -- quedan encapsulados
+  // dentro de PatientHistoryPage (el wrapper que sí los usa), manteniendo el mismo aislamiento que
+  // esta prueba protegía antes, sólo que ahora apuntando al componente real y funcional.
+  assert.doesNotMatch(source, /patientHistoryResponse|PatientHistoryView|historyTarget|fetchSubjectHistory/);
+  assert.match(source, /<PatientHistoryPage/);
+  assert.doesNotMatch(source, /<PatientDetailView/);
 });
 
 console.log(`P8-E2 subject history tests passed: ${count}`);

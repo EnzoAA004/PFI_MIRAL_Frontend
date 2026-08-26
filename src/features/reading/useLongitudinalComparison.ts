@@ -19,7 +19,7 @@ import {
  * al Backend para el cálculo determinístico. Nunca calcula un delta en el Frontend — siempre usa
  * el resultado del Backend tal cual (79-D/79-J).
  */
-export function useLongitudinalComparison(caseId: string, subjectRef: string | null) {
+export function useLongitudinalComparison(caseId: string, subjectRef: string | null, initialBaselineCaseId?: string) {
   const [state, setState] = useState(initialLongitudinalComparisonUiState);
 
   const loadCandidates = useCallback(async () => {
@@ -56,6 +56,16 @@ export function useLongitudinalComparison(caseId: string, subjectRef: string | n
     },
     [caseId],
   );
+
+  // Stage 84-T: "Comparar" desde el historial del paciente reutiliza este mismo hook -- sólo
+  // preselecciona el baseline una vez que los candidatos cargaron, nunca calcula nada acá.
+  useEffect(() => {
+    if (!initialBaselineCaseId) return;
+    if (state.phase !== "ready") return;
+    if (!state.candidates.some((candidate) => candidate.caseId === initialBaselineCaseId)) return;
+    if (state.selectedBaselineCaseId === initialBaselineCaseId) return;
+    void selectBaseline(initialBaselineCaseId);
+  }, [initialBaselineCaseId, state.phase, state.candidates]);
 
   return { state, selectBaseline, reloadCandidates: loadCandidates };
 }

@@ -1,7 +1,10 @@
-import { useMemo, useState, type ReactNode } from "react";
-import type { HistoryTarget, Measurement, PatientHistorySummary, PatientStudy, Plane } from "../appTypes";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { HistoryTarget, Measurement, MeasurementSeries, MeasurementSeriesKey, PatientHistorySummary, PatientStudy, Plane } from "../appTypes";
 import { displayMeasurementLabel, displayModality, displayReviewStatus, displayUnit } from "../clinicalDisplay";
 import { displayStudyDate, displaySubjectRef } from "../studyDisplay";
+import { fetchAvailableMeasurementSeriesKeys, fetchMeasurementSeries } from "../subjectHistoryApi";
+import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
+import { displayMetricLabel } from "../features/reading/longitudinalComparisonDisplay";
 import { PriorityBadge, ReviewBadge, StatusBadge } from "./StatusBadge";
 import { VisibilityIcon } from "./VisibilityIcon";
 
@@ -13,6 +16,8 @@ interface PatientHistoryViewProps {
   summary?: PatientHistorySummary;
   error?: string;
   onOpenStudyReview?: (caseId: string) => void;
+  /** Stage 84-P: el Study desde el que se abrió este historial, si corresponde -- se marca "Estudio actual". */
+  currentCaseId?: string | null;
 }
 
 type HistoryTab = "overview" | "repository" | "activity";
@@ -83,25 +88,74 @@ function buildComparativeRows(studies: PatientStudy[]) {
   return Array.from(rows.entries()).map(([key, value]) => ({ key, ...value }));
 }
 
-function renderTimeline(studies: PatientStudy[], onOpenStudyReview?: (caseId: string) => void) {
+/** Stage 84-H: los warnings del análisis efectivo se muestran, nunca se reinterpretan (mismo mapeo que Stage 77). */
+const WARNING_LABELS: Record<string, string> = {
+  "67B2_RUNTIME_PARITY_NOT_PROVEN": "67B2: paridad de runtime no demostrada",
+  "67C_RUNTIME_PARITY_NOT_PROVEN": "67C: paridad de runtime no demostrada",
+};
+
+function displayWarning(code: string): string {
+  return WARNING_LABELS[code] ?? code;
+}
+
+/** El vocabulario del análisis post-e50 (pending|accepted|observed|rejected) es distinto del `ReviewStatus` legado en español -- mapeo propio, nunca clínico. */
+const PRODUCT_ANALYSIS_REVIEW_LABELS: Record<string, string> = {
+  pending: "pendiente",
+  accepted: "aceptada",
+  observed: "observada",
+  rejected: "rechazada",
+};
+
+function displayProductAnalysisReviewStatus(value: string): string {
+  return PRODUCT_ANALYSIS_REVIEW_LABELS[value] ?? value;
+}
+
+function renderTimeline(
+  studies: PatientStudy[],
+  onOpenStudyReview?: (caseId: string) => void,
+  currentCaseId?: string | null,
+  onCompare?: (caseId: string) => void,
+) {
   if (studies.length === 0) return <EmptyLongitudinalState detail="No hay estudios persistidos para esta referencia." />;
   return (
     <div className="timeline patient-timeline">
-      {studies.map((study) => (
-        <article key={study.caseId}>
-          <span className="timeline-dot" />
-          <div>
-            <strong>{study.caseId}</strong>
-            <p>{formatDate(study.studyDate)} · {planeLabel(study.planes)}</p>
-            <small>{displayModality(study.modality)} · {study.description || "Descripción no informada"}</small>
-            <small>Modelo: {study.modelKey || study.modelVersion || "no informado"} · Revisor: {study.reviewer || "no informado"}</small>
-            {study.reviewedAt && <small>Revisado: {formatDate(study.reviewedAt)}</small>}
-          </div>
-          <ReviewBadge status={study.reviewStatus} />
-          <PriorityBadge priority={study.priority} />
-          {onOpenStudyReview && <button className="ghost-button" onClick={() => onOpenStudyReview(study.caseId)} type="button">Abrir revisión</button>}
-        </article>
-      ))}
+      {studies.map((study) => {
+        const isCurrent = Boolean(currentCaseId) && study.caseId === currentCaseId;
+        const productAnalysis = study.productAnalysis;
+        return (
+          <article key={study.caseId} className={isCurrent ? "patient-timeline-current" : undefined}>
+            <span className="timeline-dot" />
+            <div>
+              <strong>{study.caseId}</strong>
+              {isCurrent && <StatusBadge tone="teal">Estudio actual</StatusBadge>}
+              <p>{formatDate(study.studyDate)} · {planeLabel(study.planes)}</p>
+              <small>{displayModality(study.modality)} · {study.description || "Descripción no informada"}</small>
+              <small>Modelo: {study.modelKey || study.modelVersion || "no informado"} · Revisor: {study.reviewer || "no informado"}</small>
+              {study.reviewedAt && <small>Revisado: {formatDate(study.reviewedAt)}</small>}
+              {productAnalysis ? (
+                <small>
+                  Análisis {productAnalysis.status} · Revisión {displayProductAnalysisReviewStatus(productAnalysis.reviewStatus)}
+                  {" · "}{productAnalysis.measurementCount} mediciones
+                  {productAnalysis.correctedMeasurementCount > 0 ? ` · ${productAnalysis.correctedMeasurementCount} corregida${productAnalysis.correctedMeasurementCount === 1 ? "" : "s"}` : ""}
+                </small>
+              ) : (
+                <small>Este estudio todavía no tiene un análisis.</small>
+              )}
+              {productAnalysis && productAnalysis.warnings.length > 0 && (
+                <small className="patient-timeline-warnings">{productAnalysis.warnings.map(displayWarning).join(" · ")}</small>
+              )}
+            </div>
+            <ReviewBadge status={study.reviewStatus} />
+            <PriorityBadge priority={study.priority} />
+            <div className="patient-timeline-actions">
+              {onOpenStudyReview && <button className="ghost-button" onClick={() => onOpenStudyReview(study.caseId)} type="button">Abrir estudio</button>}
+              {onCompare && !isCurrent && currentCaseId && (
+                <button className="ghost-button" onClick={() => onCompare(study.caseId)} type="button">Comparar</button>
+              )}
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -110,9 +164,131 @@ function measurementCount(studies: PatientStudy[]) {
   return studies.reduce((total, study) => total + measurementsForStudy(study).length, 0);
 }
 
-export function PatientHistoryView({ studies, target, subjectRef, source, summary, error, onOpenStudyReview }: PatientHistoryViewProps) {
+function seriesKeyId(key: MeasurementSeriesKey): string {
+  return `${key.level ?? "null"}|${key.plane}|${key.structure}|${key.metric}`;
+}
+
+function seriesKeyLabel(key: MeasurementSeriesKey): string {
+  // Stage 84-L: reutiliza el mismo mapeo de labels que Stage 79 (áreaMm2/majorAxisMm/minorAxisMm
+  // -> Área/Eje mayor/Eje menor) -- displayMeasurementLabel es para las etiquetas legadas de
+  // StudyRun, no conoce el vocabulario de métricas post-e50, así que no aplicaba acá.
+  return `${key.level ?? "Nivel no resuelto"} · ${displayMetricLabel(key.metric)}`;
+}
+
+type EvolutionState =
+  | { status: "loading" }
+  | { status: "no-keys" }
+  | { status: "ready"; keys: MeasurementSeriesKey[]; selected: MeasurementSeriesKey; series: MeasurementSeries | null; seriesLoading: boolean }
+  | { status: "error" };
+
+/**
+ * Stage 84-I/84-R: "Evolución de mediciones" -- un selector Nivel·Métrica y la serie real de N
+ * Studies para esa key, siempre vía el Backend (nunca calculada acá). Sin librería de charts
+ * nueva (84-S): una tabla cronológica es suficiente.
+ */
+function EvolutionSection({ subjectRef }: { subjectRef: string }) {
+  const [state, setState] = useState<EvolutionState>({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: "loading" });
+    fetchAvailableMeasurementSeriesKeys(subjectRef)
+      .then((keys) => {
+        if (cancelled) return;
+        if (keys.length === 0) {
+          setState({ status: "no-keys" });
+          return;
+        }
+        setState({ status: "ready", keys, selected: keys[0], series: null, seriesLoading: true });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: "error" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [subjectRef]);
+
+  useEffect(() => {
+    if (state.status !== "ready" || !state.seriesLoading) return;
+    let cancelled = false;
+    fetchMeasurementSeries(subjectRef, state.selected)
+      .then((series) => {
+        if (!cancelled) setState((current) => (current.status === "ready" ? { ...current, series, seriesLoading: false } : current));
+      })
+      .catch(() => {
+        if (!cancelled) setState((current) => (current.status === "ready" ? { ...current, series: null, seriesLoading: false } : current));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [subjectRef, state.status === "ready" ? state.selected : null, state.status === "ready" ? state.seriesLoading : null]);
+
+  if (state.status === "loading") {
+    return <p className="rr-note">Buscando mediciones con evolución disponible…</p>;
+  }
+  if (state.status === "error") {
+    return <EmptyLongitudinalState detail="No se pudo consultar la evolución de mediciones." />;
+  }
+  if (state.status === "no-keys") {
+    return <EmptyLongitudinalState detail="No hay mediciones comparables entre múltiples estudios." />;
+  }
+
+  return (
+    <div className="patient-evolution-section">
+      <label className="rr-workspace-series">
+        <span className="rr-workspace-series-label">Nivel · Métrica</span>
+        <select
+          aria-label="Nivel y métrica"
+          value={seriesKeyId(state.selected)}
+          onChange={(event) => {
+            const next = state.keys.find((key) => seriesKeyId(key) === event.target.value);
+            if (!next) return;
+            setState({ status: "ready", keys: state.keys, selected: next, series: null, seriesLoading: true });
+          }}
+        >
+          {state.keys.map((key) => (
+            <option key={seriesKeyId(key)} value={seriesKeyId(key)}>{seriesKeyLabel(key)}</option>
+          ))}
+        </select>
+      </label>
+
+      {state.seriesLoading ? (
+        <p className="rr-note">Cargando evolución…</p>
+      ) : !state.series || state.series.points.length === 0 ? (
+        <EmptyLongitudinalState detail="No hay mediciones comparables entre múltiples estudios." />
+      ) : (
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- axe requires keyboard focus for horizontally scrollable tables.
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Evolución de la medición seleccionada">
+          <table className="worklist-table longitudinal-measurements-table">
+            <thead>
+              <tr><th>Fecha</th><th>Estudio</th><th>Valor</th></tr>
+            </thead>
+            <tbody>
+              {state.series.points.map((point) => (
+                <tr key={point.caseId}>
+                  <td>{formatDate(point.studyDate)}</td>
+                  <td>{point.caseId}</td>
+                  <td>
+                    {point.effectiveValue ?? "—"} {state.series?.key.unit}
+                    {point.effectiveSource === "professional_correction" && (
+                      <small> (Valor revisado: automático {point.automaticValue ?? "—"} {state.series?.key.unit})</small>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function PatientHistoryView({ studies, target, subjectRef, source, summary, error, onOpenStudyReview, currentCaseId }: PatientHistoryViewProps) {
   const [activeTab, setActiveTab] = useState<HistoryTab>("overview");
   const [hiddenPanels, setHiddenPanels] = useState<Record<string, boolean>>({});
+  const [compareBaselineCaseId, setCompareBaselineCaseId] = useState<string | null>(null);
   const visible = (id: string) => !hiddenPanels[id];
   const toggle = (id: string) => setHiddenPanels((current) => ({ ...current, [id]: !current[id] }));
   const hidden = <div className="panel-hidden-placeholder">Información oculta. Usá el control de visualización para desplegarla.</div>;
@@ -176,10 +352,11 @@ export function PatientHistoryView({ studies, target, subjectRef, source, summar
   return (
     <div className="view-stack clinical-quiet patient-longitudinal-view">
       <section className="history-hero compact-heading patient-history-header">
-        <div className="patient-avatar" aria-hidden="true">{displayReference.slice(0, 1)}</div>
+        <div className="patient-avatar" aria-hidden="true">{studyTraceabilityMode ? displayReference.slice(0, 1) : "H"}</div>
         <div>
-          <p>{studyTraceabilityMode ? "Trazabilidad del estudio" : "Historial longitudinal de-identificado"} / <strong>{displayReference}</strong></p>
-          <h1>{studyTraceabilityMode ? "Trazabilidad del estudio" : displayReference}</h1>
+          {/* Stage 84-W: subjectRef es técnico -- nunca se imprime en la UI, sólo se usa internamente (export, comparación, series). */}
+          <p>{studyTraceabilityMode ? "Trazabilidad del estudio" : "Historial longitudinal de-identificado"}{studyTraceabilityMode && <> / <strong>{displayReference}</strong></>}</p>
+          <h1>{studyTraceabilityMode ? "Trazabilidad del estudio" : "Historial del paciente"}</h1>
           <div className="patient-header-badges">
             <StatusBadge tone={studyTraceabilityMode ? "amber" : "teal"}>{studyTraceabilityMode ? "Sin referencia estable" : "De-identificado"}</StatusBadge>
             {source && <StatusBadge tone={source === "postgres-domain" ? "green" : "amber"}>{source}</StatusBadge>}
@@ -219,11 +396,29 @@ export function PatientHistoryView({ studies, target, subjectRef, source, summar
         <section className="patient-overview-grid">
           <article className="panel-card compact-card">
             <PanelTitle id="timeline" title={`Línea de tiempo de estudios (${totalStudies})`} />
-            {visible("timeline") ? renderTimeline(studies, onOpenStudyReview) : hidden}
+            {visible("timeline")
+              ? renderTimeline(studies, onOpenStudyReview, currentCaseId, currentCaseId ? (caseId) => setCompareBaselineCaseId(caseId) : undefined)
+              : hidden}
           </article>
+          {currentCaseId && compareBaselineCaseId && !studyTraceabilityMode && (
+            <article className="panel-card compact-card">
+              <PanelTitle id="compare" title="Comparar con estudio actual">
+                <button className="ghost-button" type="button" onClick={() => setCompareBaselineCaseId(null)}>Cerrar</button>
+              </PanelTitle>
+              {visible("compare") ? (
+                <LongitudinalComparisonPanel caseId={currentCaseId} subjectRef={displayReference} initialBaselineCaseId={compareBaselineCaseId} />
+              ) : hidden}
+            </article>
+          )}
           <article className="panel-card compact-card patient-trends-panel">
-            <PanelTitle id="trends" title="Tendencias en el tiempo"><span>Sin modelo longitudinal backend</span></PanelTitle>
-            {visible("trends") ? <EmptyLongitudinalState detail="No se calculan tendencias clínicas ni progresión longitudinal desde el frontend." /> : hidden}
+            <PanelTitle id="trends" title="Evolución de mediciones" />
+            {visible("trends") ? (
+              studyTraceabilityMode
+                ? <EmptyLongitudinalState detail="Este estudio no tiene una referencia longitudinal disponible." />
+                : studies.length < 2
+                  ? <EmptyLongitudinalState detail="No hay otros estudios disponibles para comparación." />
+                  : <EvolutionSection subjectRef={displayReference} />
+            ) : hidden}
           </article>
           <article className="panel-card compact-card">
             <PanelTitle id="measurement-history" title="Mediciones longitudinales reales"><span>Solo measurementsByPlane</span></PanelTitle>
@@ -257,7 +452,7 @@ export function PatientHistoryView({ studies, target, subjectRef, source, summar
 
       {activeTab === "repository" && (
         <section className="history-grid quiet-history-grid">
-          <article className="panel-card compact-card"><PanelTitle id="repository" title="Repositorio de estudios" />{visible("repository") ? renderTimeline(studies, onOpenStudyReview) : hidden}</article>
+          <article className="panel-card compact-card"><PanelTitle id="repository" title="Repositorio de estudios" />{visible("repository") ? renderTimeline(studies, onOpenStudyReview, currentCaseId) : hidden}</article>
         </section>
       )}
 

@@ -52,13 +52,17 @@ export function viewForPath(pathname: string): ViewKey {
   return "dashboard";
 }
 
-/** URL del detalle de una entidad Patient persistida. */
-export function pathForPatient(patientId: string): string {
-  return `${ROUTES.patients}/${encodeURIComponent(patientId)}`;
+/**
+ * URL del historial longitudinal de un paciente. Stage 84: no existe una entidad Patient — el
+ * segmento es el `subjectRef` de Study (de-identificado), tratado como identidad de paciente del
+ * MVP.
+ */
+export function pathForPatient(subjectRef: string): string {
+  return `${ROUTES.patients}/${encodeURIComponent(subjectRef)}`;
 }
 
 /**
- * UUID técnico pedido por una URL de Patient, o undefined si la ruta es la lista.
+ * `subjectRef` pedido por una URL de historial de paciente, o undefined si la ruta es la lista.
  *
  * Un segmento mal escapado devuelve undefined en vez de lanzar: un link roto debe
  * caer en la lista de pacientes, no romper la navegación.

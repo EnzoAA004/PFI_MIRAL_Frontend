@@ -20,6 +20,8 @@ type Props = {
   caseId: string;
   /** `null` cuando el Study no tiene una referencia de-identificada estable (79-D: fail closed). */
   subjectRef: string | null;
+  /** Stage 84-T: preselecciona un baseline (p.ej. desde "Comparar" en el historial del paciente). */
+  initialBaselineCaseId?: string;
 };
 
 /**
@@ -31,8 +33,8 @@ type Props = {
  * Nunca calcula un delta acá: todo el cálculo viene ya resuelto del Backend. Nunca usa semántica
  * de color clínico — sólo una flecha (↑/↓) y el signo del número (79-S).
  */
-export function LongitudinalComparisonPanel({ caseId, subjectRef }: Props) {
-  const { state, selectBaseline } = useLongitudinalComparison(caseId, subjectRef);
+export function LongitudinalComparisonPanel({ caseId, subjectRef, initialBaselineCaseId }: Props) {
+  const { state, selectBaseline } = useLongitudinalComparison(caseId, subjectRef, initialBaselineCaseId);
 
   if (!subjectRef) {
     return (

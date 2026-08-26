@@ -117,6 +117,8 @@ interface StudyReviewViewProps {
   /** Detalle persistido del estudio abierto, cargado y poseído por App. */
   selectedDetail: StudyDetailResponse | null;
   onStudyMetadataUpdated?: (caseId: string) => Promise<void>;
+  /** Stage 84: navega al historial longitudinal (subjectRef) del paciente de este estudio. */
+  onOpenPatientHistory?: (subjectRef: string) => void;
 }
 
 function inferenceModeLabel(value?: string) {
@@ -378,7 +380,7 @@ function metadataPayloadEqual(next: StudyMetadataInput, current: StudyMetadataDr
     && next.reviewPriority === current.reviewPriority;
 }
 
-export function StudyReviewView({ run, studyReview, measurements, auditTrail, saving, onBackToStudies, onMeasurementsChange, onSaveReview, onStudyMetadataUpdated, selectedDetail }: StudyReviewViewProps) {
+export function StudyReviewView({ run, studyReview, measurements, auditTrail, saving, onBackToStudies, onMeasurementsChange, onSaveReview, onStudyMetadataUpdated, selectedDetail, onOpenPatientHistory }: StudyReviewViewProps) {
   const [tab, setTab] = useState<"Sagittal" | "Axial" | "3D Reconstruction">("Sagittal");
   const [selectedSeriesId, setSelectedSeriesId] = useState("");
   const [editMode, setEditMode] = useState(false);
@@ -2222,6 +2224,31 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   </button>
                 </div>
               </details>
+
+              {displayRun.caseId && (() => {
+                const patientHistorySubjectRef = selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null;
+                return (
+                  <details className="rr-more-section">
+                    <summary>Historial del paciente</summary>
+                    <div className="rr-more-section-body">
+                      {patientHistorySubjectRef ? (
+                        <button
+                          className="rr-more-action"
+                          type="button"
+                          onClick={() => onOpenPatientHistory?.(patientHistorySubjectRef)}
+                          disabled={!onOpenPatientHistory}
+                        >
+                          Ver historial del paciente
+                        </button>
+                      ) : (
+                        <p className="panel-hidden-placeholder honest-empty-state">
+                          Este estudio no tiene una referencia longitudinal disponible.
+                        </p>
+                      )}
+                    </div>
+                  </details>
+                );
+              })()}
 
               {displayRun.caseId && (
                 <details className="rr-more-section">
