@@ -33,7 +33,7 @@ import { DiscDegenerativeFindingsPanel } from "../features/reading/DiscDegenerat
 import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Panel";
 import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
 import { ChatPanel } from "../features/reading/ChatPanel";
-import { displayReportMetric, displayReportPlane, displayReportStatus, formatReportValue, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
+import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, displayReportStatus, formatReportDelta, formatReportPercent, formatReportValue, reportContractLabel, reportCorrectedMarker, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
 import { GovernanceNotice } from "../features/reading/GovernanceNotice";
 import { WorkspaceGovernanceNotice } from "../features/reading/WorkspaceGovernanceNotice";
@@ -2410,7 +2410,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                 {studyReport && (
                   <div className="rr-backend-report" data-testid="backend-study-report">
                     <dl className="rr-tech">
-                      <dt>Contrato</dt><dd>{studyReport.schemaVersion}</dd>
+                      <dt>Contrato</dt><dd>{reportContractLabel(studyReport)}</dd>
                       <dt>Estado</dt><dd>{displayReportStatus(studyReport.reportStatus)}</dd>
                       <dt>Study</dt><dd>{studyReport.caseId}</dd>
                       <dt>Run efectivo</dt><dd>{studyReport.analysis.analysisRunId ?? "No disponible"}</dd>
@@ -2439,6 +2439,57 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                       </ul>
                     ) : <p className="rr-note">Sin mediciones efectivas disponibles.</p>}
                     {studyReport.measurements.length > 8 && <p className="rr-note">Se muestran 8 de {studyReport.measurements.length}. El JSON/PDF incluye el reporte completo.</p>}
+
+                    <p className="rr-section-title">Evolución / comparación con estudios previos</p>
+                    {studyReport.longitudinalHistory?.comparisons.length ? (
+                      <>
+                        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- scroll horizontal accesible por teclado */}
+                        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla de evolución longitudinal del informe">
+                          <table className="worklist-table longitudinal-measurements-table">
+                            <thead>
+                              <tr>
+                                <th>Fecha</th>
+                                <th>Nivel</th>
+                                <th>Estructura / métrica</th>
+                                <th>Previo</th>
+                                <th>Actual</th>
+                                <th>Delta</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {studyReport.longitudinalHistory.comparisons.slice(0, 8).map((row, index) => (
+                                <tr key={`${row.previousCaseId}-${row.level}-${row.metric}-${index}`}>
+                                  <td>{displayStudyDate(row.previousStudyDate)}</td>
+                                  <td>{row.level ?? "Sin nivel"}</td>
+                                  <td>{row.structure ?? "estructura"} · {displayReportMetric(row.metric)}</td>
+                                  <td>
+                                    {formatReportValue(row.previousEffectiveValue, row.unit)}
+                                    {reportCorrectedMarker(row.previousValueSource) && <small className="rr-note"> ({reportCorrectedMarker(row.previousValueSource)})</small>}
+                                  </td>
+                                  <td>
+                                    {formatReportValue(row.currentEffectiveValue, row.unit)}
+                                    {reportCorrectedMarker(row.currentValueSource) && <small className="rr-note"> ({reportCorrectedMarker(row.currentValueSource)})</small>}
+                                  </td>
+                                  <td>{formatReportDelta(row.absoluteDelta, row.unit)} · {formatReportPercent(row.percentageDelta)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {studyReport.longitudinalHistory.comparisons.length > 8 && <p className="rr-note">Se muestran 8 de {studyReport.longitudinalHistory.comparisons.length}. El JSON/PDF incluye el historial completo.</p>}
+                      </>
+                    ) : (
+                      <p className="rr-note">{studyReport.longitudinalHistory?.message ?? "No existen estudios previos comparables disponibles."}</p>
+                    )}
+                    {studyReport.longitudinalHistory?.previousStudies.length ? (
+                      <ul className="rr-report-loose">
+                        {studyReport.longitudinalHistory.previousStudies.map((previous) => (
+                          <li key={previous.caseId}>
+                            {displayStudyDate(previous.studyDate)} · {displayHistoryPreviousStatus(previous.comparisonStatus)} · {previous.comparableMeasurementCount} métricas comparables
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
 
                     <p className="rr-section-title">Medición seleccionada</p>
                     {studyReport.measurements[0]

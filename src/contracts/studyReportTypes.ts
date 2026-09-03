@@ -61,6 +61,44 @@ export type StudyReportTraceabilitySummary = {
   generatedAt: string;
 };
 
+export type StudyReportLongitudinalHistory = {
+  available: boolean;
+  currentStudy: {
+    caseId: string;
+    studyDate: string | null;
+    analysisRunId: string | null;
+  };
+  previousStudies: Array<{
+    caseId: string;
+    studyDate: string | null;
+    analysisRunId: string | null;
+    comparisonStatus: "comparable" | "no_comparable_measurements" | "no_usable_analysis" | string;
+    comparableMeasurementCount: number;
+    nonComparableMeasurementCount: number;
+  }>;
+  comparisons: Array<{
+    previousCaseId: string;
+    previousStudyDate: string | null;
+    currentStudyDate: string | null;
+    level: string | null;
+    plane: string | null;
+    structure: string | null;
+    metric: string;
+    unit: string;
+    previousEffectiveValue: number | null;
+    currentEffectiveValue: number | null;
+    absoluteDelta: number | null;
+    percentageDelta: number | null;
+    previousValueSource: "ai_original" | "professional_correction" | string | null;
+    currentValueSource: "ai_original" | "professional_correction" | string | null;
+    previousAutomaticValue: number | null;
+    currentAutomaticValue: number | null;
+    previousCorrectedValue: number | null;
+    currentCorrectedValue: number | null;
+  }>;
+  message: string;
+};
+
 export type StudyReport = {
   schemaVersion: "pfi.study-report.v1";
   generatedAt: string;
@@ -75,6 +113,7 @@ export type StudyReport = {
   warnings: string[];
   limitations: string[];
   longitudinalComparison: LongitudinalComparisonResult | null;
+  longitudinalHistory: StudyReportLongitudinalHistory | null;
   safety: StudyReportSafetySummary;
   traceability: StudyReportTraceabilitySummary;
 };

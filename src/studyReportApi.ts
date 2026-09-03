@@ -131,6 +131,59 @@ function parseSafety(value: unknown): StudyReport["safety"] {
   };
 }
 
+function parseLongitudinalHistory(value: unknown): StudyReport["longitudinalHistory"] {
+  if (value == null) return null;
+  const raw = asRecord(value);
+  if (!raw) throw new StudyReportContractError("Contrato de informe inválido: longitudinalHistory mal formado.");
+  const currentStudy = asRecord(raw.currentStudy);
+  if (!currentStudy) throw new StudyReportContractError("Contrato de informe inválido: falta longitudinalHistory.currentStudy.");
+  return {
+    available: requiredBoolean(raw.available, "longitudinalHistory.available"),
+    currentStudy: {
+      caseId: requiredText(currentStudy.caseId, "longitudinalHistory.currentStudy.caseId"),
+      studyDate: nullableText(currentStudy.studyDate),
+      analysisRunId: nullableText(currentStudy.analysisRunId),
+    },
+    previousStudies: asArray(raw.previousStudies).map((item) => {
+      const previous = asRecord(item);
+      if (!previous) throw new StudyReportContractError("Contrato de informe inválido: previousStudies[] mal formado.");
+      return {
+        caseId: requiredText(previous.caseId, "longitudinalHistory.previousStudies[].caseId"),
+        studyDate: nullableText(previous.studyDate),
+        analysisRunId: nullableText(previous.analysisRunId),
+        comparisonStatus: requiredText(previous.comparisonStatus, "longitudinalHistory.previousStudies[].comparisonStatus"),
+        comparableMeasurementCount: requiredNumber(previous.comparableMeasurementCount, "longitudinalHistory.previousStudies[].comparableMeasurementCount"),
+        nonComparableMeasurementCount: requiredNumber(previous.nonComparableMeasurementCount, "longitudinalHistory.previousStudies[].nonComparableMeasurementCount"),
+      };
+    }),
+    comparisons: asArray(raw.comparisons).map((item) => {
+      const comparison = asRecord(item);
+      if (!comparison) throw new StudyReportContractError("Contrato de informe inválido: longitudinalHistory.comparisons[] mal formado.");
+      return {
+        previousCaseId: requiredText(comparison.previousCaseId, "longitudinalHistory.comparisons[].previousCaseId"),
+        previousStudyDate: nullableText(comparison.previousStudyDate),
+        currentStudyDate: nullableText(comparison.currentStudyDate),
+        level: nullableText(comparison.level),
+        plane: nullableText(comparison.plane),
+        structure: nullableText(comparison.structure),
+        metric: requiredText(comparison.metric, "longitudinalHistory.comparisons[].metric"),
+        unit: requiredText(comparison.unit, "longitudinalHistory.comparisons[].unit"),
+        previousEffectiveValue: nullableNumber(comparison.previousEffectiveValue),
+        currentEffectiveValue: nullableNumber(comparison.currentEffectiveValue),
+        absoluteDelta: nullableNumber(comparison.absoluteDelta),
+        percentageDelta: nullableNumber(comparison.percentageDelta),
+        previousValueSource: nullableText(comparison.previousValueSource),
+        currentValueSource: nullableText(comparison.currentValueSource),
+        previousAutomaticValue: nullableNumber(comparison.previousAutomaticValue),
+        currentAutomaticValue: nullableNumber(comparison.currentAutomaticValue),
+        previousCorrectedValue: nullableNumber(comparison.previousCorrectedValue),
+        currentCorrectedValue: nullableNumber(comparison.currentCorrectedValue),
+      };
+    }),
+    message: requiredText(raw.message, "longitudinalHistory.message"),
+  };
+}
+
 function parseTraceability(value: unknown): StudyReport["traceability"] {
   const raw = asRecord(value);
   if (!raw) throw new StudyReportContractError("Contrato de informe inválido: falta traceability.");
@@ -164,6 +217,7 @@ export function parseStudyReport(value: unknown): StudyReport {
     warnings: optionalStrings(raw.warnings),
     limitations: optionalStrings(raw.limitations),
     longitudinalComparison: raw.longitudinalComparison == null ? null : parseLongitudinalComparisonResult(raw.longitudinalComparison),
+    longitudinalHistory: parseLongitudinalHistory(raw.longitudinalHistory),
     safety: parseSafety(raw.safety),
     traceability: parseTraceability(raw.traceability),
   };
