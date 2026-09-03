@@ -1,4 +1,5 @@
 import type { LongitudinalComparisonResult } from "./longitudinalComparisonTypes";
+import type { VisualEvidenceItem } from "./visualEvidenceTypes";
 
 export type StudyReportAnalysisSummary = {
   analysisRunId: string | null;
@@ -114,6 +115,13 @@ export type StudyReport = {
   limitations: string[];
   longitudinalComparison: LongitudinalComparisonResult | null;
   longitudinalHistory: StudyReportLongitudinalHistory | null;
+  /**
+   * EXT-04B2: additive, always an array (empty when there is none — never omitted/undefined).
+   * A pre-EXT-04B2 report (or a legacy fixture the parser is fed) has no `visualEvidence` key
+   * at all; `parseVisualEvidence` in `studyReportApi.ts` treats that identically to `null` or
+   * `[]` — always `[]`, never a parse error (backward compatibility, EXT-04B3 test 20).
+   */
+  visualEvidence: VisualEvidenceItem[];
   safety: StudyReportSafetySummary;
   traceability: StudyReportTraceabilitySummary;
 };

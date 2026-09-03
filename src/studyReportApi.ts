@@ -2,6 +2,7 @@ import { API_BASE_URL } from "./api";
 import { authHeaders, refreshDoctorSession } from "./authClient";
 import { ensureAuthSession } from "./authStorage";
 import type { StudyReport } from "./contracts/studyReportTypes";
+import type { EvidenceBaseImageRef, EvidenceGeometry, VisualEvidenceItem } from "./contracts/visualEvidenceTypes";
 import { parseLongitudinalComparisonResult } from "./longitudinalComparisonApi";
 import { BackendApiError, multiplanarRequest } from "./multiplanarApi";
 import { generateTraceId } from "./security/traceId";
@@ -184,6 +185,124 @@ function parseLongitudinalHistory(value: unknown): StudyReport["longitudinalHist
   };
 }
 
+const CANONICAL_MIN = 0;
+const CANONICAL_MAX = 256;
+
+function isFiniteNumberInCanonicalRange(value: number): boolean {
+  return Number.isFinite(value) && value >= CANONICAL_MIN - 1e-6 && value <= CANONICAL_MAX + 1e-6;
+}
+
+function numberField(raw: Record<string, unknown>, field: string): number | null {
+  const value = raw[field];
+  return typeof value === "number" && isFiniteNumberInCanonicalRange(value) ? value : null;
+}
+
+/**
+ * Mirrors `EvidenceGeometry.fromMap` (Backend) field-for-field, including the same 0..256
+ * range check `EvidenceCoordinateNormalizer` guarantees on write. Never throws: an unknown
+ * `geometryType`, a malformed map, or an out-of-range coordinate returns `null` so the caller
+ * can drop just that one region (89-CONT-style fail-safe — EXT-04B3 tests 7/12).
+ */
+export function parseEvidenceGeometry(geometryType: unknown, geometry: unknown): EvidenceGeometry | null {
+  const raw = asRecord(geometry);
+  if (!raw || typeof geometryType !== "string") return null;
+  if (geometryType === "BBOX") {
+    const x = numberField(raw, "x");
+    const y = numberField(raw, "y");
+    const width = numberField(raw, "width");
+    const height = numberField(raw, "height");
+    if (x === null || y === null || width === null || height === null || width <= 0 || height <= 0) return null;
+    return { type: "BBOX", x, y, width, height };
+  }
+  if (geometryType === "ELLIPSE") {
+    const centerX = numberField(raw, "centerX");
+    const centerY = numberField(raw, "centerY");
+    const radiusX = numberField(raw, "radiusX");
+    const radiusY = numberField(raw, "radiusY");
+    if (centerX === null || centerY === null || radiusX === null || radiusY === null || radiusX <= 0 || radiusY <= 0) return null;
+    return { type: "ELLIPSE", centerX, centerY, radiusX, radiusY };
+  }
+  if (geometryType === "POLYGON") {
+    const rawPoints = Array.isArray(raw.points) ? raw.points : null;
+    if (!rawPoints || rawPoints.length < 3) return null;
+    const points: { x: number; y: number }[] = [];
+    for (const item of rawPoints) {
+      const point = asRecord(item);
+      const x = point ? numberField(point, "x") : null;
+      const y = point ? numberField(point, "y") : null;
+      if (x === null || y === null) return null;
+      points.push({ x, y });
+    }
+    return { type: "POLYGON", points };
+  }
+  if (geometryType === "MASK_REFERENCE") {
+    const runId = typeof raw.runId === "string" && raw.runId.trim() ? raw.runId : null;
+    const plane = raw.plane === "sagittal" || raw.plane === "axial" ? raw.plane : null;
+    const assetName = typeof raw.assetName === "string" && raw.assetName.trim() ? raw.assetName : null;
+    if (!runId || !plane || !assetName) return null;
+    // Same path-traversal guard as `EvidenceGeometry.MaskReference`'s compact constructor —
+    // this value later feeds a URL path segment, never a raw URL from the JSON.
+    if ([runId, assetName].some((value) => value.includes("..") || value.includes("/") || value.includes("\\"))) return null;
+    return { type: "MASK_REFERENCE", runId, plane, assetName };
+  }
+  return null;
+}
+
+/**
+ * EXT-04B3.5: tolerant by the same rule as the rest of this parser — a missing key (pre-
+ * EXT-04B3.5 report), an explicit `null`, or a malformed shape (non-integer `sliceIndex`,
+ * blank `inputId`) all resolve to `null`, never a thrown error. A region with no usable
+ * `baseImage` still renders (its geometry, label, source, etc. are independent of this).
+ */
+export function parseEvidenceBaseImage(value: unknown): EvidenceBaseImageRef | null {
+  const raw = asRecord(value);
+  if (!raw) return null;
+  const inputId = typeof raw.inputId === "string" && raw.inputId.trim() ? raw.inputId : null;
+  const sliceIndex = typeof raw.sliceIndex === "number" && Number.isInteger(raw.sliceIndex) && raw.sliceIndex >= 0 ? raw.sliceIndex : null;
+  if (!inputId || sliceIndex === null) return null;
+  return { inputId, sliceIndex };
+}
+
+/**
+ * EXT-04B3: one `visualEvidence[]` item. Returns `null` (never throws) for a region whose
+ * geometry does not parse — that region is silently dropped by `parseVisualEvidence`, never
+ * the whole report (test 7: "geometry desconocida fail-safe").
+ */
+function parseVisualEvidenceItem(value: unknown): VisualEvidenceItem | null {
+  const raw = asRecord(value);
+  if (!raw) return null;
+  const evidenceId = typeof raw.evidenceId === "string" && raw.evidenceId ? raw.evidenceId : null;
+  const label = typeof raw.label === "string" && raw.label ? raw.label : null;
+  const geometry = parseEvidenceGeometry(raw.geometryType, raw.geometry);
+  if (!evidenceId || !label || !geometry) return null;
+  const plane = raw.plane === "sagittal" || raw.plane === "axial" ? raw.plane : null;
+  return {
+    evidenceId,
+    plane,
+    level: nullableText(raw.level),
+    structure: nullableText(raw.structure),
+    geometry,
+    source: typeof raw.source === "string" ? raw.source : "ai_suggested",
+    reviewStatus: nullableText(raw.reviewStatus),
+    label,
+    warning: nullableText(raw.warning),
+    experimental: raw.experimental === true,
+    baseImage: parseEvidenceBaseImage(raw.baseImage),
+  };
+}
+
+/**
+ * Tolerant by design (EXT-04B3 "el parser debe ser tolerante"): a missing key (pre-EXT-04B2
+ * report), an explicit `null`, or anything that isn't an array all resolve to `[]` — never a
+ * thrown `StudyReportContractError`. Only individual malformed items are dropped.
+ */
+export function parseVisualEvidence(value: unknown): VisualEvidenceItem[] {
+  if (value == null) return [];
+  return asArray(value)
+    .map(parseVisualEvidenceItem)
+    .filter((item): item is VisualEvidenceItem => item !== null);
+}
+
 function parseTraceability(value: unknown): StudyReport["traceability"] {
   const raw = asRecord(value);
   if (!raw) throw new StudyReportContractError("Contrato de informe inválido: falta traceability.");
@@ -218,6 +337,7 @@ export function parseStudyReport(value: unknown): StudyReport {
     limitations: optionalStrings(raw.limitations),
     longitudinalComparison: raw.longitudinalComparison == null ? null : parseLongitudinalComparisonResult(raw.longitudinalComparison),
     longitudinalHistory: parseLongitudinalHistory(raw.longitudinalHistory),
+    visualEvidence: parseVisualEvidence(raw.visualEvidence),
     safety: parseSafety(raw.safety),
     traceability: parseTraceability(raw.traceability),
   };

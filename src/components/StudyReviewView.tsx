@@ -34,6 +34,8 @@ import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Pan
 import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
 import { ChatPanel } from "../features/reading/ChatPanel";
 import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, displayReportStatus, formatReportDelta, formatReportPercent, formatReportValue, reportContractLabel, reportCorrectedMarker, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
+import { EvidenceRegionOverlay } from "../features/reading/EvidenceRegionOverlay";
+import { NO_VISUAL_EVIDENCE_MESSAGE } from "../features/reading/visualEvidenceDisplay";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
 import { GovernanceNotice } from "../features/reading/GovernanceNotice";
 import { WorkspaceGovernanceNotice } from "../features/reading/WorkspaceGovernanceNotice";
@@ -2511,6 +2513,22 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                           {[...studyReport.warnings, ...studyReport.limitations].map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
                         </ul>
                       </>
+                    )}
+
+                    {/* EXT-04B3: solo lectura — sin herramientas de dibujo/edición.
+                        `visualEvidence` es siempre un array (nunca undefined, ver
+                        studyReportApi.ts#parseVisualEvidence), así que "sin evidencia"
+                        se distingue de "el informe no cargó" sin necesitar un estado
+                        de error aparte. */}
+                    <p className="rr-section-title">Evidencia visual</p>
+                    {studyReport.visualEvidence.length ? (
+                      <ul className="evidence-region-list" data-testid="visual-evidence-list">
+                        {studyReport.visualEvidence.map((item) => (
+                          <EvidenceRegionOverlay item={item} key={item.evidenceId} />
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="rr-note" data-testid="visual-evidence-empty">{NO_VISUAL_EVIDENCE_MESSAGE}</p>
                     )}
                   </div>
                 )}
