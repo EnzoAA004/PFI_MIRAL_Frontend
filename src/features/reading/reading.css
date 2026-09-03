@@ -2388,4 +2388,57 @@
     color: var(--text-warning-strong, var(--warning));
   }
 
+  /* EXT-07B: "Comparación con estudio previo" — Anterior/Actual lado a lado. Sin semáforo
+     clínico: ambas columnas usan exactamente el mismo estilo neutral, la única diferencia es
+     el texto "Anterior"/"Actual". */
+  .before-after-comparison {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .before-after-row {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .before-after-row-title {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .before-after-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* Una sola columna en contenedores angostos: el mismo layout responsive que ya usa el resto
+     del panel, sin introducir un breakpoint propio. */
+  @container (max-width: 480px) {
+    .before-after-columns { grid-template-columns: 1fr; }
+  }
+
+  .before-after-column-title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .before-after-date,
+  .before-after-value {
+    margin: 2px 0;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .before-after-delta {
+    margin: 8px 0 0;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
 }

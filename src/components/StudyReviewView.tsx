@@ -35,6 +35,7 @@ import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalCom
 import { ChatPanel } from "../features/reading/ChatPanel";
 import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, displayReportStatus, formatReportDelta, formatReportPercent, formatReportValue, reportContractLabel, reportCorrectedMarker, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
 import { EvidenceRegionOverlay } from "../features/reading/EvidenceRegionOverlay";
+import { BeforeAfterComparison, BEFORE_AFTER_TITLE } from "../features/reading/BeforeAfterComparison";
 import { NO_VISUAL_EVIDENCE_MESSAGE } from "../features/reading/visualEvidenceDisplay";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
 import { GovernanceNotice } from "../features/reading/GovernanceNotice";
@@ -541,6 +542,24 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
       });
     return () => { cancelled = true; };
   }, [panelTab, displayRun.caseId, studyReportRefresh]);
+
+  // EXT-07B: the previous study's own report is fetched only for its visualEvidence (to render
+  // the "Comparación con estudio previo" image+overlay side) — the numeric before/after values
+  // themselves already come from the CURRENT study's own longitudinalHistory.comparisons
+  // (Backend-computed, EXT-04A), never recomputed here.
+  const [previousStudyReport, setPreviousStudyReport] = useState<StudyReport | null>(null);
+  const previousCaseId = studyReport?.longitudinalHistory?.previousStudies[0]?.caseId ?? null;
+  useEffect(() => {
+    if (!previousCaseId) {
+      setPreviousStudyReport(null);
+      return;
+    }
+    let cancelled = false;
+    getStudyReport(previousCaseId)
+      .then((report) => { if (!cancelled) setPreviousStudyReport(report); })
+      .catch(() => { if (!cancelled) setPreviousStudyReport(null); });
+    return () => { cancelled = true; };
+  }, [previousCaseId]);
 
   // El proxy 3D se reabre desde el snapshot durable del backend
   // (canonicalRun/metricsSnapshot), nunca desde el AI Module en vivo. Usa el mismo
@@ -2492,6 +2511,13 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                         ))}
                       </ul>
                     ) : null}
+
+                    {/* EXT-07B: reutiliza longitudinalHistory.comparisons (ya calculado por
+                        Backend) para los valores/deltas, y el reporte del estudio anterior
+                        (fetch aparte, solo para su visualEvidence) para el lado "Anterior" del
+                        overlay — nunca recalcula un delta en el Frontend. */}
+                    <p className="rr-section-title">{BEFORE_AFTER_TITLE}</p>
+                    <BeforeAfterComparison current={studyReport} previous={previousStudyReport} />
 
                     <p className="rr-section-title">Medición seleccionada</p>
                     {studyReport.measurements[0]
