@@ -36,6 +36,7 @@ import { ChatPanel } from "../features/reading/ChatPanel";
 import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, displayReportStatus, formatReportDelta, formatReportPercent, formatReportValue, reportContractLabel, reportCorrectedMarker, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
 import { EvidenceRegionEditor } from "../features/reading/EvidenceRegionEditor";
 import { NewEvidenceRegionCreator } from "../features/reading/NewEvidenceRegionCreator";
+import { EvidenceConcordancePanel } from "../features/reading/EvidenceConcordancePanel";
 import { BeforeAfterComparison, BEFORE_AFTER_TITLE } from "../features/reading/BeforeAfterComparison";
 import { NO_VISUAL_EVIDENCE_MESSAGE } from "../features/reading/visualEvidenceDisplay";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
@@ -2607,6 +2608,13 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   Uso académico y de investigación sobre datos de-identificados. Requiere revisión
                   profesional y no constituye un diagnóstico.
                 </p>
+                </div>
+              </details>
+
+              <details className="rr-more-section">
+                <summary>Concordancia de evidencia</summary>
+                <div className="rr-more-section-body">
+                  <EvidenceConcordancePanel caseId={displayRun.caseId ?? ""} batchFindings={degenerativeFindings} roiFindings={roiFindings} />
                 </div>
               </details>
 

@@ -2499,4 +2499,22 @@
     font-weight: 700;
   }
 
+  /* EXT-01: concordancia de evidencia ------------------------------------- */
+  .concordance-results-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .concordance-result {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .concordance-result-discrepant { border-color: var(--warning); }
+  .concordance-result-not_comparable { color: var(--text-muted); }
+
 }
