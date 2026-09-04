@@ -2499,4 +2499,32 @@
     font-weight: 700;
   }
 
+  /* EXT-03: mapa de activación (Grad-CAM) ---------------------------------- */
+  .activation-map-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .activation-map-image-wrap {
+    width: 160px;
+    aspect-ratio: 1 / 1;
+    background: var(--surface-dark, #0b1220);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .activation-map-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .activation-map-opacity {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
 }

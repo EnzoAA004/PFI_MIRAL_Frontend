@@ -28,6 +28,7 @@ import {
   type ViewportBinding,
 } from "../features/reading/readingWorkspaceLayout";
 import { DegenerativeFindingsPanel } from "../features/reading/DegenerativeFindingsPanel";
+import { ActivationMapPanel } from "../features/reading/ActivationMapPanel";
 import { parseDegenerativeFindings, viewerPointToImagePixels, type DegenerativeFinding, type FindingSide } from "../features/reading/degenerativeFindings";
 import { DiscDegenerativeFindingsPanel } from "../features/reading/DiscDegenerativeFindingsPanel";
 import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Panel";
@@ -2273,6 +2274,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                     }}
                     selectedFindingId={selectedFindingId}
                   />
+                  {!demoMode && <ActivationMapPanel inputId={axialInputId()} roiDraft={roiDraft} />}
                 </section>
           </ReviewInspectorPanel>
 

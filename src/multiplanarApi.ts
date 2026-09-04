@@ -205,6 +205,41 @@ export async function requestSubarticularClassification(payload: {
   });
 }
 
+export type SubarticularExplainResult = {
+  modelId: string;
+  modelVersion: string;
+  task: string;
+  targetClass: string;
+  layer: string;
+  method: string;
+  heatmapPng: string;
+  generatedAt: string;
+  experimental: boolean;
+  disclaimer: string;
+  layerDisclaimer: string;
+};
+
+/**
+ * EXT-03: Grad-CAM explainability asset for the same ROI `requestSubarticularClassification`
+ * already classifies — same request shape, plus an optional `targetClass`. Never persisted,
+ * never a diagnosis: the heatmap is always rendered with `disclaimer`/`layerDisclaimer` alongside
+ * it, never on its own.
+ */
+export async function requestSubarticularExplanation(payload: {
+  inputId: string;
+  instanceNumber: number;
+  x: number;
+  y: number;
+  side: "left" | "right";
+  level: string;
+  targetClass?: "normal_mild" | "moderate" | "severe";
+}): Promise<SubarticularExplainResult> {
+  return multiplanarRequest<SubarticularExplainResult>("/api/ai/degenerative-findings/subarticular/explain", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 /*
  * getRunReview/submitRunReview vivían acá con estados accepted/observed/rejected/
  * edited, en paralelo al pendiente/observado/aceptado/descartado de updateReview.
