@@ -17,6 +17,7 @@ export const ROUTES = {
   study: "/estudio",
   patients: "/pacientes",
   settings: "/ajustes",
+  analytics: "/analytics",
 } as const;
 
 const VIEW_TO_PATH: Record<ViewKey, string> = {
@@ -28,6 +29,7 @@ const VIEW_TO_PATH: Record<ViewKey, string> = {
   // El historial no es un destino aparte: es el detalle de Paciente.
   history: ROUTES.patients,
   settings: ROUTES.settings,
+  analytics: ROUTES.analytics,
 };
 
 export function pathForView(view: ViewKey): string {
@@ -49,6 +51,7 @@ export function viewForPath(pathname: string): ViewKey {
   if (pathname === ROUTES.patients || pathname === `${ROUTES.patients}/`) return "patients";
   if (pathname.startsWith(`${ROUTES.patients}/`)) return "history";
   if (pathname.startsWith(ROUTES.settings)) return "settings";
+  if (pathname.startsWith(ROUTES.analytics)) return "analytics";
   return "dashboard";
 }
 
