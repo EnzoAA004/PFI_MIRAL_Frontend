@@ -34,7 +34,7 @@ import {
  */
 export function EvidenceRegionOverlay({ item }: { item: VisualEvidenceItem }) {
   const group = evidenceVisualGroup(item.source);
-  const imageUrl = resolveBaseImageUrl(item);
+  const imageUrl = resolveEvidenceBaseImageUrl(item);
   const image = useAuthenticatedImageUrl(imageUrl);
 
   return (
@@ -83,7 +83,7 @@ export function EvidenceRegionOverlay({ item }: { item: VisualEvidenceItem }) {
  * guessed URL) when neither applies — `useAuthenticatedImageUrl(undefined)` reports `"idle"`,
  * which this component renders as the neutral fallback message.
  */
-function resolveBaseImageUrl(item: VisualEvidenceItem): string | undefined {
+export function resolveEvidenceBaseImageUrl(item: VisualEvidenceItem): string | undefined {
   if (item.geometry.type === "MASK_REFERENCE") return evidenceMaskAssetUrl(item.geometry);
   if (item.baseImage) return evidenceBaseImageSliceUrl(item.baseImage);
   return undefined;

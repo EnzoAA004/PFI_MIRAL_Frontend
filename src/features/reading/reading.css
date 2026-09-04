@@ -2388,6 +2388,64 @@
     color: var(--text-warning-strong, var(--warning));
   }
 
+  /* EXT-04B5: modo edición ------------------------------------------------- */
+  /* En edición la capa vuelve a escuchar el puntero (la de solo lectura nunca
+     lo hace, ver comentario más arriba); las figuras de la propuesta se
+     distinguen por trazo rojo sólido + la nota de texto en el pie, nunca solo
+     por color (safety: "región señalada", no gravedad). */
+  .evidence-region-frame.is-editing .evidence-region-overlay { cursor: move; }
+  .evidence-region-shape-draft {
+    fill: rgb(220 38 38 / .08);
+    stroke: rgb(220 38 38);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+    cursor: move;
+  }
+  .evidence-region-handle {
+    fill: #fff;
+    stroke: rgb(220 38 38);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+    cursor: pointer;
+  }
+  .evidence-region-safety-note {
+    flex-basis: 100%;
+    font-style: italic;
+    color: var(--text-muted);
+  }
+  .evidence-region-edit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    flex-basis: 100%;
+  }
+  .evidence-region-comment-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .evidence-region-edit-disabled-note {
+    flex-basis: 100%;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .evidence-region-new-button { align-self: flex-start; }
+  .evidence-region-new-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(260px, 100%);
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .evidence-region-new-type { display: flex; gap: 12px; font-size: 12px; }
+  .evidence-region-new-frame { cursor: crosshair; }
+
   /* EXT-07B: "Comparación con estudio previo" — Anterior/Actual lado a lado. Sin semáforo
      clínico: ambas columnas usan exactamente el mismo estilo neutral, la única diferencia es
      el texto "Anterior"/"Actual". */

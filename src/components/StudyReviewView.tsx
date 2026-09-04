@@ -34,7 +34,8 @@ import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Pan
 import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
 import { ChatPanel } from "../features/reading/ChatPanel";
 import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, displayReportStatus, formatReportDelta, formatReportPercent, formatReportValue, reportContractLabel, reportCorrectedMarker, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
-import { EvidenceRegionOverlay } from "../features/reading/EvidenceRegionOverlay";
+import { EvidenceRegionEditor } from "../features/reading/EvidenceRegionEditor";
+import { NewEvidenceRegionCreator } from "../features/reading/NewEvidenceRegionCreator";
 import { BeforeAfterComparison, BEFORE_AFTER_TITLE } from "../features/reading/BeforeAfterComparison";
 import { NO_VISUAL_EVIDENCE_MESSAGE } from "../features/reading/visualEvidenceDisplay";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
@@ -2541,21 +2542,36 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                       </>
                     )}
 
-                    {/* EXT-04B3: solo lectura — sin herramientas de dibujo/edición.
-                        `visualEvidence` es siempre un array (nunca undefined, ver
-                        studyReportApi.ts#parseVisualEvidence), así que "sin evidencia"
-                        se distingue de "el informe no cargó" sin necesitar un estado
-                        de error aparte. */}
+                    {/* EXT-04B5: cada región se renderiza de solo lectura por defecto; el
+                        propio `EvidenceRegionEditor` es quien ofrece "Editar anotación" para
+                        BBOX/ELLIPSE y llama a `setStudyReportRefresh` tras guardar, para que el
+                        refetch quede en un único lugar y el componente nunca reimplemente su
+                        propia lógica de fetch. `visualEvidence` sigue siendo siempre un array
+                        (nunca undefined, ver studyReportApi.ts#parseVisualEvidence). */}
                     <p className="rr-section-title">Evidencia visual</p>
                     {studyReport.visualEvidence.length ? (
                       <ul className="evidence-region-list" data-testid="visual-evidence-list">
                         {studyReport.visualEvidence.map((item) => (
-                          <EvidenceRegionOverlay item={item} key={item.evidenceId} />
+                          <EvidenceRegionEditor
+                            item={item}
+                            key={item.evidenceId}
+                            caseId={studyReport.caseId}
+                            analysisRunId={studyReport.analysis.analysisRunId}
+                            onSaved={() => setStudyReportRefresh((value) => value + 1)}
+                          />
                         ))}
                       </ul>
                     ) : (
                       <p className="rr-note" data-testid="visual-evidence-empty">{NO_VISUAL_EVIDENCE_MESSAGE}</p>
                     )}
+                    <NewEvidenceRegionCreator
+                      caseId={studyReport.caseId}
+                      analysisRunId={studyReport.analysis.analysisRunId}
+                      plane={activePlano}
+                      inputId={currentSeries?.sourceInputId ?? null}
+                      sliceIndex={currentSliceOf(activePlano)}
+                      onCreated={() => setStudyReportRefresh((value) => value + 1)}
+                    />
                   </div>
                 )}
 
