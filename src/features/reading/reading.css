@@ -2283,4 +2283,238 @@
   /* El cursor dice que el proximo clic marca, y no panea ni ventanea. */
   .subarticular-add-mode { cursor: crosshair; }
 
+  /* EXT-04B3: evidencia visual del informe estructurado --------------------- */
+  /* Solo lectura: ninguna regla de esta sección escucha pointer/drag. La capa
+     repite la convención de `.mri-measure-layer` (viewBox 0..256, sin recorte de
+     aspecto) para que la geometría ya normalizada del Backend se posicione sola,
+     sin una segunda transformación de coordenadas en el cliente. */
+  .evidence-region-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .evidence-region-figure {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    width: min(220px, 100%);
+  }
+
+  .evidence-region-frame {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    background: var(--surface-dark, #0b1220);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .evidence-region-base-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+  }
+
+  .evidence-region-no-base {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .evidence-region-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  /* Mismo principio que `.mri-measure-ai`: el origen se distingue por color Y por
+     trazo (punteado vs. sólido), nunca solo por color, y el color no codifica
+     severidad — es la misma variable `--ai` que ya usa el resto del visor para
+     "esto lo propuso la IA", no un rojo/verde de gravedad. */
+  .evidence-region-shape {
+    fill: rgb(255 255 255 / .05);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+  }
+  .evidence-region-shape-ai { stroke: var(--ai); stroke-dasharray: 4 2; }
+  .evidence-region-shape-professional { stroke: var(--clinical-accent); }
+
+  .evidence-region-caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .evidence-region-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--surface);
+  }
+  .evidence-region-badge-ai { background: var(--ai); }
+  .evidence-region-badge-professional { background: var(--clinical-accent); }
+  /* El badge experimental es un estado de proceso ("aún no validado"), no una
+     escala de gravedad clínica — mismo uso de --warning que el resto de la app
+     ya da a "requiere atención antes de confiar en esto". */
+  .evidence-region-badge-experimental { background: var(--warning); }
+
+  .evidence-region-meta,
+  .evidence-region-label { flex-basis: 100%; }
+
+  .evidence-region-warning {
+    flex-basis: 100%;
+    color: var(--text-warning-strong, var(--warning));
+  }
+
+  /* EXT-04B5: modo edición ------------------------------------------------- */
+  /* En edición la capa vuelve a escuchar el puntero (la de solo lectura nunca
+     lo hace, ver comentario más arriba); las figuras de la propuesta se
+     distinguen por trazo rojo sólido + la nota de texto en el pie, nunca solo
+     por color (safety: "región señalada", no gravedad). */
+  .evidence-region-frame.is-editing .evidence-region-overlay { cursor: move; }
+  .evidence-region-shape-draft {
+    fill: rgb(220 38 38 / .08);
+    stroke: rgb(220 38 38);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+    cursor: move;
+  }
+  .evidence-region-handle {
+    fill: #fff;
+    stroke: rgb(220 38 38);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+    cursor: pointer;
+  }
+  .evidence-region-safety-note {
+    flex-basis: 100%;
+    font-style: italic;
+    color: var(--text-muted);
+  }
+  .evidence-region-edit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    flex-basis: 100%;
+  }
+  .evidence-region-comment-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .evidence-region-edit-disabled-note {
+    flex-basis: 100%;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .evidence-region-new-button { align-self: flex-start; }
+  .evidence-region-new-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(260px, 100%);
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .evidence-region-new-type { display: flex; gap: 12px; font-size: 12px; }
+  .evidence-region-new-frame { cursor: crosshair; }
+
+  /* EXT-07B: "Comparación con estudio previo" — Anterior/Actual lado a lado. Sin semáforo
+     clínico: ambas columnas usan exactamente el mismo estilo neutral, la única diferencia es
+     el texto "Anterior"/"Actual". */
+  .before-after-comparison {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .before-after-row {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .before-after-row-title {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .before-after-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* Una sola columna en contenedores angostos: el mismo layout responsive que ya usa el resto
+     del panel, sin introducir un breakpoint propio. */
+  @container (max-width: 480px) {
+    .before-after-columns { grid-template-columns: 1fr; }
+  }
+
+  .before-after-column-title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .before-after-date,
+  .before-after-value {
+    margin: 2px 0;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .before-after-delta {
+    margin: 8px 0 0;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* EXT-01: concordancia de evidencia ------------------------------------- */
+  .concordance-results-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .concordance-result {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .concordance-result-discrepant { border-color: var(--warning); }
+  .concordance-result-not_comparable { color: var(--text-muted); }
+
 }

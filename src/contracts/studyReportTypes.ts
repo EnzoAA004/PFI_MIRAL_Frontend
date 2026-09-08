@@ -1,4 +1,5 @@
 import type { LongitudinalComparisonResult } from "./longitudinalComparisonTypes";
+import type { VisualEvidenceItem } from "./visualEvidenceTypes";
 
 export type StudyReportAnalysisSummary = {
   analysisRunId: string | null;
@@ -61,6 +62,44 @@ export type StudyReportTraceabilitySummary = {
   generatedAt: string;
 };
 
+export type StudyReportLongitudinalHistory = {
+  available: boolean;
+  currentStudy: {
+    caseId: string;
+    studyDate: string | null;
+    analysisRunId: string | null;
+  };
+  previousStudies: Array<{
+    caseId: string;
+    studyDate: string | null;
+    analysisRunId: string | null;
+    comparisonStatus: "comparable" | "no_comparable_measurements" | "no_usable_analysis" | string;
+    comparableMeasurementCount: number;
+    nonComparableMeasurementCount: number;
+  }>;
+  comparisons: Array<{
+    previousCaseId: string;
+    previousStudyDate: string | null;
+    currentStudyDate: string | null;
+    level: string | null;
+    plane: string | null;
+    structure: string | null;
+    metric: string;
+    unit: string;
+    previousEffectiveValue: number | null;
+    currentEffectiveValue: number | null;
+    absoluteDelta: number | null;
+    percentageDelta: number | null;
+    previousValueSource: "ai_original" | "professional_correction" | string | null;
+    currentValueSource: "ai_original" | "professional_correction" | string | null;
+    previousAutomaticValue: number | null;
+    currentAutomaticValue: number | null;
+    previousCorrectedValue: number | null;
+    currentCorrectedValue: number | null;
+  }>;
+  message: string;
+};
+
 export type StudyReport = {
   schemaVersion: "pfi.study-report.v1";
   generatedAt: string;
@@ -75,6 +114,14 @@ export type StudyReport = {
   warnings: string[];
   limitations: string[];
   longitudinalComparison: LongitudinalComparisonResult | null;
+  longitudinalHistory: StudyReportLongitudinalHistory | null;
+  /**
+   * EXT-04B2: additive, always an array (empty when there is none — never omitted/undefined).
+   * A pre-EXT-04B2 report (or a legacy fixture the parser is fed) has no `visualEvidence` key
+   * at all; `parseVisualEvidence` in `studyReportApi.ts` treats that identically to `null` or
+   * `[]` — always `[]`, never a parse error (backward compatibility, EXT-04B3 test 20).
+   */
+  visualEvidence: VisualEvidenceItem[];
   safety: StudyReportSafetySummary;
   traceability: StudyReportTraceabilitySummary;
 };
