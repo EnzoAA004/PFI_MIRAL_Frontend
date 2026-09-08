@@ -160,8 +160,23 @@ test("canonicalRunToLegacyViewModel no existe en ningun lugar de src", () => {
 });
 
 test("no hay schemaVersion condicional en componentes", () => {
-  for (const file of ["src/features/worklist/NewAnalysisDrawer.tsx", "src/components/MriSliceViewer.tsx", "src/components/StudyReviewView.tsx", "src/inferenceReadiness.ts", "src/selectors/canonicalRunSelectors.ts", "src/viewModels/measurementViewModel.ts", "src/viewModels/mriViewerViewModel.ts"]) {
+  for (const file of ["src/features/worklist/NewAnalysisDrawer.tsx", "src/components/MriSliceViewer.tsx", "src/inferenceReadiness.ts", "src/selectors/canonicalRunSelectors.ts", "src/viewModels/measurementViewModel.ts", "src/viewModels/mriViewerViewModel.ts"]) {
     assert.ok(!readSource(file).includes("schemaVersion"), `${file} no debe conocer schemaVersion`);
+  }
+
+  // Stage 88 [actualizado]: StudyReviewView.tsx ahora muestra `studyReport.schemaVersion`
+  // (`pfi.study-report.v1`) como una etiqueta de "Contrato" en la sección de Informe/exportación
+  // -- un contrato completamente distinto al multiplanar-run v1/v2 que esta prueba protege desde
+  // Stage 9C-4 (nunca ramificar comportamiento del visor según la versión del RUN). Mostrar el
+  // schemaVersion de un reporte ya construido por el Backend no es una rama condicional -- es
+  // texto de solo lectura, sin ningún `if`/`switch` sobre su valor. Se verifica exactamente eso:
+  // el único uso es la interpolación de display, nunca una condición.
+  const studyReviewSource = readSource("src/components/StudyReviewView.tsx");
+  const schemaVersionUses = studyReviewSource.match(/[^\n]*schemaVersion[^\n]*/g) ?? [];
+  assert.ok(schemaVersionUses.length > 0, "StudyReviewView.tsx debería mostrar studyReport.schemaVersion (Stage 88)");
+  for (const line of schemaVersionUses) {
+    assert.match(line, /studyReport\.schemaVersion/, `uso inesperado de schemaVersion fuera del reporte Stage 88: ${line}`);
+    assert.doesNotMatch(line, /\bif\s*\(|\bswitch\s*\(|===|!==/, `schemaVersion no debe usarse condicionalmente: ${line}`);
   }
 });
 

@@ -41,6 +41,7 @@
     "test:e2e:post-e50-new-analysis": "node scripts/playwright-post-e50-new-analysis-e2e.mjs",
     "test:e2e:post-e50-full-flow": "node scripts/playwright-post-e50-full-product-flow-e2e.mjs",
     "test:e2e:post-e50-structured-report": "node scripts/playwright-post-e50-structured-report-e2e.mjs",
+    "test:e2e:post-e50-demo-flow": "node scripts/playwright-post-e50-demo-flow-e2e.mjs",
     "preview": "vite preview",
     "test:annotations": "node scripts/reading-annotations-tests.mjs",
     "test:routes": "node scripts/routes-tests.mjs",
