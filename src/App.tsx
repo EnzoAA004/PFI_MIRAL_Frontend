@@ -11,6 +11,7 @@ import { PatientHistoryPage } from "./components/PatientHistoryPage";
 import { PatientsView } from "./components/PatientsView";
 import { PendingApprovalView } from "./components/PendingApprovalView";
 import { SettingsView } from "./features/settings/SettingsView";
+import { ReviewAnalyticsView } from "./components/ReviewAnalyticsView";
 import { StudyReviewView } from "./components/StudyReviewView";
 import { Worklist } from "./features/worklist/Worklist";
 import { deriveSummary, isReviewQueueItem, mergeStudyRowsWithSelectedRun, normalizeSelectedRunForReview, selectReviewableRunFromDetail, toSelectedStudyReference } from "./appDataGuards";
@@ -527,6 +528,7 @@ function App() {
         </section>
       ))}
       {activeView === "settings" && <SettingsView user={session.user} onUserUpdated={(user) => setSession((current) => current ? { ...current, user } : current)} onLogout={logout} />}
+      {activeView === "analytics" && <ReviewAnalyticsView onBack={() => changeView("dashboard")} />}
     </AppShell>
   );
 }

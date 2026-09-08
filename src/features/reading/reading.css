@@ -2517,4 +2517,39 @@
   .concordance-result-discrepant { border-color: var(--warning); }
   .concordance-result-not_comparable { color: var(--text-muted); }
 
+  /* EXT-05: feedback / curación ------------------------------------------- */
+  .feedback-curation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+  }
+  .feedback-curation-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .feedback-curation-table th,
+  .feedback-curation-table td {
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+  .feedback-curation-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  }
+  .feedback-curation-row-actions input {
+    width: 120px;
+    font-size: 11px;
+  }
+  .feedback-exclusion-reason {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
 }

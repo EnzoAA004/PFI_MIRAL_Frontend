@@ -37,6 +37,7 @@ import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, 
 import { EvidenceRegionEditor } from "../features/reading/EvidenceRegionEditor";
 import { NewEvidenceRegionCreator } from "../features/reading/NewEvidenceRegionCreator";
 import { EvidenceConcordancePanel } from "../features/reading/EvidenceConcordancePanel";
+import { FeedbackCurationPanel } from "../features/reading/FeedbackCurationPanel";
 import { BeforeAfterComparison, BEFORE_AFTER_TITLE } from "../features/reading/BeforeAfterComparison";
 import { NO_VISUAL_EVIDENCE_MESSAGE } from "../features/reading/visualEvidenceDisplay";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
@@ -2615,6 +2616,13 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                 <summary>Concordancia de evidencia</summary>
                 <div className="rr-more-section-body">
                   <EvidenceConcordancePanel caseId={displayRun.caseId ?? ""} batchFindings={degenerativeFindings} roiFindings={roiFindings} />
+                </div>
+              </details>
+
+              <details className="rr-more-section">
+                <summary>Feedback / Curación</summary>
+                <div className="rr-more-section-body">
+                  <FeedbackCurationPanel caseId={studyReport?.caseId ?? displayRun.caseId ?? ""} />
                 </div>
               </details>
 
