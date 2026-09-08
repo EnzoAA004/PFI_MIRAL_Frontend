@@ -164,18 +164,29 @@ test("no hay schemaVersion condicional en componentes", () => {
     assert.ok(!readSource(file).includes("schemaVersion"), `${file} no debe conocer schemaVersion`);
   }
 
-  // Stage 88 [actualizado]: StudyReviewView.tsx ahora muestra `studyReport.schemaVersion`
-  // (`pfi.study-report.v1`) como una etiqueta de "Contrato" en la sección de Informe/exportación
-  // -- un contrato completamente distinto al multiplanar-run v1/v2 que esta prueba protege desde
+  // Stage 88 [actualizado] / integration-final-2026: la UI muestra el `schemaVersion` del informe
+  // (`pfi.study-report.v1`) como etiqueta de "Contrato" en la sección de Informe/exportación --
+  // un contrato completamente distinto al multiplanar-run v1/v2 que esta prueba protege desde
   // Stage 9C-4 (nunca ramificar comportamiento del visor según la versión del RUN). Mostrar el
   // schemaVersion de un reporte ya construido por el Backend no es una rama condicional -- es
-  // texto de solo lectura, sin ningún `if`/`switch` sobre su valor. Se verifica exactamente eso:
-  // el único uso es la interpolación de display, nunca una condición.
+  // texto de solo lectura, sin ningún `if`/`switch` sobre su valor.
+  //
+  // La cadena EXT (commit 6e25a3c, "render longitudinal history in structured reports") extrajo
+  // el acceso inline `{studyReport.schemaVersion}` de StudyReviewView.tsx a un helper de display,
+  // `reportContractLabel()` en features/reading/studyReportDisplay.ts. El invariante no cambió,
+  // solo su ubicación: StudyReviewView.tsx sigue renderizando la fila "Contrato" (ahora vía el
+  // helper) y el helper es el único punto que lee `schemaVersion`, sin condicionales.
   const studyReviewSource = readSource("src/components/StudyReviewView.tsx");
-  const schemaVersionUses = studyReviewSource.match(/[^\n]*schemaVersion[^\n]*/g) ?? [];
-  assert.ok(schemaVersionUses.length > 0, "StudyReviewView.tsx debería mostrar studyReport.schemaVersion (Stage 88)");
+  assert.match(
+    studyReviewSource,
+    /<dt>Contrato<\/dt><dd>\{reportContractLabel\(studyReport\)\}<\/dd>/,
+    "StudyReviewView.tsx debería mostrar el contrato del informe vía reportContractLabel(studyReport)",
+  );
+
+  const reportDisplaySource = readSource("src/features/reading/studyReportDisplay.ts");
+  const schemaVersionUses = reportDisplaySource.match(/[^\n]*schemaVersion[^\n]*/g) ?? [];
+  assert.ok(schemaVersionUses.length > 0, "studyReportDisplay.ts debería leer report.schemaVersion (Stage 88)");
   for (const line of schemaVersionUses) {
-    assert.match(line, /studyReport\.schemaVersion/, `uso inesperado de schemaVersion fuera del reporte Stage 88: ${line}`);
     assert.doesNotMatch(line, /\bif\s*\(|\bswitch\s*\(|===|!==/, `schemaVersion no debe usarse condicionalmente: ${line}`);
   }
 });
