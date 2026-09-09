@@ -2550,6 +2550,7 @@
   .feedback-exclusion-reason {
     color: var(--text-muted);
     font-style: italic;
+  }
 
   /* EXT-03: mapa de activación (Grad-CAM) ---------------------------------- */
   .activation-map-toggle {
