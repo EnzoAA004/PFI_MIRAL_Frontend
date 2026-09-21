@@ -7,10 +7,11 @@ import { SESSION_INVALIDATED_EVENT, onCrossTabSessionSync } from "./security/ses
 import { AppShell } from "./components/AppShell";
 import { AuthView } from "./components/AuthView";
 import { OnboardingTutorial } from "./components/OnboardingTutorial";
-import { PatientDetailView } from "./components/PatientDetailView";
+import { PatientHistoryPage } from "./components/PatientHistoryPage";
 import { PatientsView } from "./components/PatientsView";
 import { PendingApprovalView } from "./components/PendingApprovalView";
 import { SettingsView } from "./features/settings/SettingsView";
+import { ReviewAnalyticsView } from "./components/ReviewAnalyticsView";
 import { StudyReviewView } from "./components/StudyReviewView";
 import { Worklist } from "./features/worklist/Worklist";
 import { deriveSummary, isReviewQueueItem, mergeStudyRowsWithSelectedRun, normalizeSelectedRunForReview, selectReviewableRunFromDetail, toSelectedStudyReference } from "./appDataGuards";
@@ -82,6 +83,10 @@ function App() {
   const activeView: ViewKey = viewForPath(location.pathname);
   const routeCaseId = caseIdFromPath(location.pathname);
   const [lastStudyNavView, setLastStudyNavView] = useState<"studies" | "queue">("studies");
+  // Stage 84: recuerda desde qué Study se navegó al historial del paciente, sólo para marcar
+  // "Estudio actual" en la línea de tiempo -- no persiste en la URL, así que un acceso directo a
+  // /pacientes/:id (sin pasar por un Study) simplemente no marca ninguno, sin romper la página.
+  const [patientHistoryCurrentCaseId, setPatientHistoryCurrentCaseId] = useState<string | null>(null);
   const [health, setHealth] = useState("consultando");
   const [models, setModels] = useState<AiModel[]>([]);
   const [backendStudies, setBackendStudies] = useState<StudyRow[]>([]);
@@ -506,10 +511,24 @@ function App() {
       {reviewSnapshotStatus === "error" && <div className="toast warning">No se pudo consultar el snapshot de revisión; no bloquea la lista de trabajo.</div>}
       {info && <div className="toast info">{info}</div>}
       {isWorklistView && <Worklist studies={realStudyRows} loading={shouldShowDataLoading} onOpenReview={handleOpenReview} onAnalysisReady={handleViewSavedAnalysis} />}
-      {activeView === "review" && (reviewLoading ? <LoadingState title="Cargando corrida" detail={`Consultando corridas persistidas para ${selectedStudy?.caseId ?? "el estudio seleccionado"}.`} /> : contractIssue ? <ContractErrorState detail={`${contractIssue.message}${contractIssue.path ? ` (${contractIssue.path})` : ""}${contractIssue.traceId ? ` · trace ${contractIssue.traceId}` : ""}`} onBackToStudies={() => changeView(lastStudyNavView)} /> : reviewError ? <ContractErrorState detail={reviewError} onBackToStudies={() => changeView(lastStudyNavView)} /> : safeRun ? <StudyReviewView run={safeRun} studyReview={studyReview} measurements={measurements} auditTrail={auditTrail} saving={saving} onBackToStudies={() => changeView(lastStudyNavView)} onMeasurementsChange={handleMeasurementsChange} onSaveReview={handleSaveReview} onStudyMetadataUpdated={handleStudyMetadataUpdated} selectedDetail={selectedDetail} /> : <EmptyReviewState onBackToStudies={() => changeView(lastStudyNavView)} />)}
+      {activeView === "review" && (reviewLoading ? <LoadingState title="Cargando corrida" detail={`Consultando corridas persistidas para ${selectedStudy?.caseId ?? "el estudio seleccionado"}.`} /> : contractIssue ? <ContractErrorState detail={`${contractIssue.message}${contractIssue.path ? ` (${contractIssue.path})` : ""}${contractIssue.traceId ? ` · trace ${contractIssue.traceId}` : ""}`} onBackToStudies={() => changeView(lastStudyNavView)} /> : reviewError ? <ContractErrorState detail={reviewError} onBackToStudies={() => changeView(lastStudyNavView)} /> : safeRun ? <StudyReviewView run={safeRun} studyReview={studyReview} measurements={measurements} auditTrail={auditTrail} saving={saving} onBackToStudies={() => changeView(lastStudyNavView)} onMeasurementsChange={handleMeasurementsChange} onSaveReview={handleSaveReview} onStudyMetadataUpdated={handleStudyMetadataUpdated} selectedDetail={selectedDetail} onOpenPatientHistory={(subjectRef) => { setPatientHistoryCurrentCaseId(safeRun?.caseId ?? null); navigate(pathForPatient(subjectRef)); }} /> : <EmptyReviewState onBackToStudies={() => changeView(lastStudyNavView)} />)}
       {activeView === "patients" && <PatientsView onOpenPatient={(patientId) => navigate(pathForPatient(patientId))} />}
-      {activeView === "history" && <PatientDetailView patientId={routePatientId ?? ""} onBack={() => navigate(pathForView("patients"))} onOpenStudy={(caseId) => navigate(pathForStudy(caseId))} />}
+      {activeView === "history" && (routePatientId ? (
+        <PatientHistoryPage
+          subjectRef={routePatientId}
+          currentCaseId={patientHistoryCurrentCaseId}
+          onBack={() => navigate(pathForView("patients"))}
+          onOpenStudy={(caseId) => navigate(pathForStudy(caseId))}
+        />
+      ) : (
+        <section className="panel-card clinical-empty-state">
+          <h2>Paciente no encontrado</h2>
+          <p>El enlace no corresponde a una referencia de-identificada válida.</p>
+          <button className="ghost-button" onClick={() => navigate(pathForView("patients"))} type="button">Volver a pacientes</button>
+        </section>
+      ))}
       {activeView === "settings" && <SettingsView user={session.user} onUserUpdated={(user) => setSession((current) => current ? { ...current, user } : current)} onLogout={logout} />}
+      {activeView === "analytics" && <ReviewAnalyticsView onBack={() => changeView("dashboard")} />}
     </AppShell>
   );
 }

@@ -6,6 +6,13 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,10 +21,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Bumped from 22 to 24 (CLOUD-02): matches the Dockerfile's node:24-alpine build
+      # stage exactly, closing the CI/runtime version drift flagged in CLOUD-00.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
@@ -46,18 +55,16 @@ jobs:
         run: npm run build
 
   # La imagen se construye siempre, tambien en un PR: un Dockerfile roto tiene que
-  # aparecer antes del merge. Publicar solo ocurre en un push a main, y despues de lint,
-  # typecheck, tests y build.
+  # aparecer antes del merge.
+  #
+  # CLOUD-02: build-only, sin publicar a ningun registry. El workflow historico en `main`
+  # ya empuja a GHCR en push a main -- esta rama no lo toca ni lo reemplaza, main sigue
+  # intacto. Pero CLOUD-02 en si mismo no publica nada: push:false siempre, sin login, sin
+  # packages:write. La publicacion real (a Google Artifact Registry) es CLOUD-03, con su
+  # propio gate de costo/autorizacion.
   image:
     needs: build
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
-
-    env:
-      IMAGE: ghcr.io/enzoaa004/pfi-frontend
 
     steps:
       - name: Checkout
@@ -66,29 +73,15 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Sin credenciales propias: GITHUB_TOKEN alcanza para GHCR del mismo owner.
-      - name: Log in to GHCR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       # No se pasa VITE_API_BASE_URL a proposito: el backend se configura en runtime con
       # BACKEND_URL, que docker/entrypoint.sh escribe en env.js y que gana sobre lo que
       # quedo compilado. Es lo que permite que esta misma imagen sirva en cualquier
       # entorno sin recompilar.
-      - name: Build and push
+      - name: Build (validation only, never pushed)
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-          tags: |
-            ${{ env.IMAGE }}:sha-${{ github.sha }}
-            ${{ env.IMAGE }}:latest
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
+          push: false
+          tags: pfi-frontend:ci-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -630,6 +630,22 @@ textarea  {
 .timeline small  {
   color: var(--text-muted);
 }
+/* Stage 84: línea de tiempo del historial de paciente -- marcador de "estudio actual", acciones
+   por fila y warnings del análisis, sin semántica de color clínico (sólo estado del producto). */
+.patient-timeline-current  {
+  border-color: var(--teal);
+}
+.patient-timeline-warnings  {
+  color: var(--amber, #b45309);
+}
+.patient-timeline-actions  {
+  display: flex;
+  gap: 8px;
+}
+.patient-evolution-section  {
+  display: grid;
+  gap: 12px;
+}
 .trend-grid, .library-grid  {
   display: grid;
   gap: 14px;

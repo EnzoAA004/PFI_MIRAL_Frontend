@@ -28,8 +28,19 @@ import {
   type ViewportBinding,
 } from "../features/reading/readingWorkspaceLayout";
 import { DegenerativeFindingsPanel } from "../features/reading/DegenerativeFindingsPanel";
+import { ActivationMapPanel } from "../features/reading/ActivationMapPanel";
 import { parseDegenerativeFindings, viewerPointToImagePixels, type DegenerativeFinding, type FindingSide } from "../features/reading/degenerativeFindings";
 import { DiscDegenerativeFindingsPanel } from "../features/reading/DiscDegenerativeFindingsPanel";
+import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Panel";
+import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
+import { ChatPanel } from "../features/reading/ChatPanel";
+import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, displayReportStatus, formatReportDelta, formatReportPercent, formatReportValue, reportContractLabel, reportCorrectedMarker, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
+import { EvidenceRegionEditor } from "../features/reading/EvidenceRegionEditor";
+import { NewEvidenceRegionCreator } from "../features/reading/NewEvidenceRegionCreator";
+import { EvidenceConcordancePanel } from "../features/reading/EvidenceConcordancePanel";
+import { FeedbackCurationPanel } from "../features/reading/FeedbackCurationPanel";
+import { BeforeAfterComparison, BEFORE_AFTER_TITLE } from "../features/reading/BeforeAfterComparison";
+import { NO_VISUAL_EVIDENCE_MESSAGE } from "../features/reading/visualEvidenceDisplay";
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
 import { GovernanceNotice } from "../features/reading/GovernanceNotice";
 import { WorkspaceGovernanceNotice } from "../features/reading/WorkspaceGovernanceNotice";
@@ -46,6 +57,8 @@ import { parseSlicePixelsMeta, type SlicePixelsMeta } from "../features/reading/
 import { coordinateEvidence, parseVolumeGeometry, referenceLineOn, slicePlaneAt } from "../features/reading/referenceLine";
 import { annotatedSlices, annotationToLandmark, displayAnnotationScope, formatMeasurement, isAnnotationVisible, landmarkToAnnotation, measureDistance, withLandmarkAnnotations, type Annotation, type AnnotationScope } from "../features/reading/annotations";
 import { updateStudyMetadata } from "../studyApi";
+import { fetchStudyReportExport, getStudyReport } from "../studyReportApi";
+import type { StudyReport } from "../contracts/studyReportTypes";
 import { displayModelKey, displayPrimaryPlane, displayStudyDate, displaySubjectRef } from "../studyDisplay";
 import { emptyStudyMetadataDraft, normalizeStudyMetadataInput, priorityToBackend, subjectRefErrorMessage, validateSubjectRef, type StudyMetadataDraft } from "../studyMetadata";
 import { studyRunToMriViewerModel } from "../viewModels/mriViewerViewModel";
@@ -114,6 +127,8 @@ interface StudyReviewViewProps {
   /** Detalle persistido del estudio abierto, cargado y poseído por App. */
   selectedDetail: StudyDetailResponse | null;
   onStudyMetadataUpdated?: (caseId: string) => Promise<void>;
+  /** Stage 84: navega al historial longitudinal (subjectRef) del paciente de este estudio. */
+  onOpenPatientHistory?: (subjectRef: string) => void;
 }
 
 function inferenceModeLabel(value?: string) {
@@ -375,7 +390,7 @@ function metadataPayloadEqual(next: StudyMetadataInput, current: StudyMetadataDr
     && next.reviewPriority === current.reviewPriority;
 }
 
-export function StudyReviewView({ run, studyReview, measurements, auditTrail, saving, onBackToStudies, onMeasurementsChange, onSaveReview, onStudyMetadataUpdated, selectedDetail }: StudyReviewViewProps) {
+export function StudyReviewView({ run, studyReview, measurements, auditTrail, saving, onBackToStudies, onMeasurementsChange, onSaveReview, onStudyMetadataUpdated, selectedDetail, onOpenPatientHistory }: StudyReviewViewProps) {
   const [tab, setTab] = useState<"Sagittal" | "Axial" | "3D Reconstruction">("Sagittal");
   const [selectedSeriesId, setSelectedSeriesId] = useState("");
   const [editMode, setEditMode] = useState(false);
@@ -499,6 +514,56 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     modelKey: run.modelKey ?? selectedDetail?.study?.modelKey ?? undefined,
     review: run.review ?? selectedDetail?.review,
   };
+  const [studyReport, setStudyReport] = useState<StudyReport | null>(null);
+  const [studyReportPhase, setStudyReportPhase] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [studyReportError, setStudyReportError] = useState("");
+  const [studyReportRefresh, setStudyReportRefresh] = useState(0);
+  const [studyReportExportError, setStudyReportExportError] = useState("");
+
+  useEffect(() => {
+    setStudyReport(null);
+    setStudyReportPhase("idle");
+    setStudyReportError("");
+    setStudyReportExportError("");
+  }, [displayRun.caseId, displayRun.runId]);
+
+  useEffect(() => {
+    if (panelTab !== "more" || !displayRun.caseId) return;
+    let cancelled = false;
+    setStudyReportPhase("loading");
+    setStudyReportError("");
+    getStudyReport(displayRun.caseId)
+      .then((report) => {
+        if (cancelled) return;
+        setStudyReport(report);
+        setStudyReportPhase("ready");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setStudyReport(null);
+        setStudyReportPhase("error");
+        setStudyReportError(error instanceof Error ? error.message : "No se pudo cargar el informe estructurado.");
+      });
+    return () => { cancelled = true; };
+  }, [panelTab, displayRun.caseId, studyReportRefresh]);
+
+  // EXT-07B: the previous study's own report is fetched only for its visualEvidence (to render
+  // the "Comparación con estudio previo" image+overlay side) — the numeric before/after values
+  // themselves already come from the CURRENT study's own longitudinalHistory.comparisons
+  // (Backend-computed, EXT-04A), never recomputed here.
+  const [previousStudyReport, setPreviousStudyReport] = useState<StudyReport | null>(null);
+  const previousCaseId = studyReport?.longitudinalHistory?.previousStudies[0]?.caseId ?? null;
+  useEffect(() => {
+    if (!previousCaseId) {
+      setPreviousStudyReport(null);
+      return;
+    }
+    let cancelled = false;
+    getStudyReport(previousCaseId)
+      .then((report) => { if (!cancelled) setPreviousStudyReport(report); })
+      .catch(() => { if (!cancelled) setPreviousStudyReport(null); });
+    return () => { cancelled = true; };
+  }, [previousCaseId]);
 
   // El proxy 3D se reabre desde el snapshot durable del backend
   // (canonicalRun/metricsSnapshot), nunca desde el AI Module en vivo. Usa el mismo
@@ -1541,6 +1606,17 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     if (ventana.document.readyState === "complete") ventana.print();
   }
 
+  async function exportBackendStudyReport(format: "json" | "pdf") {
+    if (!displayRun.caseId) return;
+    setStudyReportExportError("");
+    try {
+      const download = await fetchStudyReportExport(displayRun.caseId, format);
+      downloadBlob(download.filename, download.blob);
+    } catch (error) {
+      setStudyReportExportError(error instanceof Error ? error.message : "No se pudo exportar el informe estructurado.");
+    }
+  }
+
   /*
    * Las anotaciones se guardan junto con la revisión y no en cada trazo: el
    * revisor mide y descarta varias veces mientras lee, y persistir cada
@@ -2176,6 +2252,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                     unavailableReason={discDegenerativeSnapshot.unavailable}
                   />
 
+                  {displayRun.caseId && <ProductAnalysisV1Panel caseId={displayRun.caseId} />}
+
                   <DegenerativeFindingsPanel
                     findings={visibleDegenerativeFindings}
                     onSelectFinding={selectDegenerativeFinding}
@@ -2198,6 +2276,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                     }}
                     selectedFindingId={selectedFindingId}
                   />
+                  {!demoMode && <ActivationMapPanel inputId={axialInputId()} roiDraft={roiDraft} />}
                 </section>
           </ReviewInspectorPanel>
 
@@ -2217,6 +2296,54 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   </button>
                 </div>
               </details>
+
+              {displayRun.caseId && (() => {
+                const patientHistorySubjectRef = selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null;
+                return (
+                  <details className="rr-more-section">
+                    <summary>Historial del paciente</summary>
+                    <div className="rr-more-section-body">
+                      {patientHistorySubjectRef ? (
+                        <button
+                          className="rr-more-action"
+                          type="button"
+                          onClick={() => onOpenPatientHistory?.(patientHistorySubjectRef)}
+                          disabled={!onOpenPatientHistory}
+                        >
+                          Ver historial del paciente
+                        </button>
+                      ) : (
+                        <p className="panel-hidden-placeholder honest-empty-state">
+                          Este estudio no tiene una referencia longitudinal disponible.
+                        </p>
+                      )}
+                    </div>
+                  </details>
+                );
+              })()}
+
+              {displayRun.caseId && (
+                <details className="rr-more-section">
+                  <summary>Evolución</summary>
+                  <div className="rr-more-section-body">
+                    <p className="rr-section-title">Comparación entre estudios</p>
+                    <LongitudinalComparisonPanel
+                      caseId={displayRun.caseId}
+                      subjectRef={selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null}
+                    />
+                  </div>
+                </details>
+              )}
+
+              {displayRun.caseId && (
+                <details className="rr-more-section">
+                  <summary>Asistente</summary>
+                  <div className="rr-more-section-body">
+                    <p className="rr-section-title">Asistente contextual</p>
+                    <ChatPanel caseId={displayRun.caseId} />
+                  </div>
+                </details>
+              )}
 
               <details className="rr-more-section" open>
                 <summary>Anotaciones</summary>
@@ -2302,61 +2429,168 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
               <details className="rr-more-section">
                 <summary>Informe / exportación</summary>
                 <div className="rr-more-section-body">
-                <p className="rr-section-title">Informe por nivel</p>
-                <p className="rr-note">
-                  Cubre los dos planos del estudio. {structuredReport.flaggedTotal > 0
-                    ? `${structuredReport.flaggedTotal} medición${structuredReport.flaggedTotal === 1 ? "" : "es"} fuera del rango de referencia.`
-                    : "Ninguna medición fuera del rango de referencia."}
-                </p>
+                <p className="rr-section-title">Informe estructurado</p>
+                <p className="rr-note">{REPORT_SAFETY_TEXT}</p>
+                {studyReportPhase === "loading" && <p className="rr-note">Cargando informe desde Backend...</p>}
+                {studyReportPhase === "error" && <p className="rr-note rr-export-error">{studyReportError}</p>}
+                {studyReport && (
+                  <div className="rr-backend-report" data-testid="backend-study-report">
+                    <dl className="rr-tech">
+                      <dt>Contrato</dt><dd>{reportContractLabel(studyReport)}</dd>
+                      <dt>Estado</dt><dd>{displayReportStatus(studyReport.reportStatus)}</dd>
+                      <dt>Study</dt><dd>{studyReport.caseId}</dd>
+                      <dt>Run efectivo</dt><dd>{studyReport.analysis.analysisRunId ?? "No disponible"}</dd>
+                      <dt>Revisión</dt><dd>{studyReport.review.reviewStatus}</dd>
+                    </dl>
 
-                <ol className="rr-report">
-                  {structuredReport.levels.map((level) => (
-                    <li className={`rr-report-level${level.evaluated ? "" : " is-empty"}${level.flagged ? " is-flagged" : ""}`} key={level.level}>
-                      <strong>{level.level}</strong>
-                      {/*
-                        Un nivel sin medir se declara. Omitirlo lo dejaría leer como si
-                        no hubiera nada que informar ahí, que es una afirmación que la
-                        corrida no hizo.
-                      */}
-                      {level.evaluated
-                        ? <ul>{level.entries.map((entry) => <li key={entry.id}>{entryText(entry)}</li>)}</ul>
-                        : <p className="rr-note">No evaluado en esta corrida.</p>}
-                    </li>
-                  ))}
-                </ol>
+                    <p className="rr-section-title">Niveles</p>
+                    {studyReport.discLevels.length ? (
+                      <ul className="rr-report-loose">
+                        {studyReport.discLevels.map((level) => (
+                          <li key={level.discLevelResultId}>
+                            {(level.level ?? "Sin nivel")} · localización {level.localizationStatus ?? "no informada"} · axial {level.axialPairingStatus ?? "no informado"} · revisión {level.reviewStatus}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <p className="rr-note">No hay niveles estructurados para una corrida completed/partial utilizable.</p>}
 
-                {structuredReport.studyWide.length > 0 && (
-                  <>
-                    <p className="rr-section-title">Del estudio</p>
-                    <ul className="rr-report-loose">
-                      {structuredReport.studyWide.map((entry) => <li key={entry.id}>{entryText(entry)}</li>)}
-                    </ul>
-                  </>
+                    <p className="rr-section-title">Mediciones efectivas</p>
+                    {studyReport.measurements.length ? (
+                      <ul className="rr-report-loose">
+                        {studyReport.measurements.slice(0, 8).map((measurement, index) => (
+                          <li key={`${measurement.level}-${measurement.plane}-${measurement.structure}-${measurement.metric}-${index}`}>
+                            {reportMeasurementLine(measurement)}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <p className="rr-note">Sin mediciones efectivas disponibles.</p>}
+                    {studyReport.measurements.length > 8 && <p className="rr-note">Se muestran 8 de {studyReport.measurements.length}. El JSON/PDF incluye el reporte completo.</p>}
+
+                    <p className="rr-section-title">Evolución / comparación con estudios previos</p>
+                    {studyReport.longitudinalHistory?.comparisons.length ? (
+                      <>
+                        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- scroll horizontal accesible por teclado */}
+                        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla de evolución longitudinal del informe">
+                          <table className="worklist-table longitudinal-measurements-table">
+                            <thead>
+                              <tr>
+                                <th>Fecha</th>
+                                <th>Nivel</th>
+                                <th>Estructura / métrica</th>
+                                <th>Previo</th>
+                                <th>Actual</th>
+                                <th>Delta</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {studyReport.longitudinalHistory.comparisons.slice(0, 8).map((row, index) => (
+                                <tr key={`${row.previousCaseId}-${row.level}-${row.metric}-${index}`}>
+                                  <td>{displayStudyDate(row.previousStudyDate)}</td>
+                                  <td>{row.level ?? "Sin nivel"}</td>
+                                  <td>{row.structure ?? "estructura"} · {displayReportMetric(row.metric)}</td>
+                                  <td>
+                                    {formatReportValue(row.previousEffectiveValue, row.unit)}
+                                    {reportCorrectedMarker(row.previousValueSource) && <small className="rr-note"> ({reportCorrectedMarker(row.previousValueSource)})</small>}
+                                  </td>
+                                  <td>
+                                    {formatReportValue(row.currentEffectiveValue, row.unit)}
+                                    {reportCorrectedMarker(row.currentValueSource) && <small className="rr-note"> ({reportCorrectedMarker(row.currentValueSource)})</small>}
+                                  </td>
+                                  <td>{formatReportDelta(row.absoluteDelta, row.unit)} · {formatReportPercent(row.percentageDelta)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {studyReport.longitudinalHistory.comparisons.length > 8 && <p className="rr-note">Se muestran 8 de {studyReport.longitudinalHistory.comparisons.length}. El JSON/PDF incluye el historial completo.</p>}
+                      </>
+                    ) : (
+                      <p className="rr-note">{studyReport.longitudinalHistory?.message ?? "No existen estudios previos comparables disponibles."}</p>
+                    )}
+                    {studyReport.longitudinalHistory?.previousStudies.length ? (
+                      <ul className="rr-report-loose">
+                        {studyReport.longitudinalHistory.previousStudies.map((previous) => (
+                          <li key={previous.caseId}>
+                            {displayStudyDate(previous.studyDate)} · {displayHistoryPreviousStatus(previous.comparisonStatus)} · {previous.comparableMeasurementCount} métricas comparables
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    {/* EXT-07B: reutiliza longitudinalHistory.comparisons (ya calculado por
+                        Backend) para los valores/deltas, y el reporte del estudio anterior
+                        (fetch aparte, solo para su visualEvidence) para el lado "Anterior" del
+                        overlay — nunca recalcula un delta en el Frontend. */}
+                    <p className="rr-section-title">{BEFORE_AFTER_TITLE}</p>
+                    <BeforeAfterComparison current={studyReport} previous={previousStudyReport} />
+
+                    <p className="rr-section-title">Medición seleccionada</p>
+                    {studyReport.measurements[0]
+                      ? (
+                        <dl className="rr-tech">
+                          <dt>Nivel</dt><dd>{studyReport.measurements[0].level ?? "Sin nivel"}</dd>
+                          <dt>Plano</dt><dd>{displayReportPlane(studyReport.measurements[0].plane)}</dd>
+                          <dt>Métrica</dt><dd>{displayReportMetric(studyReport.measurements[0].metric)}</dd>
+                          <dt>IA</dt><dd>{formatReportValue(studyReport.measurements[0].automaticValue, studyReport.measurements[0].unit)}</dd>
+                          <dt>Efectivo</dt><dd>{formatReportValue(studyReport.measurements[0].effectiveValue, studyReport.measurements[0].unit)}</dd>
+                        </dl>
+                      )
+                      : <p className="rr-note">Sin medición seleccionada por el reporte.</p>}
+
+                    {(studyReport.warnings.length > 0 || studyReport.limitations.length > 0) && (
+                      <>
+                        <p className="rr-section-title">Warnings / limitations</p>
+                        <ul className="rr-report-loose">
+                          {[...studyReport.warnings, ...studyReport.limitations].map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+                        </ul>
+                      </>
+                    )}
+
+                    {/* EXT-04B5: cada región se renderiza de solo lectura por defecto; el
+                        propio `EvidenceRegionEditor` es quien ofrece "Editar anotación" para
+                        BBOX/ELLIPSE y llama a `setStudyReportRefresh` tras guardar, para que el
+                        refetch quede en un único lugar y el componente nunca reimplemente su
+                        propia lógica de fetch. `visualEvidence` sigue siendo siempre un array
+                        (nunca undefined, ver studyReportApi.ts#parseVisualEvidence). */}
+                    <p className="rr-section-title">Evidencia visual</p>
+                    {studyReport.visualEvidence.length ? (
+                      <ul className="evidence-region-list" data-testid="visual-evidence-list">
+                        {studyReport.visualEvidence.map((item) => (
+                          <EvidenceRegionEditor
+                            item={item}
+                            key={item.evidenceId}
+                            caseId={studyReport.caseId}
+                            analysisRunId={studyReport.analysis.analysisRunId}
+                            onSaved={() => setStudyReportRefresh((value) => value + 1)}
+                          />
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="rr-note" data-testid="visual-evidence-empty">{NO_VISUAL_EVIDENCE_MESSAGE}</p>
+                    )}
+                    <NewEvidenceRegionCreator
+                      caseId={studyReport.caseId}
+                      analysisRunId={studyReport.analysis.analysisRunId}
+                      plane={activePlano}
+                      inputId={currentSeries?.sourceInputId ?? null}
+                      sliceIndex={currentSliceOf(activePlano)}
+                      onCreated={() => setStudyReportRefresh((value) => value + 1)}
+                    />
+                  </div>
                 )}
 
-                {structuredReport.unassigned.length > 0 && (
-                  <>
-                    <p className="rr-section-title">Sin nivel asignado</p>
-                    <p className="rr-note">Medidas que la corrida no pudo asociar a un nivel. No es lo mismo que no aplicar a ninguno.</p>
-                    <ul className="rr-report-loose">
-                      {structuredReport.unassigned.map((entry) => <li key={entry.id}>{entryText(entry)}</li>)}
-                    </ul>
-                  </>
-                )}
-
-                <p className="rr-section-title">Exportar</p>
+                <p className="rr-section-title">Exportar desde Backend</p>
                 <div className="rr-report-actions">
-                  <button onClick={printReport} type="button">PDF</button>
-                  <button onClick={() => { void exportHtml(); }} type="button">HTML</button>
-                  <button onClick={() => { void exportCsv(); }} type="button">CSV</button>
-                  <button onClick={() => { void exportJson(); }} type="button">JSON</button>
+                  <button onClick={() => { void exportBackendStudyReport("pdf"); }} type="button">PDF</button>
+                  <button onClick={() => { void exportBackendStudyReport("json"); }} type="button">JSON</button>
+                  <button onClick={() => setStudyReportRefresh((value) => value + 1)} type="button">Actualizar</button>
                 </div>
+                {studyReportExportError && <p className="rr-note rr-export-error">{studyReportExportError}</p>}
 
                 {/*
-                  DICOM va aparte de los tres de arriba a propósito. HTML, CSV y JSON son
-                  el informe para leer o para procesar acá; estos dos son los objetos que
-                  otro sistema puede abrir sobre la misma imagen. Mezclarlos en una fila
-                  los haría parecer cuatro formatos del mismo informe.
+                  DICOM va aparte del reporte técnico. PDF/JSON son el informe estructurado
+                  del Backend; estos dos son objetos interoperables que otro visor puede abrir
+                  sobre la misma imagen.
                 */}
                 <p className="rr-section-title">Exportar en DICOM</p>
                 <p className="rr-note">
@@ -2377,6 +2611,20 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   Uso académico y de investigación sobre datos de-identificados. Requiere revisión
                   profesional y no constituye un diagnóstico.
                 </p>
+                </div>
+              </details>
+
+              <details className="rr-more-section">
+                <summary>Concordancia de evidencia</summary>
+                <div className="rr-more-section-body">
+                  <EvidenceConcordancePanel caseId={displayRun.caseId ?? ""} batchFindings={degenerativeFindings} roiFindings={roiFindings} />
+                </div>
+              </details>
+
+              <details className="rr-more-section">
+                <summary>Feedback / Curación</summary>
+                <div className="rr-more-section-body">
+                  <FeedbackCurationPanel caseId={studyReport?.caseId ?? displayRun.caseId ?? ""} />
                 </div>
               </details>
 

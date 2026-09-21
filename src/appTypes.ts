@@ -4,7 +4,7 @@ export type Priority = "alta" | "media" | "baja";
 export type DataOrigin = "backend" | "ai_module" | "database" | "demo";
 export type MultiplanarRunId = string;
 export type PlaneRunId = string;
-export type ViewKey = "dashboard" | "studies" | "queue" | "review" | "patients" | "history" | "settings";
+export type ViewKey = "dashboard" | "studies" | "queue" | "review" | "patients" | "history" | "settings" | "analytics";
 
 export type HistoryTarget =
   | { kind: "subject"; subjectRef: string }
@@ -531,6 +531,22 @@ export type AuditEvent = {
   detail: string;
 };
 
+/**
+ * Stage 84-C: resumen del análisis post-e50 (Stage 76/78/79 -- AiProductAnalysisRun), distinto
+ * del `StudyRun` legado que ocupa el resto de `PatientStudy`. `null` cuando el Study todavía no
+ * tiene un análisis efectivo (Stage 84-D: "Sin análisis" es un estado normal, nunca un error).
+ */
+export type PatientStudyProductAnalysis = {
+  analysisRunId: string;
+  status: string;
+  reviewStatus: string;
+  measurementCount: number;
+  correctedMeasurementCount: number;
+  warnings: string[];
+  humanReviewRequired: boolean;
+  notClinicalDiagnosis: boolean;
+};
+
 export type PatientStudy = {
   caseId: string;
   subjectRef?: string | null;
@@ -549,6 +565,7 @@ export type PatientStudy = {
   corrections?: PersistedReviewCorrection[];
   createdAt?: string;
   updatedAt?: string;
+  productAnalysis?: PatientStudyProductAnalysis | null;
   metrics?: {
     lordosisAngle?: number;
     canalDiameter?: number;
@@ -557,6 +574,30 @@ export type PatientStudy = {
     aiInitial?: Record<string, number>;
     reviewerFinal?: Record<string, number>;
   };
+};
+
+/** Stage 84-L: la misma matching key `(level, plane, structure, metric)` de Stage 79, más `unit` para mostrar. */
+export type MeasurementSeriesKey = {
+  level: string | null;
+  plane: string;
+  structure: string;
+  metric: string;
+  unit: string;
+};
+
+/** Stage 84-J: el valor original de IA nunca se omite, incluso cuando existe una corrección. */
+export type MeasurementSeriesPoint = {
+  caseId: string;
+  studyDate: string | null;
+  automaticValue: number | null;
+  correctedValue: number | null;
+  effectiveValue: number | null;
+  effectiveSource: "ai_original" | "professional_correction" | string;
+};
+
+export type MeasurementSeries = {
+  key: MeasurementSeriesKey;
+  points: MeasurementSeriesPoint[];
 };
 
 export type PatientHistorySummary = {
@@ -575,6 +616,20 @@ export type PatientHistoryGovernance = {
   derivedMetricsExport?: string;
   humanReviewRequired?: boolean;
   notClinicalDiagnosis?: boolean;
+};
+
+/**
+ * Stage 85: una fila de la lista de pacientes -- una proyección agregada sobre `Study.subjectRef`,
+ * nunca una entidad Patient. `subjectRef` viaja para poder navegar (ver `pathForPatient`) pero no
+ * se muestra como nombre visible (ver `PatientsView`, política 85-I).
+ */
+export type SubjectSummary = {
+  subjectRef: string;
+  studyCount: number;
+  latestStudyDate: string | null;
+  latestCaseId: string;
+  latestAnalysisStatus: string | null;
+  latestReviewStatus: string | null;
 };
 
 export type PatientHistoryResponse = {

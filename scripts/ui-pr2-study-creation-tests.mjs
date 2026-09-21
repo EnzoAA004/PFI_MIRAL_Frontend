@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 const worklist = readFileSync("src/features/worklist/Worklist.tsx", "utf8");
 const filters = readFileSync("src/features/worklist/studyFilters.ts", "utf8");
 const drawer = readFileSync("src/features/worklist/NewAnalysisDrawer.tsx", "utf8");
-const patientApi = readFileSync("src/patientApi.ts", "utf8");
+const selector = readFileSync("src/features/worklist/SubjectSelector.tsx", "utf8");
 const routes = readFileSync("src/routes.ts", "utf8");
 
 let count = 0;
@@ -27,14 +27,14 @@ test("Worklist no presenta el modelo como criterio de búsqueda visible", () => 
 });
 
 test("la referencia del estudio usa copy operativo", () => {
-  assert.match(drawer, /Referencia interna del estudio \(opcional\)/);
-  assert.match(drawer, /referencia breve para reconocer este estudio/);
-  assert.doesNotMatch(drawer, /Referencia técnica legacy del estudio/);
+  assert.match(selector, /Referencia interna del estudio \(opcional\)/);
+  assert.match(selector, /referencia breve para reconocer este estudio/);
+  assert.doesNotMatch(selector, /Referencia técnica legacy del estudio/);
 });
 
 test("el placeholder ya no parece un dataset técnico", () => {
-  assert.match(drawer, /placeholder="EST-2026-001"/);
-  assert.doesNotMatch(drawer, /placeholder="SPIDER-101"/);
+  assert.match(selector, /placeholder="EST-2026-001"/);
+  assert.doesNotMatch(selector, /placeholder="SPIDER-101"/);
 });
 
 /*
@@ -55,7 +55,6 @@ test("el análisis muestra progreso honesto sin porcentaje inventado", () => {
   assert.match(drawer, /aria-label="Progreso del análisis"/);
   assert.match(drawer, /Procesando imágenes/);
   assert.match(drawer, /Completando resultados/);
-  assert.match(drawer, /Asociando al paciente/);
   assert.match(drawer, /El sistema no informa porcentajes/);
   assert.doesNotMatch(drawer, /progressPercent|setInterval/);
 });
@@ -63,13 +62,14 @@ test("el análisis muestra progreso honesto sin porcentaje inventado", () => {
 test("doble submit queda bloqueado de forma síncrona", () => {
   assert.match(drawer, /runInFlightRef\.current/);
   assert.match(drawer, /if \(!sagittalReady \|\| running \|\| runInFlightRef\.current\) return/);
-  assert.match(drawer, /disabled=\{!patientReady \|\| !sagittalReady \|\| running\}/);
+  assert.match(drawer, /disabled=\{!sagittalReady \|\| running\}/);
 });
 
-test("éxito completo abre automáticamente el Study asociado", () => {
+test("éxito completo abre automáticamente el Study creado con subjectRef", () => {
   const successBlock = drawer.slice(drawer.indexOf("const nextProductState = await runProductExtensions(context)"), drawer.indexOf("// La corrida existe"));
-  assert.match(successBlock, /association\.status === "associated"/);
+  assert.match(successBlock, /\["completed", "degraded"\]\.includes\(nextProductState\.phase\)/);
   assert.match(successBlock, /openCompletedStudy\(context\.caseId\)/);
+  assert.doesNotMatch(drawer, /attemptPatientAssociation|associatePatientAfterAnalysis/);
 });
 
 test("un error de análisis no navega y mantiene el contexto", () => {
@@ -81,17 +81,13 @@ test("un error de análisis no navega y mantiene el contexto", () => {
   assert.doesNotMatch(errorBlock, /onAnalysisReady|openCompletedStudy/);
 });
 
-test("retry de asociación conserva operación exclusiva y autoabre al resolver", () => {
-  const retryBlock = drawer.slice(drawer.indexOf("async function retryPatientAssociation"), drawer.indexOf("async function run()"));
-  assert.match(retryBlock, /attemptPatientAssociation\(persistedRun, selectedPatient\.id\)/);
-  assert.doesNotMatch(retryBlock, /runMultiplanarAnalysis|createPatient/);
-  assert.match(retryBlock, /openCompletedStudy\(persistedRun\.caseId\)/);
+test("no existe un paso de asociación posterior a la corrida (Stage 86)", () => {
+  assert.doesNotMatch(drawer, /associationState|attemptPatientAssociation|retryPatientAssociation|patientStudyAssociation/);
 });
 
-test("Patient API mantiene endpoints y payloads existentes", () => {
-  assert.match(patientApi, /multiplanarRequest<unknown>\("\/api\/patients"/);
-  assert.match(patientApi, /body: JSON\.stringify\(request\)/);
-  assert.match(patientApi, /reason: "INITIAL_ASSIGNMENT"/);
+test("el estudio se crea con el subjectRef elegido en un único request", () => {
+  assert.match(drawer, /studyMetadata: normalizedStudyMetadata/);
+  assert.doesNotMatch(drawer, /PUT.*\/patient|associateStudyPatient/);
 });
 
 test("Study Review conserva la ruta funcional por caseId", () => {

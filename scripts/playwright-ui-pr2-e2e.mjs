@@ -9,7 +9,6 @@ const appUrl = `http://127.0.0.1:${port}`;
 const backendUrl = "http://localhost:8080";
 const authKey = "lumbar-mri-auth-session-v1";
 const caseId = "CASE-UI-PR2";
-const patientId = "11111111-1111-4111-8111-111111111111";
 const runId = "run-ui-pr2";
 const finalHash = "cf11dcc0ad77a7c787e64a796a2fd7398ef906add461cef4b3d61f1a5238e944";
 const evidenceDir = process.env.UI_PR2_EVIDENCE_DIR;
@@ -163,7 +162,7 @@ async function seedSession(page) {
 }
 
 async function installBackendMocks(page, { failRun = false } = {}) {
-  const calls = { run: 0, association: 0 };
+  const calls = { run: 0, legacyPatient: 0 };
   let studyCreated = false;
   await page.route(`${backendUrl}/api/**`, async (route) => {
     const request = route.request();
@@ -172,8 +171,12 @@ async function installBackendMocks(page, { failRun = false } = {}) {
     if (apiPath === "/api/system/health" || apiPath === "/api/ai/health") return route.fulfill({ json: { status: "ok" } });
     if (apiPath === "/api/ai/models") return route.fulfill({ json: [] });
     if (apiPath === "/api/auth/me") return route.fulfill({ json: user });
-    if (apiPath === "/api/patients" && request.method() === "GET") {
-      return route.fulfill({ json: [{ id: patientId, patientReference: "PAC-UI-PR2", createdAt: "2026-08-13T12:00:00Z", updatedAt: "2026-08-13T12:00:00Z" }] });
+    if (apiPath.startsWith("/api/patients")) {
+      calls.legacyPatient += 1;
+      return route.fulfill({ status: 404, json: { code: "NOT_FOUND" } });
+    }
+    if (apiPath === "/api/subjects") {
+      return route.fulfill({ json: [{ subjectRef: "PAT-UI-PR2", studyCount: 1, latestStudyDate: "2026-08-01", latestCaseId: "CASE-EXISTING", latestAnalysisStatus: null, latestReviewStatus: null }] });
     }
     if (apiPath === "/api/studies") {
       return route.fulfill({
@@ -200,9 +203,9 @@ async function installBackendMocks(page, { failRun = false } = {}) {
       studyCreated = true;
       return route.fulfill({ json: canonicalRunResponse() });
     }
-    if (apiPath === `/api/studies/${caseId}/patient` && request.method() === "PUT") {
-      calls.association += 1;
-      return route.fulfill({ json: { studyId: "22222222-2222-4222-8222-222222222222", caseId, patientId, previousPatientId: null, reasonCode: "INITIAL_ASSIGNMENT", changed: true } });
+    if (apiPath.startsWith("/api/studies/") && apiPath.endsWith("/patient")) {
+      calls.legacyPatient += 1;
+      return route.fulfill({ status: 404, json: { code: "NOT_FOUND" } });
     }
     if (apiPath === "/api/audit" || apiPath === "/api/audit/events") return route.fulfill({ json: [] });
     return route.fulfill({ json: {} });
@@ -213,8 +216,8 @@ async function installBackendMocks(page, { failRun = false } = {}) {
 async function openPreparedDrawer(page) {
   await page.getByRole("heading", { name: "Lista de trabajo" }).waitFor({ timeout: 10_000 });
   await page.getByRole("button", { name: /Nuevo análisis/ }).click();
-  await page.getByPlaceholder("PAC-00").fill("PAC");
-  await page.getByRole("button", { name: "PAC-UI-PR2" }).click();
+  // Stage 86: el paciente/subjectRef es opcional -- este flujo prueba el caso "sin
+  // asociar" a propósito, para confirmar que ya no depende de una selección previa.
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
   await page.getByRole("button", { name: /Cargar un archivo por plano/ }).click();
   await page.locator('input[type="file"]').nth(1).setInputFiles({
@@ -247,8 +250,10 @@ async function runSuccess(browser) {
   await seedSession(page);
   assertTruthy(await page.getByRole("columnheader", { name: "Modelo" }).count() === 0, "Worklist no debe mostrar Modelo");
   await openPreparedDrawer(page);
+  await page.getByLabel("Paciente nuevo").check();
   assertTruthy(await page.getByText("Referencia interna del estudio (opcional)").count() === 1, "debe mostrar el copy operativo");
   assertTruthy(await page.getByPlaceholder("EST-2026-001").count() === 1, "debe mostrar el placeholder operativo");
+  await page.getByLabel("Paciente existente").check();
   for (const [width, height] of [[1920, 1080], [1366, 768], [390, 844]]) await capture(page, "new-analysis", width, height);
 
   const analyze = page.getByRole("button", { name: "Analizar" });
@@ -260,7 +265,8 @@ async function runSuccess(browser) {
   await page.waitForTimeout(100);
   assertTruthy(calls.run === 1, "doble submit debe quedar bloqueado en una sola corrida");
   await page.waitForURL(`${appUrl}/estudio/${caseId}`, { timeout: 10_000 });
-  assertTruthy(calls.run === 1 && calls.association === 1, "el éxito debe ejecutar una corrida y una asociación");
+  assertTruthy(calls.run === 1, "el éxito debe ejecutar una única corrida, sin paso de asociación posterior");
+  assertTruthy(calls.legacyPatient === 0, "no debe haber requests a /api/patients ni /api/studies/{caseId}/patient");
   await page.close();
 }
 
@@ -273,9 +279,9 @@ async function runError(browser) {
   await page.getByText(/No se pudo ejecutar el análisis/).waitFor({ timeout: 10_000 });
   assertTruthy(!new URL(page.url()).pathname.startsWith("/estudio/"), "un error no debe navegar a Study Review");
   assertTruthy(await page.locator(".wl-drawer").isVisible(), "un error debe mantener abierto el flujo de creación");
-  assertTruthy(await page.getByText("Paciente seleccionado").count() === 1, "el Patient debe mantenerse seleccionado");
   assertTruthy(await page.getByRole("button", { name: "Analizar" }).isEnabled(), "el análisis debe poder reintentarse");
-  assertTruthy(calls.run === 1 && calls.association === 0, "un fallo no debe asociar ni navegar");
+  assertTruthy(calls.run === 1, "un fallo no debe navegar");
+  assertTruthy(calls.legacyPatient === 0, "un fallo no debe haber tocado el endpoint legacy de patients");
   await page.close();
 }
 

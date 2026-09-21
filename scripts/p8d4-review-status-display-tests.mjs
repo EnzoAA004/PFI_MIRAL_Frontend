@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
@@ -130,16 +130,14 @@ test("E diccionario muestra labels sin mutar claves tecnicas", () => {
   assert.equal(display.displayMeasurementLabel("unknown_metric_key"), "unknown metric key");
 });
 
-test("F Pacientes usa entidades reales y no agrupa Studies por subjectRef", () => {
+test("F Pacientes agrupa por subjectRef via la proyeccion del Backend (Stage 85 -- reemplaza la busqueda por entidad Patient)", () => {
   const source = readFileSync(join(root, "src/components/PatientsView.tsx"), "utf8");
-  assert.match(source, /searchPatients\(query, 100\)/);
-  assert.doesNotMatch(source, /subjectRef|buildPatients|StudyRow/);
+  assert.match(source, /fetchSubjectList\(\)/);
+  assert.doesNotMatch(source, /searchPatients/);
 });
 
-test("G el detalle longitudinal consulta Studies por patientId", () => {
-  const source = readFileSync(join(root, "src/components/PatientDetailView.tsx"), "utf8");
-  assert.match(source, /getPatientStudies\(patientId\)/);
-  assert.doesNotMatch(source, /subjectRef|fetchSubjectHistory/);
+test("G PatientDetailView fue retirado (Stage 85 -- huerfano desde Stage 84, reemplazado por PatientHistoryPage)", () => {
+  assert.ok(!existsSync(join(root, "src/components/PatientDetailView.tsx")));
 });
 
 test("H estilos semanticos de botones existen", () => {

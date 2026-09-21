@@ -1,0 +1,56 @@
+name: CLOUD-03 Publish Image (Frontend)
+
+# TEMPORARY (CLOUD-03 first-publish validation): workflow_dispatch alone
+# cannot be triggered via the Actions tab/API until this file exists on the
+# repo's default branch, which it does not yet (still isolated on this
+# branch, per CLOUD-03 branch isolation). Until then, a push scoped
+# EXCLUSIVELY to this one branch name is the only way to exercise this
+# workflow without merging/PRing into main. workflow_dispatch is kept so it
+# becomes usable the normal way once this file reaches the default branch.
+on:
+  push:
+    branches:
+      - cloud/cloud-03-artifact-wif-frontend
+  workflow_dispatch: {}
+
+concurrency:
+  group: cloud-03-publish-frontend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_ARTIFACT_PUSH_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # No VITE_API_BASE_URL build arg on purpose -- BACKEND_URL is resolved
+      # at container start (docker/entrypoint.sh -> env.js), the same
+      # build-once/deploy-anywhere pattern already used for GHCR.
+      - name: Build and push (tagged by git SHA, never :latest)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REPOSITORY }}/frontend:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
