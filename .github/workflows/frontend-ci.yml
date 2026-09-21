@@ -71,7 +71,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # No se pasa VITE_API_BASE_URL a proposito: el backend se configura en runtime con
       # BACKEND_URL, que docker/entrypoint.sh escribe en env.js y que gana sobre lo que
