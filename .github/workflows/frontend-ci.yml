@@ -24,7 +24,7 @@ jobs:
       # Bumped from 22 to 24 (CLOUD-02): matches the Dockerfile's node:24-alpine build
       # stage exactly, closing the CI/runtime version drift flagged in CLOUD-00.
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: "npm"
