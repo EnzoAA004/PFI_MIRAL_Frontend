@@ -44,7 +44,7 @@ jobs:
       # at container start (docker/entrypoint.sh -> env.js), the same
       # build-once/deploy-anywhere pattern already used for GHCR.
       - name: Build and push (tagged by git SHA, never :latest)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true

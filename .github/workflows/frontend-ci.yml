@@ -78,7 +78,7 @@ jobs:
       # quedo compilado. Es lo que permite que esta misma imagen sirva en cualquier
       # entorno sin recompilar.
       - name: Build (validation only, never pushed)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
