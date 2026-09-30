@@ -307,3 +307,37 @@
   min-width: 0;
   width: 100%;
 }
+
+/*
+ * Marca del producto.
+ *
+ * El isotipo reemplaza a la ficha con degradado y al glifo de columna dibujado a
+ * mano: es un archivo, no marcado, así que la misma imagen sirve de favicon, de
+ * marca en la barra lateral y de marca en el acceso, y deja de haber dos dibujos
+ * que se pretenden el mismo logo.
+ *
+ * Va sobre una ficha clara y no sobre la superficie: su tinta principal es casi
+ * negra (#22262a) y sobre la barra lateral oscura desaparecería.
+ */
+@layer components {
+  .brand-mark {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    width: 34px;
+    height: 34px;
+    background: #FDFDFD;
+    padding: 2px;
+  }
+
+  .brand-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .app-layout.is-rail .brand-mark {
+    height: 36px;
+    width: 36px;
+  }
+}

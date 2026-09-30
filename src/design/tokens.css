@@ -13,6 +13,9 @@
     --warning: #F59E0B;
     --danger: #DC2626;
     --info-bg: #EFF4FF;
+    /* Texto sobre un relleno --primary. Cambia de lado con el tema: el azul
+       claro de las paletas oscuras pide texto oscuro, el azul pleno pide blanco. */
+    --on-primary: #FFFFFF;
     /* Clinical Operations (light): semantic aliases shared by list, patient and settings surfaces. */
     --operations-canvas: #F4F7FB;
     --surface-elevated: #FFFFFF;
@@ -157,6 +160,7 @@
     --warning: #E0A030;
     --danger: #E5544B;
     --info-bg: #1B2637;
+    --on-primary: #08121F;
     --clinical-accent: #38A9C4;
     --clinical-accent-soft: #16252B;
 
@@ -199,7 +203,9 @@
   }
 
   /*
-   * Reading room (dark). Scoped to [data-theme="reading"] so the light clinical
+   * Reading room (dark) — el tema por defecto del visor.
+   *
+   * Scoped to [data-theme="reading"] so the light clinical
    * palette above is untouched — worklist and administration stay light, only the
    * reading workspace goes dark.
    *
@@ -227,6 +233,7 @@
     --warning: #E0A030;
     --danger: #E5544B;
     --info-bg: #16202F;
+    --on-primary: #08121F;
 
     --surface-subtle: #0F131A;
     --surface-soft: #16202F;
@@ -265,6 +272,73 @@
 
     color-scheme: dark;
   }
+
+  /*
+   * Sala de lectura (claro) — [data-theme="reading-light"].
+   *
+   * El mismo marco que la sala oscura, un escalón por encima de la superficie
+   * operativa clara: la sala sigue siendo el lugar más neutro del producto, sin
+   * el azulado de la lista de trabajo, porque cualquier tinte alrededor del
+   * viewport se le mete al ojo antes que la imagen.
+   *
+   * **El viewport se queda negro.** No es una omisión: es la única superficie
+   * que no puede cambiar. Sobre blanco, el rango dinámico percibido del estudio
+   * se aplana y las anotaciones quemadas sobre la imagen —que siguen la
+   * convención DICOM de un gris claro que no compita con los píxeles más
+   * brillantes— desaparecerían. Todo lo que se dibuja encima (cotas, contornos,
+   * leyendas, esquinas informativas) hereda de ese negro y por eso no se
+   * redefine acá.
+   */
+  [data-theme="reading-light"] {
+    --bg-app: #EEF0F3;
+    --surface: #FFFFFF;
+    --surface-raised: #F7F8FA;
+    --border: #D8DDE5;
+    --border-strong: #B9C1CD;
+    --text: #171B21;
+    --text-muted: #5B6675;
+    /* Acentos plenos: sobre superficie clara el desaturado del oscuro se apaga. */
+    --primary: #2563EB;
+    --ai: #7C3AED;
+    --success: #16A34A;
+    --warning: #B45309;
+    --danger: #DC2626;
+    --info-bg: #EFF4FF;
+
+    --surface-subtle: #F2F4F7;
+    --surface-soft: #EFF4FF;
+    --surface-warm: color-mix(in srgb, var(--surface) 88%, var(--warning));
+    --surface-success: color-mix(in srgb, var(--surface) 90%, var(--success));
+    --surface-danger: color-mix(in srgb, var(--surface) 90%, var(--danger));
+    --surface-ai: color-mix(in srgb, var(--surface) 90%, var(--ai));
+    --border-info: #BFDBFE;
+    --border-warning: #FED7AA;
+    --border-success: #BBF7D0;
+    --border-danger: #FECACA;
+    --text-primary-strong: #1D4ED8;
+    --text-success-strong: #166534;
+    --text-warning-strong: #92400E;
+    --text-danger-strong: #B91C1C;
+    --text-ai-strong: #6D28D9;
+    /* Este alias nombra "texto sobre el negro del viewport", no "sobre el marco":
+       las esquinas informativas lo usan y el viewport sigue siendo negro. */
+    --text-on-dark: #DBEAFE;
+
+    /* Idénticos a la sala oscura, y a propósito: son la imagen, no el marco. */
+    --viewport-bg: #000000;
+    --viewport-annotation: #B9C4D2;
+    --viewport-annotation-strong: #E6EAF0;
+    --viewport-reference-line: #B45309;
+    --viewport-crosshair: #2563EB;
+
+    --focus-ring: rgba(37, 99, 235, .22);
+    /* Acá la elevación sí puede salir de la sombra: hay fondo claro debajo. */
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .10);
+    --shadow-card: 0 18px 50px rgba(15, 23, 42, .08);
+    --shadow-legacy: 0 10px 28px rgba(15, 31, 52, .06);
+    --shadow-float: 0 24px 70px rgba(15, 23, 42, .14);
+    --shadow-modal: 0 28px 90px rgba(15, 23, 42, .22);
+
+    color-scheme: light;
+  }
 }
-
-

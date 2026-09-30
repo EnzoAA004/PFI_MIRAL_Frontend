@@ -84,70 +84,6 @@
 
   .wl-primary:active { transform: translateY(1px); }
 
-  /* Filter chips — these carry the counts that used to be metric cards --- */
-  .wl-filters {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(112px, 1fr));
-    align-items: stretch;
-    gap: 0;
-    overflow: hidden;
-    background: var(--surface-elevated);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-subtle);
-  }
-
-  .wl-chip {
-    position: relative;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: var(--sp-3);
-    min-height: 52px;
-    padding: var(--sp-2) var(--sp-4);
-    background: transparent;
-    border: 0;
-    border-right: 1px solid var(--border-subtle);
-    border-radius: 0;
-    color: var(--text-muted);
-    font-size: var(--fs-micro);
-    font-weight: var(--fw-medium);
-    cursor: pointer;
-    text-align: left;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
-  }
-
-  .wl-chip:last-child { border-right: 0; }
-
-  .wl-chip::after {
-    content: "";
-    position: absolute;
-    inset: auto var(--sp-3) 0;
-    height: 2px;
-    border-radius: var(--radius-pill) var(--radius-pill) 0 0;
-    background: transparent;
-  }
-
-  .wl-chip:hover {
-    background: var(--surface-subtle);
-    color: var(--text);
-  }
-
-  .wl-chip.is-active {
-    background: var(--surface-soft);
-    color: var(--text-primary-strong);
-  }
-
-  .wl-chip.is-active::after { background: var(--clinical-accent); }
-
-  .wl-chip strong {
-    font-variant-numeric: tabular-nums;
-    font-size: var(--fs-h3);
-    font-weight: var(--fw-semibold);
-    color: var(--text);
-    line-height: 1;
-  }
-
   /* Table --------------------------------------------------------------- */
   .wl-table-wrap {
     background: var(--surface-elevated);
@@ -321,7 +257,6 @@
   .wl-pagination button:hover:not(:disabled) { background: var(--surface-subtle); }
   .wl-pagination button:disabled { opacity: .45; cursor: default; }
 
-
   /* ==========================================================================
    * Pasada de densidad clínica.
    *
@@ -335,56 +270,6 @@
    *
    * La sala de lectura no se toca: esto es todo previo a abrir el estudio.
    * ======================================================================= */
-
-  /* Filtros: dejan de ser una franja segmentada con su propio marco y pasan a
-     ser lo que son, un conjunto de opciones excluyentes sobre la lista. */
-  .wl-filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--sp-1);
-    grid-template-columns: none;
-    background: none;
-    border: 0;
-    border-bottom: 1px solid var(--border);
-    border-radius: 0;
-    box-shadow: none;
-    overflow: visible;
-    padding-bottom: var(--sp-2);
-  }
-
-  .wl-chip {
-    display: inline-flex;
-    grid-template-columns: none;
-    align-items: baseline;
-    gap: var(--sp-2);
-    min-height: var(--control-h);
-    padding: 0 var(--sp-3);
-    border: 1px solid transparent;
-    border-radius: var(--radius-pill);
-    color: var(--text-muted);
-    font-size: var(--fs-small);
-    font-weight: var(--fw-medium);
-  }
-
-  .wl-chip::after { display: none; }
-
-  .wl-chip:hover {
-    background: var(--surface-subtle);
-    color: var(--text);
-  }
-
-  .wl-chip.is-active {
-    background: var(--info-bg);
-    border-color: var(--border-info);
-    color: var(--text-primary-strong);
-  }
-
-  .wl-chip strong {
-    font-size: var(--fs-small);
-    font-variant-numeric: tabular-nums;
-    font-weight: var(--fw-semibold);
-  }
 
   /* La tabla ya está delimitada por su encabezado y sus líneas: la tarjeta que
      la envolvía sólo agregaba un marco alrededor de un marco. */
@@ -433,7 +318,6 @@
     font-family: var(--font-sans);
   }
 
-
   /* Cargador de datos ------------------------------------------------------
    * Los "01 / 02 / 03" en color de acento numeraban tres secciones de un
    * formulario que se completa en el orden que quiera quien lo usa: no eran
@@ -479,7 +363,6 @@
   .wl-field input[placeholder="EST-2026-001"] {
     font-family: var(--font-mono);
   }
-
 
   /* ==========================================================================
    * Pasada de des-ornamentación.
@@ -560,14 +443,16 @@
   .wl-table { table-layout: fixed; }
 
   /* El sobrante va a las dos primeras, que son las de texto de largo variable.
-     Las otras cuatro tienen contenido de largo conocido —una fecha ISO, dos
-     siglas, un estado, una prioridad— y ensancharlas sólo agrega hueco. */
-  .wl-table th:nth-child(1) { width: 30%; }
-  .wl-table th:nth-child(2) { width: 26%; }
-  .wl-table th:nth-child(3) { width: 12%; }
-  .wl-table th:nth-child(4) { width: 10%; }
-  .wl-table th:nth-child(5) { width: 12%; }
-  .wl-table th:nth-child(6) { width: 10%; }
+     Las otras cinco tienen contenido de largo conocido —una fecha ISO, una
+     modalidad, un estado, una prioridad, dos siglas de plano— y ensancharlas
+     sólo agrega hueco. */
+  .wl-table th:nth-child(1) { width: 20%; }
+  .wl-table th:nth-child(2) { width: 24%; }
+  .wl-table th:nth-child(3) { width: 13%; }
+  .wl-table th:nth-child(4) { width: 12%; }
+  .wl-table th:nth-child(5) { width: 11%; }
+  .wl-table th:nth-child(6) { width: 12%; }
+  .wl-table th:nth-child(7) { width: 8%; }
 
   /* Con anchos fijos un valor largo desbordaría la celda en vez de ensancharla:
      se recorta con puntos suspensivos y el título completo queda en la fila. */
@@ -585,8 +470,6 @@
     border-radius: var(--radius-sm, 4px);
   }
 
-  .wl-chip { border-radius: var(--radius-sm, 4px); }
-
   .wl-search { height: var(--control-h); }
 
   .wl-primary {
@@ -594,36 +477,8 @@
     font-weight: var(--fw-medium);
   }
 
-
-  /* El filtro activo era lo único que quedaba dibujado como cápsula azul, y por
-     eso pasó a ser lo más llamativo de la pantalla: más que el estudio de
-     prioridad alta, que es lo que hay que ver. Un subrayado marca cuál está
-     activo sin agregar una forma nueva. */
-  .wl-filters { gap: var(--sp-4); }
-
-  .wl-chip {
-    padding: 0 0 var(--sp-1);
-    border: 0;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    margin-bottom: -1px;
-  }
-
-  .wl-chip:hover {
-    background: none;
-    color: var(--text);
-  }
-
-  .wl-chip.is-active {
-    background: none;
-    border-bottom-color: var(--clinical-accent, var(--primary));
-    color: var(--text);
-  }
-
-  .wl-chip.is-active strong { color: var(--text); }
-
   @media (max-width: 900px) {
-    .wl-filters { grid-template-columns: repeat(5, minmax(108px, 1fr)); overflow-x: auto; }
+
     .wl-actions { width: 100%; }
     .wl-search { flex: 1; min-width: 0; }
   }
@@ -633,15 +488,6 @@
     .wl-actions { align-items: stretch; flex-direction: column; }
     .wl-search,
     .wl-primary { min-width: 0; width: 100%; }
-
-    .wl-filters {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      overflow: hidden;
-    }
-
-    .wl-chip { border-bottom: 1px solid var(--border-subtle); }
-    .wl-chip:nth-child(2n) { border-right: 0; }
-    .wl-chip:last-child { grid-column: 1 / -1; border-bottom: 0; }
 
     .wl-table-wrap {
       background: transparent;
@@ -1128,5 +974,400 @@
     .wl-field-row { grid-template-columns: 1fr; }
     .wl-patient-heading { align-items: flex-start; flex-direction: column; }
     .wl-analysis-progress ol { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ==========================================================================
+   * Filtros, panel del estudio y paginación.
+   *
+   * Los cinco chips excluyentes se volvieron cinco filtros combinables, y la
+   * lista dejó de ocupar todo el ancho: al elegir una fila se abre a su derecha
+   * el panel del estudio. El panel es una columna del mismo cuerpo y no una
+   * capa flotante mientras haya lugar —una capa taparía justamente la fila que
+   * el médico acaba de elegir—; por debajo de 1200 px sí pasa a cubrir la
+   * lista, porque a ese ancho una tabla de siete columnas y un panel no entran.
+   * ======================================================================= */
+
+  .wl-filters-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    height: var(--control-h);
+    padding: 0 var(--sp-3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 4px);
+    color: var(--text);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-medium);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .wl-filters-toggle:hover { background: var(--surface-subtle); }
+  .wl-filters-toggle.is-open { border-color: var(--clinical-accent); color: var(--text); }
+
+  /* El contador de filtros activos no es decorativo: con la barra plegada es lo
+     único que dice que la lista está recortada. */
+  .wl-filters-toggle em {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: var(--clinical-accent);
+    border-radius: var(--radius-pill);
+    color: var(--surface);
+    font-size: var(--fs-micro);
+    font-style: normal;
+    font-weight: var(--fw-semibold);
+  }
+
+  .wl-filterbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--sp-3);
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .wl-filter {
+    display: grid;
+    gap: 3px;
+    min-width: 150px;
+    flex: 1 1 150px;
+  }
+
+  .wl-filter > span {
+    color: var(--text-muted);
+    font-size: var(--fs-micro);
+    font-weight: var(--fw-semibold);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .wl-filter select,
+  .wl-page-size select {
+    height: var(--control-h);
+    padding: 0 var(--sp-2);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 4px);
+    color: var(--text);
+    font-family: inherit;
+    font-size: var(--fs-small);
+  }
+
+  .wl-filter select:focus-visible,
+  .wl-page-size select:focus-visible {
+    outline: 2px solid var(--clinical-accent);
+    outline-offset: 1px;
+  }
+
+  .wl-filter select:disabled { color: var(--text-muted); cursor: not-allowed; }
+
+  .wl-filters-clear {
+    height: var(--control-h);
+    padding: 0 var(--sp-3);
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-size: var(--fs-small);
+    cursor: pointer;
+  }
+
+  .wl-filters-clear:hover:not(:disabled) { color: var(--text); border-color: var(--border); border-radius: var(--radius-sm, 4px); }
+  .wl-filters-clear:disabled { opacity: .4; cursor: default; }
+
+  .wl-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-4);
+    min-height: 0;
+  }
+
+  .wl-body.has-panel { grid-template-columns: minmax(0, 1fr) 320px; }
+
+  .wl-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    min-width: 0;
+  }
+
+  /* La fila elegida se marca con una barra al inicio y un fondo apenas más
+     claro: en una tabla densa un color de relleno fuerte compite con los
+     estados, que son lo que hay que poder leer de un vistazo. */
+  .wl-row.is-selected {
+    background: color-mix(in srgb, var(--clinical-accent) 12%, transparent);
+    box-shadow: inset 2px 0 0 var(--clinical-accent);
+  }
+
+  .wl-row.is-selected:hover { background: color-mix(in srgb, var(--clinical-accent) 16%, transparent); }
+
+  /* Panel del estudio seleccionado -------------------------------------- */
+  .wl-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-height: calc(100vh - 190px);
+    background: var(--surface-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-subtle);
+  }
+
+  .wl-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding: var(--sp-3);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .wl-panel-head h2 {
+    margin: 0;
+    font-size: var(--fs-small);
+    font-weight: var(--fw-semibold);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .wl-panel-close {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    background: none;
+    border: 0;
+    border-radius: var(--radius-sm, 4px);
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .wl-panel-close:hover { background: var(--surface-subtle); color: var(--text); }
+
+  .wl-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    padding: var(--sp-3);
+    overflow-y: auto;
+  }
+
+  .wl-panel-facts { display: grid; gap: var(--sp-2); margin: 0; }
+
+  .wl-panel-facts > div {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: var(--sp-2);
+    align-items: baseline;
+  }
+
+  .wl-panel-facts dt {
+    color: var(--text-muted);
+    font-size: var(--fs-micro);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .wl-panel-facts dd {
+    margin: 0;
+    color: var(--text);
+    font-size: var(--fs-small);
+    font-variant-numeric: tabular-nums;
+    word-break: break-word;
+  }
+
+  .wl-panel-badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+  .wl-panel-section { display: grid; gap: var(--sp-2); }
+
+  .wl-panel-section h3 {
+    margin: 0;
+    padding-bottom: var(--sp-1);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: var(--fs-micro);
+    font-weight: var(--fw-semibold);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .wl-panel-note {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--fs-small);
+    line-height: 1.45;
+  }
+
+  .wl-panel-series-list { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+
+  .wl-series {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: var(--sp-2);
+    align-items: center;
+  }
+
+  /* Una serie que la IA no puede tomar sigue siendo una imagen que el médico
+     lee: se atenúa, no se esconde, y dice por qué. */
+  .wl-series.is-unusable .wl-series-text strong { color: var(--text-muted); }
+
+  .wl-series-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm, 4px);
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-scan, #05070A);
+    object-fit: cover;
+  }
+
+  .wl-series-thumb.is-placeholder {
+    display: grid;
+    place-items: center;
+    color: var(--text-muted);
+  }
+
+  .wl-series-text { display: grid; gap: 1px; min-width: 0; }
+
+  .wl-series-text strong {
+    font-size: var(--fs-small);
+    font-weight: var(--fw-medium);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .wl-series-text span {
+    color: var(--text-muted);
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wl-series-text em {
+    color: var(--text-warning-strong, var(--warning));
+    font-size: var(--fs-micro);
+    font-style: normal;
+  }
+
+  .wl-panel-foot {
+    padding: var(--sp-3);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .wl-panel-foot .wl-primary { width: 100%; justify-content: center; }
+
+  /* Paginación ----------------------------------------------------------- */
+  .wl-pages { display: flex; align-items: center; gap: var(--sp-1); }
+
+  .wl-pagination button {
+    min-width: var(--control-h);
+    padding: 0 var(--sp-2);
+  }
+
+  .wl-pagination button.is-current {
+    background: var(--clinical-accent);
+    border-color: var(--clinical-accent);
+    color: var(--surface);
+    font-weight: var(--fw-semibold);
+  }
+
+  .wl-page-gap { padding: 0 2px; color: var(--text-muted); }
+
+  .wl-page-size {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 1200px) {
+    /* El panel pasa a cubrir la lista: a este ancho, tabla y panel lado a lado
+       dejan las dos columnas ilegibles. */
+    .wl-body.has-panel { grid-template-columns: minmax(0, 1fr); }
+
+    .wl-panel {
+      position: fixed;
+      inset: 0 0 0 auto;
+      z-index: 60;
+      width: min(360px, 100%);
+      max-height: none;
+      border-radius: 0;
+      border-width: 0 0 0 1px;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .wl-filterbar { gap: var(--sp-2); }
+    .wl-filter { flex-basis: calc(50% - var(--sp-2)); min-width: 0; }
+    .wl-filters-toggle { width: 100%; justify-content: center; }
+    .wl-panel { width: 100%; }
+    .wl-pagination { align-items: stretch; flex-direction: column; }
+    .wl-pages { justify-content: center; flex-wrap: wrap; }
+  }
+
+  /* La prioridad gana el mismo punto que el estado: son las dos columnas que se
+     recorren en vertical sin leer, y con una sola marcada la vista se apoya en
+     el color del texto, que a este tamaño no alcanza. */
+  .wl-table td[data-label="Prioridad"] .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .wl-table td[data-label="Prioridad"] .status-badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+  }
+
+  .wl-table td[data-label="Prioridad"] .badge-amber { color: var(--text-warning-strong, var(--warning)); }
+  .wl-table td[data-label="Prioridad"] .badge-slate { color: var(--text-muted); }
+
+  /* La búsqueda ocupa el ancho que sobra: es el control que más se usa de la
+     pantalla y estaba compitiendo por 240 px con dos botones. */
+  .wl .operations-page-actions { flex: 1; }
+  .wl-actions { flex: 1; justify-content: flex-end; }
+  .wl-search { flex: 1 1 auto; max-width: 620px; }
+
+  /* La paginación se queda al pie de la pantalla, no debajo de la última fila.
+     Con tres estudios quedaba flotando a media altura, leyéndose como parte de
+     la lista en vez de como su marco: el pie de una lista es el borde inferior
+     del área de trabajo, esté la lista llena o vacía. */
+  .main-panel > .wl { min-height: 100%; }
+  .wl-body { flex: 1; }
+  .wl-main > .wl-table-wrap { flex: 1 0 auto; }
+
+  /* Cuando la lista sí es larga y la página scrollea, el pie sigue visible en
+     lugar de irse abajo del todo. */
+  .wl-pagination {
+    position: sticky;
+    bottom: 0;
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--border-subtle);
+    background: var(--operations-canvas, var(--bg-app));
+  }
+
+  /* La paginación se queda al pie de la pantalla, no debajo de la última fila.
+     Con tres estudios quedaba flotando a media altura, leyéndose como parte de
+     la lista en vez de como su marco: el pie de una lista es el borde inferior
+     del área de trabajo, esté la lista llena o vacía. */
+  .main-panel > .wl { min-height: 100%; }
+  .wl-main { flex: 1; }
+  .wl-main > .wl-table-wrap { flex: 1 0 auto; }
+
+  /* Cuando la lista sí es larga y la página scrollea, el pie sigue visible en
+     lugar de irse abajo del todo. */
+  .wl-pagination {
+    position: sticky;
+    bottom: 0;
+    padding-top: var(--sp-2);
+    background: var(--operations-canvas, var(--bg-app));
   }
 }

@@ -79,7 +79,7 @@ function renderTechnicalReportHtml(payload: any) {
 </head>
 <body>
   <main>
-    <div class="eyebrow">PFI Lumbar RM · Reporte técnico autenticado</div>
+    <div class="eyebrow">MIRA·L · Reporte técnico autenticado</div>
     <h1>${escapeHtml(payload.caseId)} · ${escapeHtml(payload.runId)}</h1>
     <p class="subtitle">Salida técnica generada por el módulo IA para revisión profesional. Datos de-identificados.</p>
 

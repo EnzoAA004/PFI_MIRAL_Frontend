@@ -211,7 +211,7 @@ async function installBackendMocks(page, { failRun = false } = {}) {
 }
 
 async function openPreparedDrawer(page) {
-  await page.getByRole("heading", { name: "Lista de trabajo" }).waitFor({ timeout: 10_000 });
+  await page.getByRole("heading", { name: "Lista de estudios" }).waitFor({ timeout: 10_000 });
   await page.getByRole("button", { name: /Nuevo análisis/ }).click();
   await page.getByPlaceholder("PAC-00").fill("PAC");
   await page.getByRole("button", { name: "PAC-UI-PR2" }).click();

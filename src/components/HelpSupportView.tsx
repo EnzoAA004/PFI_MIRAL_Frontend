@@ -46,7 +46,7 @@ export function HelpSupportView() {
 
         <article className="panel-card compact-card help-card">
           <div className="section-title"><h2><Mail aria-hidden size={18} /> Contacto</h2></div>
-          <p className="muted compact-copy">Para soporte del MVP, reportar el caso, pantalla y acción que produjo el problema al equipo responsable del proyecto PFI.</p>
+          <p className="muted compact-copy">Para soporte del MVP, reportar el caso, pantalla y acción que produjo el problema al equipo responsable de MIRA·L.</p>
           <p className="settings-persistence-note">No hay sistema de tickets integrado en el frontend actual.</p>
         </article>
       </section>

@@ -23,6 +23,9 @@ const parser = load("src/features/reading/discDegenerativeFindings.ts", [
   "groupDiscFindingsByLevel",
   "labelsFor",
   "SCHEMA_VERSION",
+  "preferredRegion",
+  "regionToViewerBase",
+  "analysedSliceRange",
 ]);
 const display = load("src/features/reading/discFindingDisplay.ts", [
   "DISC_FINDING_LABELS",
@@ -32,6 +35,7 @@ const display = load("src/features/reading/discFindingDisplay.ts", [
   "DEPLOYMENT_ORDER",
   "DISC_FINDINGS_NOTICE",
   "displayDiscFindingValue",
+  "displayDiscFindingConfidence",
 ]);
 
 let passed = 0;
@@ -121,6 +125,29 @@ check("si probabilities reaparece se rechaza el finding completo", () => {
   assert.equal(parser.parseDiscFinding(finding({
     classification: { kind: "binary", label: "present", probabilities: { absent: 0.1, present: 0.9 } },
   })), null);
+});
+
+check("la confianza de la etiqueta reportada sí viaja", () => {
+  const parsed = parser.parseDiscFinding(finding({
+    classification: { kind: "binary", label: "present", confidence: 0.873 },
+  }));
+  assert.equal(parsed.confidence, 0.873);
+});
+
+/*
+ * Una confianza fuera de [0,1] no se recorta a 1 ni se muestra: significa que el
+ * productor cambió de escala (porcentaje, logit), y presentarla como probabilidad
+ * afirmaría una certeza que nadie calculó. El hallazgo se conserva porque su
+ * etiqueta sigue siendo válida; lo que se cae es el número.
+ */
+check("una confianza fuera de rango o no numérica se ignora sin tirar el finding", () => {
+  for (const confidence of [1.4, -0.2, Number.NaN, "0.9", null]) {
+    const parsed = parser.parseDiscFinding(finding({
+      classification: { kind: "binary", label: "present", confidence },
+    }));
+    assert.ok(parsed, `confidence ${String(confidence)} no debería invalidar el finding`);
+    assert.equal(parsed.confidence, undefined);
+  }
 });
 
 check("kind incompatible con la tarea viola el contrato", () => {
@@ -262,10 +289,24 @@ check("el aviso exige revisión y niega diagnóstico autónomo", () => {
   assert.match(display.DISC_FINDINGS_NOTICE, /No constituye un diagnóstico clínico autónomo/);
 });
 
-check("el panel discal no contiene probabilities, confidence ni logits", () => {
+/*
+ * El panel muestra la confianza de la etiqueta reportada —la encuesta de lectores
+ * la pidió y el resto del producto ya la informa junto a cada medición—, pero
+ * sigue sin poder mostrar la distribución completa: leer la clase segunda como una
+ * segunda opinión es exactamente lo que un informe de una sola etiqueta con
+ * revisión humana obligatoria no afirma.
+ */
+check("el panel discal muestra la confianza pero no la distribución ni logits", () => {
   const panel = readFileSync("src/features/reading/DiscDegenerativeFindingsPanel.tsx", "utf8");
-  assert.doesNotMatch(panel, /probabilit|confidence|logit/i);
+  assert.doesNotMatch(panel, /probabilit|logit/i);
+  assert.match(panel, /displayDiscFindingConfidence\(finding\.confidence\)/);
   assert.match(panel, /finding\.label/);
+});
+
+check("la confianza se formatea como porcentaje y distingue el dato ausente", () => {
+  assert.equal(display.displayDiscFindingConfidence(0.873), "87,3 %");
+  assert.equal(display.displayDiscFindingConfidence(1), "100,0 %");
+  assert.equal(display.displayDiscFindingConfidence(undefined), "Confianza no informada");
 });
 
 check("Pfirrmann permanece en el resumen expandible por nivel", () => {
@@ -329,6 +370,101 @@ check("el parser conserva íntegros ids, labels y deploymentStatus", () => {
       { findingId: "research", label: "present", deploymentStatus: "not_product_supported" },
     ],
   );
+});
+
+
+// --- Dónde se evaluó cada nivel (marca sobre el corte) -----------------------
+
+const region = (overrides = {}) => ({
+  inputId: "inp-t2",
+  sliceIndex: 8,
+  pointYx: [120, 96],
+  bboxYx: [108, 132, 84, 108],
+  coordinateSpaceHeight: 256,
+  coordinateSpaceWidth: 200,
+  ...overrides,
+});
+const located = (overrides = {}) => finding({
+  sourceSeries: [
+    { role: "sagittal_t1", available: true, positions: [3, 4, 5] },
+    { role: "sagittal_t2", available: true, positions: [7, 8, 9], ...region(), ...overrides },
+  ],
+});
+
+check("la región evaluada se parsea con su serie, su corte y su punto", () => {
+  const parsed = parser.parseDiscFinding(located());
+  const t2 = parsed.sources.find((source) => source.role === "sagittal_t2");
+  assert.equal(t2.region.inputId, "inp-t2");
+  assert.equal(t2.region.sliceIndex, 8);
+  assert.equal(t2.region.point.x, 96);
+  assert.equal(t2.region.point.y, 120);
+  assert.deepEqual({ ...t2.region.bbox }, { x0: 84, y0: 108, x1: 108, y1: 132 });
+  // La serie sin geometría no inventa ninguna.
+  assert.equal(parsed.sources.find((source) => source.role === "sagittal_t1").region, null);
+});
+
+check("un finding sin sourceSeries sigue siendo válido pero no localiza", () => {
+  const parsed = parser.parseDiscFinding(finding());
+  assert.equal(parsed.sources.length, 0);
+  assert.equal(parser.preferredRegion(parsed), null);
+});
+
+check("una geometría incompleta invalida el finding en vez de marcar a medias", () => {
+  const partial = region();
+  delete partial.coordinateSpaceWidth;
+  const parsed = parser.parseDiscFinding(finding({
+    sourceSeries: [{ role: "sagittal_t2", available: true, positions: [7, 8, 9], ...partial }],
+  }));
+  assert.equal(parsed, null);
+});
+
+check("el corte marcado tiene que ser uno de los que el modelo miró", () => {
+  const parsed = parser.parseDiscFinding(located({ sliceIndex: 40 }));
+  assert.equal(parsed, null);
+});
+
+check("un punto fuera de su propia ventana invalida el finding", () => {
+  assert.equal(parser.parseDiscFinding(located({ pointYx: [10, 96] })), null);
+  assert.equal(parser.parseDiscFinding(located({ pointYx: [120, 900] })), null);
+});
+
+check("una modalidad que no entró al modelo no puede localizar nada", () => {
+  const parsed = parser.parseDiscFinding(finding({
+    sourceSeries: [
+      { role: "sagittal_t2", available: true, positions: [7, 8, 9] },
+      { role: "sagittal_t1", available: false, positions: [], ...region({ inputId: "inp-t1" }) },
+    ],
+  }));
+  assert.equal(parsed, null);
+});
+
+check("se prefiere la serie que el visor ya está mostrando", () => {
+  const parsed = parser.parseDiscFinding(finding({
+    sourceSeries: [
+      { role: "sagittal_t1", available: true, positions: [3, 4, 5], ...region({ inputId: "inp-t1", sliceIndex: 4 }) },
+      { role: "sagittal_t2", available: true, positions: [7, 8, 9], ...region() },
+    ],
+  }));
+  assert.equal(parser.preferredRegion(parsed, "inp-t1").role, "sagittal_t1");
+  assert.equal(parser.preferredRegion(parsed, "inp-t1").region.sliceIndex, 4);
+  // Sin serie a la vista, o con una que no evaluó el nivel, manda T2.
+  assert.equal(parser.preferredRegion(parsed).role, "sagittal_t2");
+  assert.equal(parser.preferredRegion(parsed, "inp-otra").role, "sagittal_t2");
+});
+
+check("el rango nombra los tres cortes de la ventana, no uno solo", () => {
+  const parsed = parser.parseDiscFinding(located());
+  const t2 = parsed.sources.find((source) => source.role === "sagittal_t2");
+  assert.equal(parser.analysedSliceRange(t2), "cortes 7-9");
+});
+
+check("la región se lleva a la base del visor con la escala de su propia serie", () => {
+  const parsed = parser.parseDiscFinding(located());
+  const t2 = parsed.sources.find((source) => source.role === "sagittal_t2");
+  const drawn = parser.regionToViewerBase(t2.region);
+  // 96/200 y 120/256 de la imagen, en base 256.
+  assert.deepEqual({ ...drawn.point }, { x: 122.88, y: 120 });
+  assert.deepEqual({ ...drawn.box }, { x0: 107.52, y0: 108, x1: 138.24, y1: 132 });
 });
 
 console.log(`disc-degenerative-findings: ${passed} passed`);

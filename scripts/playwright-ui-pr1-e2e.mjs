@@ -128,16 +128,29 @@ try {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   const errors = await installBackendMocks(page);
   await seedSession(page);
-  await page.getByRole("heading", { name: "Lista de trabajo" }).waitFor({ timeout: 10_000 });
+  await page.getByRole("heading", { name: "Lista de estudios" }).waitFor({ timeout: 10_000 });
   assertTruthy(await page.getByText("CASE-023").count() === 1, "debe mostrar estudios persistidos");
-  assertTruthy(await page.getByRole("button", { name: /Pendientes\s+4/ }).count() === 1, "debe presentar el contador operativo de pendientes");
   assertTruthy(await page.locator(".study-status-pendiente").count() === 4, "debe mostrar estado visible para cada estudio pendiente");
 
-  await page.getByRole("button", { name: /Observados\s+1/ }).click();
+  // Los contadores que vivían en los chips ahora son parte de las opciones del filtro de estado.
+  const statusFilter = page.locator(".wl-filter select").nth(2);
+  assertTruthy(
+    (await statusFilter.locator("option").nth(1).innerText()).includes("(4)"),
+    "el filtro de estado debe seguir informando cuántos estudios pendientes hay",
+  );
+
+  await statusFilter.selectOption("observado");
   await page.getByText("CASE-019").waitFor();
+  assertTruthy(await page.locator(".wl-row").count() === 1, "el filtro Observados debe conservar su semántica");
   assertTruthy(await page.locator(".study-status-observado").count() === 1, "el filtro Observados debe conservar su semántica");
 
-  await page.getByRole("button", { name: /Total\s+7/ }).click();
+  // Los filtros se cruzan: observado + prioridad baja no deja ninguno de los siete.
+  await page.locator(".wl-filter select").nth(3).selectOption("baja");
+  await page.getByText("No hay estudios para estos filtros.").waitFor();
+
+  await page.getByRole("button", { name: "Limpiar filtros" }).click();
+  assertTruthy(await page.locator(".wl-row").count() === 7, "limpiar filtros debe devolver la lista completa");
+
   const search = page.getByLabel("Buscar estudios");
   await search.fill("CASE-021");
   assertTruthy(await page.locator(".wl-row").count() === 1, "la búsqueda debe filtrar sin requests adicionales");
@@ -145,10 +158,17 @@ try {
   await page.getByText("No hay estudios para esta búsqueda.").waitFor();
   await search.fill("");
 
-  await page.getByRole("button", { name: /^Caso/ }).click();
+  await page.getByRole("button", { name: /^ID estudio/ }).click();
   assertTruthy((await page.locator(".wl-row").first().innerText()).includes("CASE-006"), "sorting por caso debe seguir operativo");
   await page.getByRole("button", { name: /^Fecha/ }).click();
-  await page.getByRole("button", { name: /Pendientes\s+4/ }).click();
+
+  // Elegir una fila la muestra sin sacar al médico de la lista; abrirla sigue siendo Enter.
+  await page.locator(".wl-row").first().click();
+  await page.locator(".wl-panel").waitFor();
+  assertTruthy((await page.locator(".wl-panel").innerText()).includes("CASE-023"), "el panel debe describir el estudio elegido");
+  assertTruthy(page.url() === `${appUrl}/`, "elegir una fila no debe navegar a la sala de lectura");
+  await page.getByLabel("Cerrar el panel del estudio").click();
+  assertTruthy(await page.locator(".wl-panel").count() === 0, "el panel debe poder cerrarse");
 
   for (const [width, height] of [[1920, 1080], [1366, 768], [1024, 768], [390, 844]]) await capture(page, width, height);
   await page.locator(".wl-row").first().press("Enter");

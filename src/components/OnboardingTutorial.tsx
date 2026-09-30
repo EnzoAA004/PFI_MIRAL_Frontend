@@ -27,10 +27,10 @@ export function OnboardingTutorial({ onComplete, saving }: OnboardingTutorialPro
     <div className="onboarding-backdrop" role="dialog" aria-modal="true" aria-label="Tutorial inicial">
       <section className="onboarding-card">
         <div className="auth-brand">
-          <div className="brand-mark">LM</div>
+          <div className="brand-mark" aria-hidden="true"><img alt="" src="/logo.svg" /></div>
           <div>
             <strong>Primer ingreso profesional</strong>
-            <span>Guía breve de uso para la plataforma de RM lumbar.</span>
+            <span>Guía breve de uso para MIRA·L.</span>
           </div>
         </div>
         <div className="auth-copy">

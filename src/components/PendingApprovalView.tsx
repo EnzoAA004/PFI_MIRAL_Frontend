@@ -10,7 +10,7 @@ export function PendingApprovalView({ session, onLogout }: PendingApprovalViewPr
     <main className="auth-page">
       <section className="auth-card approval-card">
         <div className="auth-brand">
-          <div className="brand-mark">PF</div>
+          <div className="brand-mark" aria-hidden="true"><img alt="" src="/logo.svg" /></div>
           <div>
             <strong>Registro profesional pendiente</strong>
             <span>Validación institucional requerida antes de acceder a estudios.</span>

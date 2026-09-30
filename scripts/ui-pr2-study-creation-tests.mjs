@@ -14,15 +14,15 @@ function test(name, fn) {
   console.log(`ok ${count} - ${name}`);
 }
 
-test("Worklist elimina la columna Modelo y conserva las seis columnas operativas", () => {
+test("Worklist elimina la columna Modelo y conserva las columnas operativas", () => {
   assert.doesNotMatch(worklist, /column="modelKey"|data-label="Modelo"|>Modelo</);
-  for (const label of ["Caso", "Paciente", "Fecha", "Planos", "Revisión", "Prioridad"]) {
+  for (const label of ["Paciente", "ID estudio", "Fecha", "Modalidad", "Prioridad", "Estado", "Series"]) {
     assert.match(worklist, new RegExp(label));
   }
 });
 
 test("Worklist no presenta el modelo como criterio de búsqueda visible", () => {
-  assert.match(worklist, /Buscar caso, paciente o descripción/);
+  assert.match(worklist, /Buscar por paciente, ID de estudio, fecha o descripción/);
   assert.doesNotMatch(filters, /displayModelKey|study\.modelKey/);
 });
 

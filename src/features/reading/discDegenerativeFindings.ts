@@ -30,11 +30,47 @@ export function labelsFor(findingType: DiscFindingType): readonly string[] {
 
 export const SCHEMA_VERSION = "pfi.disc-degenerative-findings.v1";
 
+export const DISC_SERIES_ROLES = ["sagittal_t1", "sagittal_t2"] as const;
+export type DiscSeriesRole = typeof DISC_SERIES_ROLES[number];
+
+/**
+ * Dónde se evaluó un nivel en una serie: el corte central, la ventana que entró al
+ * modelo y el punto que se puede marcar sobre la imagen.
+ *
+ * `point` y `bbox` vienen en píxeles nativos de esa serie, con su espacio de
+ * coordenadas al lado. Traducirlos a la base del visor sin ese espacio los pondría
+ * en cualquier lado: una serie de 320x320 y una de 512x512 no comparten escala.
+ *
+ * No es la extensión del hallazgo. El clasificador no segmenta lesión: la ventana
+ * sale de la máscara del disco, así que esto dice sobre qué se clasificó, no dónde
+ * está la patología.
+ */
+export type DiscEvaluatedRegion = {
+  /** Serie en la que caen estas coordenadas. El corte solo vale dentro de ella. */
+  inputId: string;
+  sliceIndex: number;
+  point: { x: number; y: number };
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+  /** Alto y ancho nativos de la serie, en píxeles. */
+  height: number;
+  width: number;
+};
+
+export type DiscFindingSource = {
+  role: DiscSeriesRole;
+  available: boolean;
+  /** Los cortes que el modelo miró: la ventana 2.5D, nunca la serie entera. */
+  positions: number[];
+  region: DiscEvaluatedRegion | null;
+};
+
 export type DiscFinding = {
   findingId: string;
   findingType: DiscFindingType;
   level: DiscLevel;
   label: string;
+  /** Probabilidad de la etiqueta reportada, 0..1. Ausente si la corrida no la informa. */
+  confidence?: number;
   deploymentStatus: DeploymentStatus;
   evaluationDataset: string;
   externalValidationAvailable: boolean;
@@ -44,6 +80,8 @@ export type DiscFinding = {
   modelSha256: string;
   reviewRequired: true;
   reviewStatus: "pending";
+  /** Una entrada por modalidad, con su propia localización: T1 y T2 no la comparten. */
+  sources: DiscFindingSource[];
 };
 
 export class DiscDegenerativeContractError extends Error {
@@ -63,10 +101,100 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 /**
- * Parses one finding from the Backend public projection. Probabilities are not
- * part of that contract: their presence invalidates the item instead of creating
- * confidence bars or reconstructing a score.
+ * La región evaluada de una serie, o `null` si esa serie no publica ninguna.
+ *
+ * Todo o nada, igual que el resto del contrato: con media geometría no se puede
+ * dibujar nada, y una marca puesta con la mitad de los datos cae en un lugar
+ * arbitrario del corte. Ante un dato incompleto devuelve `undefined`, que el
+ * llamador convierte en finding inválido en vez de en una marca aproximada.
+ */
+function parseEvaluatedRegion(
+  raw: Record<string, unknown>,
+  positions: number[],
+): DiscEvaluatedRegion | null | undefined {
+  const keys = ["inputId", "sliceIndex", "pointYx", "bboxYx", "coordinateSpaceHeight", "coordinateSpaceWidth"];
+  const present = keys.filter((key) => Object.prototype.hasOwnProperty.call(raw, key));
+  if (present.length === 0) return null;
+  if (present.length !== keys.length) return undefined;
+
+  const inputId = text(raw.inputId);
+  const height = finiteNumber(raw.coordinateSpaceHeight);
+  const width = finiteNumber(raw.coordinateSpaceWidth);
+  const sliceIndex = finiteNumber(raw.sliceIndex);
+  if (!inputId || height === null || width === null || height <= 0 || width <= 0) return undefined;
+  if (sliceIndex === null || !Number.isInteger(sliceIndex) || sliceIndex < 0) return undefined;
+  // El centro tiene que ser uno de los cortes analizados: si no lo es, geometría y
+  // predicción no vienen de la misma preparación.
+  if (positions.length > 0 && !positions.includes(sliceIndex)) return undefined;
+
+  const pointRaw = Array.isArray(raw.pointYx) ? raw.pointYx.map(finiteNumber) : [];
+  const bboxRaw = Array.isArray(raw.bboxYx) ? raw.bboxYx.map(finiteNumber) : [];
+  if (pointRaw.length !== 2 || pointRaw.some((value) => value === null)) return undefined;
+  if (bboxRaw.length !== 4 || bboxRaw.some((value) => value === null)) return undefined;
+
+  const [pointY, pointX] = pointRaw as number[];
+  const [y0, y1, x0, x1] = bboxRaw as number[];
+  if (y1 <= y0 || x1 <= x0) return undefined;
+  if (y0 < 0 || x0 < 0 || y1 > height || x1 > width) return undefined;
+  if (pointY < y0 || pointY > y1 || pointX < x0 || pointX > x1) return undefined;
+
+  return {
+    inputId,
+    sliceIndex,
+    point: { x: pointX, y: pointY },
+    bbox: { x0, y0, x1, y1 },
+    height,
+    width,
+  };
+}
+
+/**
+ * Las series de origen, cuando el emisor las declara.
+ *
+ * Ausentes no invalidan el finding: una corrida vieja las omitía y su clasificación
+ * sigue siendo la que el médico revisó. Lo que se pierde es la marca, no el
+ * hallazgo. Declaradas y rotas sí invalidan: ahí hay un emisor que cree estar
+ * localizando algo.
+ */
+function parseSources(value: unknown): DiscFindingSource[] | null {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const sources: DiscFindingSource[] = [];
+  for (const entry of value) {
+    const raw = asRecord(entry);
+    const role = text(raw?.role) as DiscSeriesRole;
+    if (!raw || !DISC_SERIES_ROLES.includes(role) || typeof raw.available !== "boolean") return null;
+    const positionsRaw = Array.isArray(raw.positions) ? raw.positions : [];
+    if (positionsRaw.some((item) => typeof item !== "number" || !Number.isInteger(item) || item < 0)) return null;
+    const positions = positionsRaw as number[];
+    const region = parseEvaluatedRegion(raw, positions);
+    if (region === undefined) return null;
+    // Una modalidad que no entró al modelo no localiza nada.
+    if (region && !raw.available) return null;
+    sources.push({ role, available: raw.available, positions, region });
+  }
+  return sources.some((source) => source.available) ? sources : null;
+}
+
+/** Cortes que el modelo miró de una serie, ordenados, para mostrarlos como rango. */
+export function analysedSliceRange(source: DiscFindingSource): string {
+  const positions = [...source.positions].sort((a, b) => a - b);
+  if (!positions.length) return "";
+  const first = positions[0];
+  const last = positions[positions.length - 1];
+  return first === last ? `corte ${first}` : `cortes ${first}-${last}`;
+}
+
+/**
+ * Parses one finding from the Backend public projection. The probability vector is
+ * not part of that contract: its presence invalidates the item instead of letting
+ * the panel reconstruct a score or read the runner-up class as a second opinion.
+ * The confidence of the reported label does travel, already reduced by the Backend.
  */
 export function parseDiscFinding(value: unknown): DiscFinding | null {
   const raw = asRecord(value);
@@ -87,7 +215,22 @@ export function parseDiscFinding(value: unknown): DiscFinding | null {
     ? "categorical"
     : "binary";
   if (classification.kind !== expectedKind) return null;
+  /*
+   * La distribución completa sigue sin poder llegar: su presencia invalida el
+   * hallazgo. Lo que sí viaja es `confidence`, la probabilidad de la etiqueta que
+   * el modelo reporta —el backend la deriva en su proyección pública—, porque un
+   * hallazgo categórico sin idea de cuán seguro está el modelo no se puede pesar
+   * contra la imagen. Fuera de [0,1] no se muestra en vez de recortarse: un valor
+   * así significa que el productor cambió de escala, no que la confianza sea 1.
+   */
   if (Object.prototype.hasOwnProperty.call(classification, "probabilities")) return null;
+  const rawConfidence = classification.confidence;
+  const confidence = typeof rawConfidence === "number"
+    && Number.isFinite(rawConfidence)
+    && rawConfidence >= 0
+    && rawConfidence <= 1
+    ? rawConfidence
+    : undefined;
 
   const evidence = asRecord(raw.evidence);
   const deploymentStatus = text(evidence?.deploymentStatus) as DeploymentStatus;
@@ -109,11 +252,15 @@ export function parseDiscFinding(value: unknown): DiscFinding | null {
   const review = asRecord(raw.review);
   if (!review || review.required !== true || review.status !== "pending" || raw.notClinicalDiagnosis !== true) return null;
 
+  const sources = parseSources(raw.sourceSeries);
+  if (!sources) return null;
+
   return {
     findingId,
     findingType,
     level,
     label,
+    confidence,
     deploymentStatus,
     evaluationDataset: text(evidence.evaluationDataset),
     externalValidationAvailable: evidence.externalValidationAvailable,
@@ -123,7 +270,46 @@ export function parseDiscFinding(value: unknown): DiscFinding | null {
     modelSha256,
     reviewRequired: true,
     reviewStatus: "pending",
+    sources,
   };
+}
+
+/**
+ * La región, llevada a la base 0..256 en la que dibuja el visor.
+ *
+ * Es el inverso exacto de `viewerPointToImagePixels`: la base cubre el corte entero,
+ * así que la escala sale del propio espacio de coordenadas de la serie. Sin él, un
+ * punto de una serie de 512 px dibujado sobre una de 320 se corre casi un centímetro.
+ */
+export function regionToViewerBase(region: DiscEvaluatedRegion) {
+  const baseX = (value: number) => value / region.width * 256;
+  const baseY = (value: number) => value / region.height * 256;
+  return {
+    point: { x: baseX(region.point.x), y: baseY(region.point.y) },
+    box: {
+      x0: baseX(region.bbox.x0),
+      y0: baseY(region.bbox.y0),
+      x1: baseX(region.bbox.x1),
+      y1: baseY(region.bbox.y1),
+    },
+  };
+}
+
+/**
+ * La serie en la que conviene mostrar este nivel.
+ *
+ * Se prefiere la que el visor ya está mostrando: mover el stack es menos invasivo
+ * que cambiarle la serie al médico. Si esa no evaluó el nivel, T2 antes que T1
+ * —es la secuencia en la que se lee un disco— y solo entonces se cambia de serie.
+ */
+export function preferredRegion(
+  finding: DiscFinding,
+  viewedInputId?: string | null,
+): { role: DiscSeriesRole; region: DiscEvaluatedRegion } | null {
+  const located = finding.sources.flatMap((source) => (source.region ? [{ role: source.role, region: source.region }] : []));
+  if (!located.length) return null;
+  const viewed = viewedInputId ? located.find((item) => item.region.inputId === viewedInputId) : undefined;
+  return viewed ?? located.find((item) => item.role === "sagittal_t2") ?? located[0];
 }
 
 /** All-or-nothing parsing prevents a broken item from becoming a partial clinical result. */
