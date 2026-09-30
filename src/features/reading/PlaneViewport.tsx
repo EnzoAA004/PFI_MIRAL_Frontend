@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { OrientationLabels } from "./orientationMarkers";
 import { MriSliceViewer, type MeasurementOverlay, type RawSlicePixels, type SliceNavigation } from "../../components/MriSliceViewer";
+import type { FindingMarker } from "./MeasurementLayer";
 import { instanceLabel, resolveSegmentationDisplayColor, type Segmentation } from "./segmentation";
 import { displayStructureLabel } from "../../clinicalDisplay";
 import type { StudyArchiveSeries } from "../../appTypes";
@@ -68,6 +69,8 @@ export type PlaneViewportProps = {
   derivedMeasurableCount: number;
   referenceLine: [{ x: number; y: number }, { x: number; y: number }] | null;
   referenceLineReason: string;
+  /** Marca del hallazgo discal que el revisor pidió ubicar, en la base 0..256. */
+  findingMarker?: FindingMarker | null;
   selectedMeasurementId: string | null;
   highlightedMeasurementId: string | null;
   onSelectMeasurement: (id: string) => void;
@@ -104,7 +107,7 @@ export function PlaneViewport({
   subarticularMode, onSubarticularPoint, orientation, pixelSpacingMm,
   onMoveLandmark, onAddLandmark, onLandmarkAddComplete, onOverlayAvailableChange,
   measureTool, measureDraft, onMeasurePoint, onMeasureFreehand, annotations, aiMeasurements, aiMeasurableCount,
-  derivedMeasurements, derivedMeasurableCount, referenceLine, referenceLineReason, onMoveMeasurePoint, annotatedIndices, onMoveMaskPoint,
+  derivedMeasurements, derivedMeasurableCount, referenceLine, referenceLineReason, findingMarker, onMoveMeasurePoint, annotatedIndices, onMoveMaskPoint,
   selectedMeasurementId, highlightedMeasurementId, onSelectMeasurement,
   segmentation, slicePixels, pixelsBaseUrl, hiddenInstances, onToggleInstance,
   seriesChoices, viewedSeriesId, analyzedSeriesName, unsegmentedReason, onSelectSeries,
@@ -221,6 +224,7 @@ export function PlaneViewport({
           derivedMeasurements={derivedMeasurements}
           derivedMeasurableCount={derivedMeasurableCount}
           referenceLine={referenceLine}
+          findingMarker={findingMarker}
           referenceLineReason={referenceLineReason}
           highlightedMeasurementId={highlightedMeasurementId}
           onSelectMeasurement={onSelectMeasurement}

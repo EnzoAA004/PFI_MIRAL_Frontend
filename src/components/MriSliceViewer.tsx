@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from "react";
 import { startAuthenticatedImageLoad, useAuthenticatedImageUrl } from "../authenticatedAssets";
 import { displayLandmarkLabel, displayStructureLabel } from "../clinicalDisplay";
 import { paintSegmentation, type Segmentation } from "../features/reading/segmentation";
 import { applyWindow, defaultWindow, fetchSlicePixels, percentileWindow, slicePixelsUrl, type SlicePixelsMeta } from "../features/reading/pixels";
-import { MeasurementLayer, type MeasurementFigure } from "../features/reading/MeasurementLayer";
+import { MeasurementLayer, type FindingMarker, type MeasurementFigure } from "../features/reading/MeasurementLayer";
 import type { MeasurementKind } from "../features/reading/measurements";
 import { spokenOrientation, type OrientationLabels } from "../features/reading/orientationMarkers";
 import { scaleBarFor } from "../features/reading/scaleBar";
@@ -156,6 +156,15 @@ type Props = {
   referenceLine?: [Point, Point] | null;
   /** Por qué no se traza, cuando no se puede. Se dice en vez de callar. */
   referenceLineReason?: string;
+  /**
+   * Marca del hallazgo que el revisor pidió ubicar, ya resuelta en la base 0..256.
+   *
+   * Llega resuelta y no como geometría cruda por lo mismo que la línea de
+   * referencia: decidir si el corte que se está mirando es el que se evaluó es una
+   * verificación con reglas propias, y repartirla entre el visor y quien la consulta
+   * la haría divergir.
+   */
+  findingMarker?: FindingMarker | null;
   /**
    * Mediciones derivadas de la geometría de otras estructuras: ángulo segmentario y
    * listesis. Van en su propia capa, apagada por defecto, porque el modelo no fue
@@ -362,6 +371,7 @@ export function MriSliceViewer({
   aiMeasurableCount = 0,
   referenceLine = null,
   referenceLineReason = "",
+  findingMarker = null,
   derivedMeasurements = [],
   derivedMeasurableCount = 0,
   onMoveMeasurePoint,
@@ -483,8 +493,20 @@ export function MriSliceViewer({
 
   const segmentationCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const hiddenKey = (hiddenInstances ?? []).join(",");
-  useEffect(() => {
-    const canvas = segmentationCanvasRef.current;
+  /*
+   * Pintar la segmentación es una ref de callback y no un efecto.
+   *
+   * El <canvas> se desmonta al apagar la superposición y se vuelve a montar al
+   * encenderla, pero sus datos —la segmentación, las clases ocultas— no
+   * cambiaron: un efecto con esas dependencias no se volvía a disparar y el
+   * canvas nuevo quedaba en blanco hasta cambiar de corte, que es lo que
+   * obligaba a rodar la rueda para "traer de vuelta" las máscaras. Una ref de
+   * callback se ejecuta en el momento en que el nodo existe, así que pinta
+   * tanto cuando cambian los datos (React la vuelve a llamar al cambiar su
+   * identidad) como cuando el canvas vuelve a montarse.
+   */
+  const paintSegmentationCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
+    segmentationCanvasRef.current = canvas;
     if (!canvas || !segmentation) return;
     const context = canvas.getContext("2d");
     if (!context) return;
@@ -1156,7 +1178,20 @@ export function MriSliceViewer({
               <img> queda solo como marco: sigue definiendo el tamaño natural sobre el
               que se posicionan landmarks y mediciones, pero no se ve.
             */}
-            {pixelsReady && <canvas className="mri-pixel-canvas" ref={pixelCanvasRef} />}
+            {/*
+              El canvas se monta siempre y se muestra cuando tiene contenido, en vez
+              de montarse recién cuando `pixelsReady` pasa a true.
+
+              Montarlo por condición era una carrera que perdía casi siempre: el
+              efecto que descarga las intensidades pone `pixelsReady` en false al
+              empezar —lo que desmonta el canvas—, y cuando la descarga terminaba
+              escribía sobre una ref ya vacía, salía por el guard y nunca llegaba a
+              ponerlo en true. La imagen quedaba en el PNG ventaneado por el backend
+              hasta que otro corte volvía a disparar el efecto con el canvas del corte
+              anterior todavía montado. Eso es lo que se sentía como "no carga hasta
+              que scrolleo".
+            */}
+            <canvas className="mri-pixel-canvas" ref={pixelCanvasRef} style={{ opacity: pixelsReady ? 1 : 0 }} />
             <img
               ref={imageRef}
               alt={`${seriesName} recurso de entrada`}
@@ -1177,11 +1212,12 @@ export function MriSliceViewer({
               se cae al overlay compuesto, que es lo que esa corrida produjo.
             */}
             {overlayVisible && segmentation && onAiSlice ? (
-              <canvas className="mri-segmentation-canvas" ref={segmentationCanvasRef} style={{ opacity: overlayAlpha }} />
+              <canvas className="mri-segmentation-canvas" ref={paintSegmentationCanvas} style={{ opacity: overlayAlpha }} />
             ) : overlayVisible && onAiSlice && overlayLoaded && overlayAsset.url ? (
               <img alt={`${seriesName} recurso de superposicion IA`} className="mri-overlay-img" draggable={false} src={overlayAsset.url} style={{ opacity: overlayAlpha, transform: "translateZ(0)" }} />
             ) : null}
             <MeasurementLayer
+              marker={findingMarker ?? null}
               referenceLine={referenceVisible ? referenceLine : null}
               editable={!(measurementsReadonly ?? readonly) && Boolean(onMoveMeasurePoint)}
               figures={visibleMeasures}

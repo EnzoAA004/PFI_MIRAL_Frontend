@@ -8,6 +8,7 @@ const tokens = readFileSync("src/design/tokens.css", "utf8");
 const sidebar = readFileSync("src/components/Sidebar.tsx", "utf8");
 const statusBadge = readFileSync("src/components/StatusBadge.tsx", "utf8");
 const pageHeader = readFileSync("src/components/OperationsPageHeader.tsx", "utf8");
+const panel = readFileSync("src/features/worklist/SelectedStudyPanel.tsx", "utf8");
 const app = readFileSync("src/App.tsx", "utf8");
 
 let count = 0;
@@ -51,7 +52,7 @@ test("Worklist usa el page header operativo reutilizable", () => {
  * el texto decorativo que lo acompañaba.
  */
 test("el header identifica la pantalla y ofrece la acción primaria", () => {
-  assert.match(worklist, /title="Lista de trabajo"/);
+  assert.match(worklist, /title="Lista de estudios"/);
   assert.match(worklist, /Nuevo análisis/);
   assert.doesNotMatch(worklist, /eyebrow=/);
 });
@@ -67,9 +68,35 @@ test("la búsqueda mantiene label accesible y control search", () => {
   assert.match(worklist, /type="search"/);
 });
 
+/*
+ * Los cinco chips excluyentes pasaron a ser cinco filtros combinables. Los
+ * contadores no se perdieron —que es lo que este test protege— sino que se
+ * mudaron a las opciones del filtro de estado, donde siguen siendo el número
+ * y la forma de actuar sobre él.
+ */
 test("los contadores siguen siendo filtros accionables", () => {
-  assert.match(worklist, /aria-pressed=\{filter\.id === filterId\}/);
-  assert.match(worklist, /counts\[filter\.id\]/);
+  assert.match(worklist, /statusCounts\[status\]/);
+  assert.match(worklist, /updateFilter\("reviewStatus", event\.target\.value\)/);
+});
+
+test("los filtros son combinables y se pueden limpiar", () => {
+  for (const label of ["Paciente", "Fecha", "Estado", "Prioridad", "Modalidad"]) {
+    assert.match(worklist, new RegExp(`<span>${label}</span>`));
+  }
+  assert.match(worklist, /Limpiar filtros/);
+  assert.match(worklist, /aria-expanded=\{filtersOpen\}/);
+});
+
+test("seleccionar una fila abre el panel del estudio sin abrir la revisión", () => {
+  assert.match(worklist, /onClick=\{\(\) => setSelectedKey\(key\)\}/);
+  assert.match(worklist, /onDoubleClick=\{\(\) => openStudy\(study\)\}/);
+  assert.match(worklist, /<SelectedStudyPanel/);
+});
+
+/* El panel no promete datos que el contrato de estudios no transporta. */
+test("el panel del estudio no inventa filiación ni derivador", () => {
+  assert.doesNotMatch(panel, /Accession|Médico solicitante|Centro derivador|<dt>Sexo|<dt>Edad/);
+  assert.match(panel, /archiveSeries/);
 });
 
 test("la tabla conserva sorting accesible", () => {
@@ -119,7 +146,7 @@ test("mobile transforma filas en cards sin cambiar el DOM tabular", () => {
 });
 
 test("las celdas mobile tienen labels reales", () => {
-  for (const label of ["Caso", "Paciente", "Fecha", "Planos", "Revisión", "Prioridad"]) {
+  for (const label of ["Paciente", "ID estudio", "Fecha", "Modalidad", "Prioridad", "Estado", "Series"]) {
     assert.match(worklist, new RegExp(`data-label="${label}"`));
   }
   assert.doesNotMatch(worklist, /data-label="Modelo"|>Modelo</);

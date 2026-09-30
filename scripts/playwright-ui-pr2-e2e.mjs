@@ -214,7 +214,7 @@ async function installBackendMocks(page, { failRun = false } = {}) {
 }
 
 async function openPreparedDrawer(page) {
-  await page.getByRole("heading", { name: "Lista de trabajo" }).waitFor({ timeout: 10_000 });
+  await page.getByRole("heading", { name: "Lista de estudios" }).waitFor({ timeout: 10_000 });
   await page.getByRole("button", { name: /Nuevo análisis/ }).click();
   // Stage 86: el paciente/subjectRef es opcional -- este flujo prueba el caso "sin
   // asociar" a propósito, para confirmar que ya no depende de una selección previa.

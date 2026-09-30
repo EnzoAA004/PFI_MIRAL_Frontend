@@ -1,4 +1,4 @@
-import type { DeploymentStatus, DiscFindingType } from "./discDegenerativeFindings";
+import type { DeploymentStatus, DiscFindingType, DiscSeriesRole } from "./discDegenerativeFindings";
 
 export const DISC_FINDING_LABELS: Record<DiscFindingType, string> = {
   disc_bulging: "Abombamiento discal",
@@ -36,6 +36,21 @@ export function displayDiscFindingValue(value: string): string {
   return DISC_FINDING_VALUE_LABELS[value] ?? value;
 }
 
+/**
+ * La confianza del hallazgo, con el mismo formato que ya usan las mediciones
+ * (`formatTechnicalConfidence`): un porcentaje con un decimal y coma decimal.
+ *
+ * Una corrida sin confianza informada lo dice en vez de mostrar un guion: el
+ * lector tiene que poder distinguir "el modelo no estaba seguro" de "esta corrida
+ * no publica ese dato", y las corridas anteriores a este cambio son del segundo
+ * tipo.
+ */
+export function displayDiscFindingConfidence(value?: number): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${(value * 100).toFixed(1).replace(".", ",")} %`
+    : "Confianza no informada";
+}
+
 export function startsCollapsed(status: DeploymentStatus): boolean {
   return status === "not_product_supported";
 }
@@ -48,3 +63,19 @@ export const DEPLOYMENT_ORDER: DeploymentStatus[] = [
 
 export const DISC_FINDINGS_NOTICE =
   "Resultado generado por IA y sujeto a revisión profesional. No constituye un diagnóstico clínico autónomo.";
+
+export const DISC_SERIES_ROLE_LABELS: Record<DiscSeriesRole, string> = {
+  sagittal_t1: "Sagital T1",
+  sagittal_t2: "Sagital T2",
+};
+
+/**
+ * Qué afirma la marca sobre el corte.
+ *
+ * Se dice donde se la ofrece y no solo en el aviso general: el que va a mirar la
+ * cruz sobre la imagen la lee como "acá está lo que encontró". El modelo clasifica
+ * sobre una ventana centrada en el disco y no segmenta lesión, así que la marca
+ * ubica lo evaluado, no la extensión del hallazgo.
+ */
+export const DISC_REGION_NOTICE =
+  "La marca señala la región que se evaluó para este nivel, no la extensión del hallazgo.";

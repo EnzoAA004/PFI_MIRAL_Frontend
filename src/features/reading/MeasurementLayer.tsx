@@ -32,8 +32,28 @@ export type MeasurementFigure = {
   measurementId?: string;
 };
 
+/**
+ * La marca de un hallazgo de IA sobre el corte.
+ *
+ * Una cruz y no un punto: los puntos de esta imagen ya son los landmarks, y sobre
+ * anatomía clara un disco lleno tapa justo lo que se quiere ver. La cruz deja ver
+ * el píxel que señala.
+ *
+ * `box` es la ventana que entró al modelo. Va punteada y tenue a propósito: la
+ * marca ubica lo que se evaluó, no la extensión de un hallazgo, y un recuadro
+ * sólido alrededor de una estructura se lee como una lesión delimitada.
+ */
+export type FindingMarker = {
+  /** En la base 0..256, igual que las cotas. */
+  point: AnnotationPoint;
+  box?: { x0: number; y0: number; x1: number; y1: number } | null;
+  label: string;
+};
+
 type Props = {
   figures: MeasurementFigure[];
+  /** Hallazgo señalado sobre este corte, cuando el revisor pidió verlo. */
+  marker?: FindingMarker | null;
   /** Dónde corta el otro plano, cuando la geometría lo sostiene. */
   referenceLine?: [AnnotationPoint, AnnotationPoint] | null;
   /** En curso: la figura que el médico está trazando ahora mismo. */
@@ -184,8 +204,30 @@ function Figure({ figure, kind, tick }: { figure: MeasurementFigure; kind: Measu
   );
 }
 
+function Marker({ marker, size, stroke }: { marker: FindingMarker; size: number; stroke: number }) {
+  const { point, box } = marker;
+  return (
+    <g className="mri-finding-marker">
+      {box && (
+        <rect
+          className="mri-finding-marker-box"
+          height={box.y1 - box.y0}
+          strokeDasharray={`${stroke * 3} ${stroke * 2}`}
+          strokeWidth={stroke}
+          width={box.x1 - box.x0}
+          x={box.x0}
+          y={box.y0}
+        />
+      )}
+      <line strokeWidth={stroke} x1={point.x - size} x2={point.x + size} y1={point.y} y2={point.y} />
+      <line strokeWidth={stroke} x1={point.x} x2={point.x} y1={point.y - size} y2={point.y + size} />
+      {marker.label && <Plate size={size * 1.6} text={marker.label} x={point.x} y={point.y - size * 2.2} />}
+    </g>
+  );
+}
+
 export function MeasurementLayer({
-  figures, draft, referenceLine, selectedId, highlightedId, zoom, editable, onSelect, onDragStart,
+  figures, marker, draft, referenceLine, selectedId, highlightedId, zoom, editable, onSelect, onDragStart,
 }: Props) {
   /*
    * 8 y no 6: medido sobre la aplicacion, el valor anterior renderizaba a 10 px de
@@ -232,7 +274,7 @@ export function MeasurementLayer({
     placed.push(boxAt(anchor));
     anchors.set(figure.id, anchor);
   }
-  if (!figures.length && !draft && !referenceLine) return null;
+  if (!figures.length && !draft && !referenceLine && !marker) return null;
 
   return (
     <svg className="mri-measure-layer" viewBox={`0 0 ${BASE} ${BASE}`} preserveAspectRatio="none">
@@ -308,6 +350,12 @@ export function MeasurementLayer({
           </g>
         );
       })}
+      {/*
+        * La marca del hallazgo va sobre las cotas: es lo que el revisor acaba de
+        * pedir ver, y debajo de una línea de medición se pierde justo en la
+        * estructura que señala.
+        */}
+      {marker && <Marker marker={marker} size={tick * 2.4} stroke={tick * 0.5} />}
       {draft && draft.points.length > 0 && (
         <g className="mri-measure mri-measure-draft">
           {draft.points.length >= 2 && (

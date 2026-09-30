@@ -1,8 +1,7 @@
 import type { ViewKey } from "../appTypes";
 import { Fragment, type ComponentType, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, ListChecks, Moon, Settings, ShieldCheck, Sun, Users } from "lucide-react";
-import { useEffect, useState } from "react";
-import { applyTheme, persistTheme, resolveTheme, type OperationsTheme } from "../design/theme";
+import { setTheme, useTheme, type OperationsTheme } from "../design/theme";
 
 /**
  * Navigation follows the reading workflow, not the module structure.
@@ -31,16 +30,13 @@ interface SidebarProps {
 }
 
 /**
- * Alternador de tema de la superficie operativa. La sala de lectura no
- * participa: declara `data-theme="reading"` sobre sí misma y gana por
- * anidamiento, así que el estudio se lee siempre en oscuro.
+ * Alternador de tema. La preferencia es una sola para todo el producto: la sala
+ * de lectura la sigue con su propia escala (`data-theme="reading"` /
+ * `reading-light`, que gana por anidamiento) y tiene su propio botón en la
+ * barra del visor, porque acá la barra de navegación no se monta.
  */
 function ThemeToggle({ collapsed }: { collapsed: boolean }) {
-  const [theme, setTheme] = useState<OperationsTheme>(() => resolveTheme());
-
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+  const theme = useTheme();
 
   const next: OperationsTheme = theme === "dark" ? "light" : "dark";
   const label = next === "light" ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
@@ -49,7 +45,7 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
     <button
       className="sidebar-collapse"
       type="button"
-      onClick={() => { persistTheme(next); setTheme(next); }}
+      onClick={() => setTheme(next)}
       aria-label={label}
       title={collapsed ? label : undefined}
     >
@@ -64,16 +60,11 @@ export function Sidebar({ activeView, activeNavView = activeView, onChangeView, 
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" role="img" aria-label="Marca de columna lumbar">
-            <path d="M12 3c-1.4 0-2.5.8-2.5 1.9S10.6 7 12 7s2.5-.9 2.5-2.1S13.4 3 12 3Z" />
-            <path d="M11.3 7.3c-1.5.1-2.7 1-2.7 2.2s1.3 2 2.9 1.9l1.2-.1c1.5-.1 2.7-1 2.7-2.2s-1.3-2-2.9-1.9l-1.2.1Z" />
-            <path d="M11.6 11.8c-1.6.1-2.8 1-2.8 2.2s1.3 2.1 2.9 2l.8-.1c1.6-.1 2.8-1 2.8-2.2s-1.3-2.1-2.9-2l-.8.1Z" />
-            <path d="M12 16.5c-1.4 0-2.5.9-2.5 2S10.6 21 12 21s2.5-1.3 2.5-2.5-.9-2-2.5-2Z" />
-          </svg>
+          <img alt="" src="/logo.svg" />
         </div>
-        <div>
-          <strong>RM lumbar</strong>
-          <span>Plataforma de análisis</span>
+        <div title="MIRA·L — Mapeo Integrado y Revisión Anatómica Lumbar">
+          <strong>MIRA·L</strong>
+          <span>Revisión anatómica lumbar</span>
         </div>
       </div>
       <nav className="side-nav">
@@ -93,7 +84,14 @@ export function Sidebar({ activeView, activeNavView = activeView, onChangeView, 
       </nav>
       <div className="sidebar-footer">
         {identity}
-        <span className={systemOnline ? "system-status is-online" : "system-status is-degraded"}><ShieldCheck aria-hidden size={16} />v1.3.2</span>
+        {/* El pie dice dos cosas distintas y las dos importan al reportar un problema:
+            si el módulo de IA está respondiendo, y qué versión de la aplicación se está
+            usando. Antes sólo se veía la versión, con el color del ícono como única
+            señal del estado, que es la señal que nadie mira. */}
+        <span className={systemOnline ? "system-status is-online" : "system-status is-degraded"}>
+          <ShieldCheck aria-hidden size={16} />
+          <span className="side-nav-label">{systemOnline ? "Sincronizado" : "Modo degradado"} · v1.3.2</span>
+        </span>
         <ThemeToggle collapsed={collapsed} />
         {onToggleCollapsed && (
           <button

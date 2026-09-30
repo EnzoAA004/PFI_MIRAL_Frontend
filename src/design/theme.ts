@@ -1,22 +1,29 @@
 /**
- * Tema de la superficie operativa: lista de trabajo, pacientes, cargador,
- * configuración y acceso.
+ * Tema del producto. Hay dos valores y una sola preferencia guardada, que
+ * gobierna las dos superficies:
  *
- * Sólo hay dos valores y el atributo vive en <html>:
+ *   superficie operativa    lista de trabajo, pacientes, cargador,
+ *                           configuración y acceso. El atributo vive en <html>:
+ *                           `data-theme="clinical"` para oscuro, sin atributo
+ *                           para claro (que es la paleta base de :root).
  *
- *   data-theme="clinical"  superficie oscura, la misma familia que el visor
- *   (sin atributo)         superficie clara, que es la paleta base de :root
+ *   sala de lectura (PACS)  declara el tema sobre sí misma y, al estar anidada,
+ *                           gana siempre: `data-theme="reading"` para oscuro y
+ *                           `data-theme="reading-light"` para claro.
  *
- * La sala de lectura **no participa**: declara `data-theme="reading"` sobre sí
- * misma y, al estar anidada, gana siempre. Una sala de lectura es una sala
- * oscura —sobre un fondo claro el ojo se adapta a la interfaz en vez de a la
- * imagen, y eso aplana el contraste percibido del estudio—, así que no es una
- * preferencia que tenga sentido ofrecer ahí.
+ * Antes la sala de lectura era oscura y punto: una sala de lectura es una sala
+ * oscura, y sobre un fondo claro el ojo se adapta a la interfaz en vez de a la
+ * imagen. Eso sigue siendo cierto y por eso el oscuro es el que se elige sin
+ * preferencia guardada, pero el visor **no** puede ser la única pantalla que
+ * ignora la elección de quien lo usa. El compromiso: el marco acompaña el tema,
+ * el viewport se queda negro en los dos. La imagen nunca se lee sobre blanco.
  *
- * El atributo se escribe antes del primer pintado desde un script en línea en
- * index.html; este módulo comparte con él la clave y la lógica de resolución
- * para que no puedan divergir.
+ * El atributo de <html> se escribe antes del primer pintado desde un script en
+ * línea en index.html; este módulo comparte con él la clave y la lógica de
+ * resolución para que no puedan divergir.
  */
+import { useEffect, useState } from "react";
+
 export type OperationsTheme = "dark" | "light";
 
 export const THEME_STORAGE_KEY = "pfi.theme";
@@ -59,4 +66,47 @@ export function persistTheme(theme: OperationsTheme) {
   } catch {
     // Sin almacenamiento la elección dura lo que dure la pestaña.
   }
+}
+
+/**
+ * El valor del token de la sala de lectura para un tema dado. La sala no usa
+ * `clinical`/sin-atributo: tiene su propia escala, un paso más profunda en
+ * oscuro y un paso más neutra en claro.
+ */
+export function readingThemeAttribute(theme: OperationsTheme): "reading" | "reading-light" {
+  return theme === "light" ? "reading-light" : "reading";
+}
+
+/*
+ * La preferencia la pueden cambiar dos controles en pantallas distintas —el pie
+ * de la barra de navegación y la barra del visor—, así que no puede vivir en el
+ * estado local de ninguno de los dos: el que no recibió el clic se quedaría
+ * mostrando el ícono del tema anterior. Un registro de suscriptores a nivel de
+ * módulo alcanza; no amerita un contexto de React para un enum de dos valores.
+ */
+const listeners = new Set<(theme: OperationsTheme) => void>();
+
+/** Guarda la elección, la aplica a <html> y despierta a todos los controles. */
+export function setTheme(theme: OperationsTheme) {
+  persistTheme(theme);
+  applyTheme(theme);
+  for (const listener of listeners) listener(theme);
+}
+
+/** Tema vigente, sincronizado entre todos los componentes que lo lean. */
+export function useTheme(): OperationsTheme {
+  const [theme, setThemeState] = useState<OperationsTheme>(() => resolveTheme());
+
+  useEffect(() => {
+    listeners.add(setThemeState);
+    // Otra pestaña del mismo profesional pudo haber cambiado la preferencia.
+    setThemeState(resolveTheme());
+    return () => { listeners.delete(setThemeState); };
+  }, []);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  return theme;
 }

@@ -97,10 +97,10 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
     <main className="auth-page">
       <section className="auth-card">
         <div className="auth-brand">
-          <div className="brand-mark">LM</div>
+          <div className="brand-mark" aria-hidden="true"><img alt="" src="/logo.svg" /></div>
           <div>
-            <strong>Plataforma de análisis de RM lumbar</strong>
-            <span>Datos académicos deidentificados · Revisión humana requerida</span>
+            <strong>MIRA·L</strong>
+            <span>Mapeo Integrado y Revisión Anatómica Lumbar</span>
           </div>
         </div>
         <div className="auth-copy">

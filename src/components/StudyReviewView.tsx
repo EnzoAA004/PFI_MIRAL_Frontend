@@ -13,6 +13,7 @@ import { LevelNavigator } from "../features/reading/LevelNavigator";
 import { groupMeasurements } from "../features/reading/measurementGrouping";
 import { ReviewInspector, ReviewInspectorPanel, type ReviewInspectorTab } from "../features/reading/ReviewInspector";
 import {
+  ReadingThemeToggle,
   ReadingWorkspaceBody,
   ReadingWorkspaceHeader,
   ReadingWorkspaceShell,
@@ -44,7 +45,16 @@ import { NO_VISUAL_EVIDENCE_MESSAGE } from "../features/reading/visualEvidenceDi
 import { DISC_FINDING_LABELS, DEPLOYMENT_LABELS, DEPLOYMENT_NOTES, displayDiscFindingValue } from "../features/reading/discFindingDisplay";
 import { GovernanceNotice } from "../features/reading/GovernanceNotice";
 import { WorkspaceGovernanceNotice } from "../features/reading/WorkspaceGovernanceNotice";
-import { DiscDegenerativeContractError, parsePersistedDiscDegenerativeFindings, type DiscFinding } from "../features/reading/discDegenerativeFindings";
+import {
+  DiscDegenerativeContractError,
+  parsePersistedDiscDegenerativeFindings,
+  preferredRegion,
+  regionToViewerBase,
+  type DiscEvaluatedRegion,
+  type DiscFinding,
+  type DiscLevel,
+  type DiscSeriesRole,
+} from "../features/reading/discDegenerativeFindings";
 import {
   levelForSlice, missingFieldReason, parseSliceLevels, sideFromSliceOrientation, type SubarticularRoiDraft,
 } from "../features/reading/subarticularRoi";
@@ -606,6 +616,16 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
 
   /*
+   * Nivel discal cuya región evaluada está marcada sobre el sagital.
+   *
+   * Se guarda la región entera y no solo el nivel: la marca pertenece a una serie y a
+   * un corte concretos, y sin eso no hay cómo verificar al dibujar que el corte que se
+   * está mirando es el que se clasificó.
+   */
+  const [discMarker, setDiscMarker] = useState<{ level: DiscLevel; role: DiscSeriesRole; region: DiscEvaluatedRegion } | null>(null);
+  const [discRegionNotice, setDiscRegionNotice] = useState("");
+
+  /*
    * Marcado del receso subarticular.
    *
    * El modelo no localiza la anatomia: necesita que alguien le diga sobre que coordenada
@@ -845,6 +865,86 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     if (!finding || finding.slicePosition === null) return;
     const total = seriesList.find((item: any) => item.plane === "axial")?.sliceCount ?? 1;
     setSliceByPlane((state) => ({ ...state, axial: clampSlice(finding.slicePosition as number, total) }));
+  }
+
+  /**
+   * El `inputId` de la serie sagital que mira un viewport.
+   *
+   * `null` en el estado significa "la que analizó la IA", que es un rol y no un
+   * identificador: para comparar contra la serie donde se evaluó un nivel hay que
+   * resolverlo al `inputId` real del catálogo.
+   */
+  function sagittalInputIdOf(bindingId: string, defaultInputId?: string | null): string | null {
+    const stored = viewedSeriesByPlane[bindingId];
+    const resolved = stored === undefined ? defaultInputId ?? null : stored;
+    if (resolved) return String(resolved);
+    const analyzed = studySeries.find((item) => item.plane === "sagittal" && item.analyzable);
+    return analyzed?.inputId ?? studySeries.find((item) => item.plane === "sagittal")?.inputId ?? null;
+  }
+
+  /**
+   * Lleva el sagital a donde se evaluó un nivel discal, y deja la marca puesta.
+   *
+   * Mueve la serie además del corte. El modelo localiza T1 y T2 por separado, así que
+   * el corte 8 de una no es el corte 8 de la otra: saltar solo el índice pondría al
+   * revisor en un corte cualquiera de la serie equivocada, con la marca encima.
+   *
+   * Si la serie donde se evaluó no está en el catálogo del estudio, no se mueve nada y
+   * se dice por qué: dibujar la cruz sobre la serie que esté a mano la ubicaría en una
+   * anatomía que no es la que se clasificó.
+   */
+  function goToDiscRegion(level: DiscLevel) {
+    const sagittalBindings = viewportBindings.filter((item) => item.plane === "sagittal");
+    const first = sagittalBindings[0];
+    if (!first) return;
+    const located = discDegenerativeSnapshot.findings
+      .filter((finding) => finding.level === level)
+      .map((finding) => preferredRegion(finding, sagittalInputIdOf(first.id, first.defaultSeriesInputId)))
+      .find(Boolean);
+    if (!located) return;
+
+    const target = studySeries.find((item) => item.inputId === located.region.inputId);
+    if (!target) {
+      setDiscMarker(null);
+      setDiscRegionNotice(`${level}: la serie en la que se evaluó este nivel no está disponible en el visor.`);
+      return;
+    }
+
+    /*
+     * En el layout T1 + T2 hay dos viewports sagitales. Se usa el que ya está en la
+     * serie donde se evaluó el nivel: cambiarle la serie al primero dejaría los dos
+     * mostrando lo mismo y le sacaría al médico justo la comparación que ese layout
+     * existe para dar.
+     */
+    const binding = sagittalBindings.find(
+      (item) => sagittalInputIdOf(item.id, item.defaultSeriesInputId) === located.region.inputId,
+    ) ?? first;
+
+    setDiscRegionNotice("");
+    if (sagittalInputIdOf(binding.id, binding.defaultSeriesInputId) !== located.region.inputId) {
+      setViewedSeriesByPlane((state) => ({ ...state, [binding.id]: located.region.inputId }));
+    }
+    setSliceByPlane((state) => ({
+      ...state,
+      [binding.id]: clampSlice(located.region.sliceIndex, target.sliceCount ?? 1),
+    }));
+    setDiscMarker({ level, role: located.role, region: located.region });
+  }
+
+  /**
+   * La marca, ya en la base del visor, o `null` si este viewport no es su lugar.
+   *
+   * Se exige serie y corte exactos. Un corte vecino se parece lo suficiente como para
+   * que la cruz pase por buena, y la ventana 2.5D son tres cortes: el que la
+   * localización nombra es uno solo. Al desplazarse la marca desaparece, que es
+   * justamente lo que dice que era de ese corte.
+   */
+  function findingMarkerFor(bindingId: string, defaultInputId: string | null | undefined, currentSlice: number | undefined) {
+    if (!discMarker) return null;
+    const { region, level } = discMarker;
+    if (sagittalInputIdOf(bindingId, defaultInputId) !== region.inputId) return null;
+    if (currentSlice !== region.sliceIndex) return null;
+    return { ...regionToViewerBase(region), label: level };
   }
 
   /**
@@ -1147,6 +1247,19 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     sagittalT2InputId: sagittalT2?.inputId,
   };
   const viewportBindings = viewportBindingsFor(layoutPreset, layoutAvailability);
+  /*
+   * El nivel marcado es el que se está viendo marcado, no el último que se pidió.
+   * Si el médico se corrió de corte la cruz ya no está en pantalla, y el botón que
+   * dijera "marcado" estaría hablando de algo que no se ve.
+   */
+  const markedDiscLevel = discMarker && viewportBindings.some((binding) => binding.plane === "sagittal"
+    && findingMarkerFor(
+      binding.id,
+      binding.defaultSeriesInputId,
+      planeViewportData("sagittal", binding.id, binding.defaultSeriesInputId)?.nav?.current,
+    ))
+    ? discMarker.level
+    : null;
   const activeLayoutPreset = layoutPresetAvailable(layoutPreset, layoutAvailability) ? layoutPreset : "reading";
 
   const viewerModel = useMemo(
@@ -1447,7 +1560,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     try { await tryBackendExport("json"); return; } catch { /* local fallback */ }
     const payload = exportPayload();
     const cleanPayload = {
-      report: { title: "RM lumbar PFI - Resumen académico de revisión", generatedAt: payload.generatedAt, caseId: payload.caseId, runId: payload.runId, reviewStatus: payload.reviewStatus, scope: payload.governance.scope },
+      report: { title: "MIRA·L - Resumen académico de revisión", generatedAt: payload.generatedAt, caseId: payload.caseId, runId: payload.runId, reviewStatus: payload.reviewStatus, scope: payload.governance.scope },
       study: { subjectRef: payload.subjectRef, studyDate: payload.studyDate, plane: payload.plane, modelKey: payload.modelKey, modelVersion: payload.modelVersion },
       traceability: { inferenceMode: payload.inferenceMode, requestedInferenceMode: payload.requestedInferenceMode, modelReadiness: payload.modelReadiness, modelArtifact: payload.modelArtifact, quality: payload.quality },
       summary: payload.summary,
@@ -1572,7 +1685,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   function buildReportHtml() {
     const payload = exportPayload();
     const measurementRows = payload.measurements.map((row) => `<tr><td><strong>${escapeHtml(row.label)}</strong><br><span>${escapeHtml(row.level)}</span></td><td>${escapeHtml(row.aiValue)} ${escapeHtml(row.unit)}</td><td>${escapeHtml(row.reviewerValue ?? "sin cambios")}</td><td>${escapeHtml(row.deltaFormatted)}</td><td>${escapeHtml(row.status)}</td><td>${row.outlier ? "Si" : "No"}</td></tr>`).join("");
-    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>RM lumbar PFI - ${escapeHtml(payload.caseId)}</title><style>body{font-family:Inter,Segoe UI,Arial,sans-serif;margin:32px;color:#102033;background:#f8fafc}.report{background:#fff;border:1px solid #d8e6f4;border-radius:18px;box-shadow:0 18px 50px rgba(15,23,42,.08);padding:28px;max-width:1080px;margin:auto}.eyebrow{text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-size:12px;font-weight:800}h1{margin:6px 0 4px;font-size:28px}.muted{color:#64748b}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}.card{border:1px solid #e2e8f0;border-radius:14px;padding:12px;background:#f8fbff}.card strong{display:block;font-size:20px;margin-top:4px}table{border-collapse:collapse;width:100%;margin-top:16px}th{background:#eef4fb;text-align:left;font-size:12px;text-transform:uppercase;color:#475569}td,th{border-bottom:1px solid #e2e8f0;padding:12px;vertical-align:top}td span{color:#64748b;font-size:12px}.notice{border:1px solid #bae6fd;background:#f0f9ff;border-radius:14px;padding:12px;margin-top:18px}.footer{font-size:12px;color:#64748b;margin-top:20px}.level{border-top:1px solid #e2e8f0;padding:12px 0}.level h3{margin:0 0 6px;font-size:15px}.level ul{margin:0;padding-left:20px}.level li{margin:3px 0;font-size:14px}.flag{color:#b45309;font-style:normal;font-size:12px;font-weight:700}.research{border:1px dashed #cbd5e1;border-radius:14px;padding:12px 16px;margin-top:16px;background:#fbfdff}.research h3{margin:0 0 4px;font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#475569}.research ul{margin:8px 0 0;padding-left:20px}.research li{font-size:14px;margin:3px 0}@media print{body{background:#fff;margin:0}.report{box-shadow:none;border:0}}</style></head><body><main class="report"><div class="eyebrow">Plataforma de análisis de RM lumbar PFI</div><h1>Resumen académico de revisión</h1><p class="muted">Caso ${escapeHtml(payload.caseId)} · Corrida ${escapeHtml(payload.runId)} · Generado ${escapeHtml(payload.generatedAt)}</p><section class="grid"><div class="card">Estado<strong>${escapeHtml(payload.reviewStatusLabel)}</strong></div><div class="card">Modo<strong>${escapeHtml(payload.inferenceMode)}</strong></div><div class="card">Mediciones<strong>${payload.summary.measurementsTotal}</strong></div><div class="card">Atípicos<strong>${payload.summary.outliers}</strong></div></section><section class="notice"><strong>Alcance:</strong> uso académico/investigación, datos de-identificados, requiere revisión profesional y no constituye diagnóstico clínico. No incluye imágenes crudas. Preparación: ${escapeHtml(payload.modelReadiness)}.</section><h2>Hallazgos por nivel</h2>${reportSections()}<h2>Hallazgos degenerativos</h2>${findingsSection()}<h2>Mediciones IA vs revisor</h2><table><thead><tr><th>Medición</th><th>IA</th><th>Revisor</th><th>Delta</th><th>Estado</th><th>Atípico</th></tr></thead><tbody>${measurementRows}</tbody></table><h2>Notas</h2><p>${escapeHtml(payload.notes || "Sin notas registradas.")}</p><div class="footer">Referencia de sujeto deidentificada: ${escapeHtml(payload.subjectRef)} · Fecha de estudio: ${escapeHtml(payload.studyDate)} · Modelo: ${escapeHtml(payload.modelKey)}</div></main></body></html>`;
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>MIRA·L - ${escapeHtml(payload.caseId)}</title><style>body{font-family:Inter,Segoe UI,Arial,sans-serif;margin:32px;color:#102033;background:#f8fafc}.report{background:#fff;border:1px solid #d8e6f4;border-radius:18px;box-shadow:0 18px 50px rgba(15,23,42,.08);padding:28px;max-width:1080px;margin:auto}.eyebrow{text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-size:12px;font-weight:800}h1{margin:6px 0 4px;font-size:28px}.muted{color:#64748b}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}.card{border:1px solid #e2e8f0;border-radius:14px;padding:12px;background:#f8fbff}.card strong{display:block;font-size:20px;margin-top:4px}table{border-collapse:collapse;width:100%;margin-top:16px}th{background:#eef4fb;text-align:left;font-size:12px;text-transform:uppercase;color:#475569}td,th{border-bottom:1px solid #e2e8f0;padding:12px;vertical-align:top}td span{color:#64748b;font-size:12px}.notice{border:1px solid #bae6fd;background:#f0f9ff;border-radius:14px;padding:12px;margin-top:18px}.footer{font-size:12px;color:#64748b;margin-top:20px}.level{border-top:1px solid #e2e8f0;padding:12px 0}.level h3{margin:0 0 6px;font-size:15px}.level ul{margin:0;padding-left:20px}.level li{margin:3px 0;font-size:14px}.flag{color:#b45309;font-style:normal;font-size:12px;font-weight:700}.research{border:1px dashed #cbd5e1;border-radius:14px;padding:12px 16px;margin-top:16px;background:#fbfdff}.research h3{margin:0 0 4px;font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#475569}.research ul{margin:8px 0 0;padding-left:20px}.research li{font-size:14px;margin:3px 0}@media print{body{background:#fff;margin:0}.report{box-shadow:none;border:0}}</style></head><body><main class="report"><div class="eyebrow">MIRA·L · Mapeo Integrado y Revisión Anatómica Lumbar</div><h1>Resumen académico de revisión</h1><p class="muted">Caso ${escapeHtml(payload.caseId)} · Corrida ${escapeHtml(payload.runId)} · Generado ${escapeHtml(payload.generatedAt)}</p><section class="grid"><div class="card">Estado<strong>${escapeHtml(payload.reviewStatusLabel)}</strong></div><div class="card">Modo<strong>${escapeHtml(payload.inferenceMode)}</strong></div><div class="card">Mediciones<strong>${payload.summary.measurementsTotal}</strong></div><div class="card">Atípicos<strong>${payload.summary.outliers}</strong></div></section><section class="notice"><strong>Alcance:</strong> uso académico/investigación, datos de-identificados, requiere revisión profesional y no constituye diagnóstico clínico. No incluye imágenes crudas. Preparación: ${escapeHtml(payload.modelReadiness)}.</section><h2>Hallazgos por nivel</h2>${reportSections()}<h2>Hallazgos degenerativos</h2>${findingsSection()}<h2>Mediciones IA vs revisor</h2><table><thead><tr><th>Medición</th><th>IA</th><th>Revisor</th><th>Delta</th><th>Estado</th><th>Atípico</th></tr></thead><tbody>${measurementRows}</tbody></table><h2>Notas</h2><p>${escapeHtml(payload.notes || "Sin notas registradas.")}</p><div class="footer">Referencia de sujeto deidentificada: ${escapeHtml(payload.subjectRef)} · Fecha de estudio: ${escapeHtml(payload.studyDate)} · Modelo: ${escapeHtml(payload.modelKey)}</div></main></body></html>`;
     return html;
   }
 
@@ -2029,6 +2142,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
             {inspectorCollapsed ? "Mostrar inspector" : "Ocultar inspector"}
           </button>
           <button className="rr-ghost" onClick={() => setMetadataDialogOpen(true)} type="button">Editar datos</button>
+          <ReadingThemeToggle />
         </div>
       </ReadingWorkspaceHeader>
 
@@ -2083,6 +2197,9 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                    * "escala no informada" mientras la tabla, al lado, informaba
                    * milímetros. Una de las dos cosas tenía que estar mintiendo.
                    */
+                  findingMarker={planeName === "sagittal"
+                    ? findingMarkerFor(binding.id, binding.defaultSeriesInputId, data.nav?.current)
+                    : null}
                   spacingLabel={data.series.inPlaneSpacingMm?.length === 2
                     ? `${data.series.inPlaneSpacingMm[0].toFixed(3)} x ${data.series.inPlaneSpacingMm[1].toFixed(3)} mm/px`
                     : quality?.pixelSpacingMm ? `${quality.pixelSpacingMm} mm/px` : "escala no informada"}
@@ -2249,7 +2366,14 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   <DiscDegenerativeFindingsPanel
                     contractError={discDegenerativeSnapshot.contractError}
                     findings={discDegenerativeSnapshot.findings}
+                    markedLevel={markedDiscLevel}
+                    onGoToRegion={goToDiscRegion}
+                    regionNotice={discRegionNotice}
                     unavailableReason={discDegenerativeSnapshot.unavailable}
+                    viewedInputId={sagittalInputIdOf(
+                      viewportBindings.find((item) => item.plane === "sagittal")?.id ?? "sagittal",
+                      viewportBindings.find((item) => item.plane === "sagittal")?.defaultSeriesInputId,
+                    )}
                   />
 
                   {displayRun.caseId && <ProductAnalysisV1Panel caseId={displayRun.caseId} />}

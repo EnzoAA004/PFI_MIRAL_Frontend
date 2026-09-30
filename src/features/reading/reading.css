@@ -203,6 +203,89 @@
   .rr-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
   .rr-ghost:disabled { opacity: .4; cursor: default; }
 
+  /* Alternador de tema: sólo el ícono. La barra ya está llena y el texto
+     ("Tema claro") empujaría los controles de lectura fuera a 1400 px. */
+  .rr-theme-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    padding: 0;
+    flex: none;
+  }
+
+  /* Capa sobre la imagen -------------------------------------------------- */
+  /*
+   * El viewport es negro en los dos temas (ver [data-theme="reading-light"] en
+   * tokens.css): la imagen no se lee sobre blanco. Todo lo que se dibuja
+   * *encima* de esa imagen —esquinas DICOM, escala, marcadores de orientación,
+   * cotas, y las dos leyendas flotantes— vive entonces en una sala oscura
+   * aunque el marco esté en claro, y tiene que seguir la escala oscura.
+   *
+   * Sin esto, en tema claro el texto de las leyendas salía casi negro sobre el
+   * panel negro y el título en azul oscuro: ilegible.
+   *
+   * Se resuelve redeclarando los tokens en el borde de esa capa —cascadean a
+   * todos los descendientes, así que no hay que perseguir cada color— con
+   * exactamente los valores de [data-theme="reading"]. Dos consecuencias
+   * buscadas: sobre la imagen los dos temas se ven idénticos, y la regla está
+   * acotada al tema claro, así que el visor oscuro no cambia en nada.
+   *
+   * Lo que queda afuera es lo que NO está sobre la imagen: las barras de
+   * herramientas y el pie de controles viven debajo del cuadro y siguen al
+   * marco, que es lo que hace que el tema claro se note.
+   *
+   * `color-scheme: dark` va con los tokens: los controles nativos que caen acá
+   * —las casillas de las dos leyendas y la barra de desplazamiento de
+   * Estructuras— los pinta el navegador, no la hoja de estilos, y en claro
+   * salían gris claro sobre el panel negro.
+   */
+  [data-theme="reading-light"] :is(
+    .rr-corner,
+    .rr-scalebar,
+    .rr-orientation,
+    .rr-viewport-role,
+    .real-slice-frame,
+    .rr-instances-panel,
+    .segmentation-legend-panel,
+    .viewer-limit-note
+  ) {
+    --text: #E6EAF0;
+    --text-muted: #8B96A5;
+    --primary: #4F8DF7;
+    --ai: #9B7BF0;
+    --success: #3DBE72;
+    --warning: #E0A030;
+    --danger: #E5544B;
+    --border: #232A35;
+    --border-strong: #313A48;
+    --surface: #12161D;
+    --surface-raised: #171C25;
+    --surface-subtle: #0F131A;
+    --text-primary-strong: #8FB6FA;
+    --text-success-strong: #7BD6A0;
+    --text-warning-strong: #EBC076;
+    --text-danger-strong: #F08A83;
+    --text-ai-strong: #BCA5F5;
+    --on-primary: #08121F;
+    color-scheme: dark;
+  }
+
+  /*
+   * El color heredado se fija aparte, y sólo en la raíz de cada bloque: la
+   * herencia transporta el color ya resuelto, no la referencia al token, así
+   * que redeclarar --text arriba no alcanza para lo que no tiene regla propia
+   * (la lista de la leyenda, por ejemplo). Puesto sólo en las raíces, las
+   * reglas propias de cada elemento de adentro siguen mandando y la jerarquía
+   * de énfasis se mantiene.
+   */
+  [data-theme="reading-light"] :is(
+    .real-slice-frame,
+    .rr-instances-panel,
+    .segmentation-legend-panel
+  ) {
+    color: var(--text);
+  }
+
   /* Body ---------------------------------------------------------------- */
   .rr-body {
     display: grid;
@@ -520,6 +603,56 @@
     opacity: .8;
     vector-effect: non-scaling-stroke;
     pointer-events: none;
+  }
+
+  /* Marca de un hallazgo discal: dónde se evaluó ese nivel en este corte.
+
+     Cruz abierta y no punto lleno: los puntos de esta imagen ya son los landmarks, y
+     un disco relleno tapa justo el píxel que señala. El recuadro va tenue y punteado
+     porque delimita la ventana que entró al modelo, no una lesión: un trazo sólido
+     alrededor de una estructura se lee como un contorno de hallazgo, y el
+     clasificador no segmenta nada. */
+  .mri-finding-marker line {
+    stroke: var(--warning, #e0a33e);
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+  }
+
+  .mri-finding-marker-box {
+    fill: none;
+    stroke: var(--warning, #e0a33e);
+    opacity: .45;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+  }
+
+  .mri-finding-marker .mri-measure-plate { color: var(--warning, #e0a33e); }
+
+  /* Dónde se evaluó un nivel, en el panel. El botón es el atajo al corte. */
+  .rr-disc-region {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    opacity: .8;
+    margin: 4px 0 6px;
+  }
+
+  .rr-disc-region button {
+    background: none;
+    border: 1px solid var(--border, rgb(255 255 255 / .18));
+    border-radius: 4px;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    padding: 2px 8px;
+  }
+
+  .rr-disc-region button[aria-pressed="true"] {
+    border-color: var(--warning, #e0a33e);
+    color: var(--warning, #e0a33e);
   }
 
   /* En curso: lo que el médico está trazando ahora, todavía sin valor. */
@@ -1687,7 +1820,7 @@
     background: var(--primary);
     border: 1px solid var(--primary);
     border-radius: var(--radius-btn);
-    color: #08121f;
+    color: var(--on-primary);
     font-size: var(--fs-small);
     font-weight: var(--fw-semibold);
     cursor: pointer;
@@ -2142,8 +2275,11 @@
     align-items: center;
     gap: 8px;
   }
+  /* El mismo padding derecho que la fila: el resumen reserva 26 px para el
+     chevron, y con 10 px acá la columna Pfirrmann del encabezado quedaba 16 px
+     corrida respecto de sus valores. */
   .rr-disc-overview-head {
-    padding: 6px 10px;
+    padding: 6px 26px 6px 10px;
     background: var(--surface-subtle);
     color: var(--muted);
     font-size: 10px;
@@ -2184,6 +2320,14 @@
   .rr-disc-finding { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; font-size: 12px; }
   .rr-disc-finding-result { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 5px; }
   .rr-disc-finding strong { text-align: right; }
+  /* La confianza acompaña al valor, no compite con él: mismo renglón, un escalón
+     más chica y en el color secundario. */
+  .rr-disc-confidence {
+    color: var(--muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
   .rr-disc-research {
     border: 1px solid var(--line);
     border-radius: 8px;
