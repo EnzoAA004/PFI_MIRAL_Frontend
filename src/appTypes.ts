@@ -16,6 +16,15 @@ export type StudyMetadataInput = {
   modality: string | null;
   description: string | null;
   reviewPriority: "low" | "medium" | "high";
+  /** Paciente existente asociado; el backend deriva subjectRef de su codigo. */
+  patientId?: string | null;
+  /** Contexto clinico propio de este estudio (no se deriva del paciente). */
+  ageAtStudy?: number | null;
+  ageProvenance?: "calculated" | "reported" | null;
+  clinicalReason?: string | null;
+  symptoms?: string | null;
+  symptomDuration?: string | null;
+  relevantHistory?: string | null;
 };
 
 export type PipelineRunRequest = {

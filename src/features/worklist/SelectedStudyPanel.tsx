@@ -4,6 +4,9 @@ import type { Plane, StudyArchiveSeries, StudyDetailResponse, StudyRow } from ".
 import { displayModality, displayPlane, displayReviewStatus } from "../../clinicalDisplay";
 import { displayStudyDate, displaySubjectRef } from "../../studyDisplay";
 import { fetchStudyDetail } from "../../studyApi";
+import { fetchStudyContext, type StudyContext } from "../../studyContextApi";
+import { patientDisplayName } from "../../patientApi";
+import { ageProvenanceLabel } from "../../studyAge";
 import { aiAssetUrl } from "../../multiplanarApi";
 import { useAuthenticatedImageUrl } from "../../authenticatedAssets";
 import { PriorityBadge, ReviewBadge } from "../../components/StatusBadge";
@@ -63,6 +66,7 @@ function SeriesThumbnail({ runId, plane, label }: { runId?: string | null; plane
 export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPanelProps) {
   const [detail, setDetail] = useState<StudyDetailResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [context, setContext] = useState<StudyContext | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -78,6 +82,17 @@ export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPane
         if (!active) return;
         setState("failed");
       });
+    return () => { active = false; };
+  }, [study.caseId]);
+
+  /* Paciente y contexto clinico tal como quedaron guardados con el estudio. Si falla, el panel
+     sigue siendo util sin ellos. */
+  useEffect(() => {
+    let active = true;
+    setContext(null);
+    fetchStudyContext(study.caseId)
+      .then((response) => { if (active) setContext(response); })
+      .catch(() => { if (active) setContext(null); });
     return () => { active = false; };
   }, [study.caseId]);
 
@@ -129,6 +144,24 @@ export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPane
             </dl>
           ) : null}
         </section>
+
+        {context && (context.patient || context.clinicalContext) ? (
+          <section className="wl-panel-section" aria-label="Paciente y contexto clínico">
+            <h3>Paciente y contexto clínico</h3>
+            <dl className="wl-panel-facts">
+              {context.patient ? (
+                <div><dt>Paciente</dt><dd>{patientDisplayName(context.patient) || "Sin nombre cargado"} · {context.patient.patientReference}</dd></div>
+              ) : null}
+              {context.clinicalContext?.ageAtStudy != null ? (
+                <div><dt>Edad al estudio</dt><dd>{context.clinicalContext.ageAtStudy} años · {ageProvenanceLabel(context.clinicalContext.ageProvenance)}</dd></div>
+              ) : null}
+              {context.clinicalContext?.clinicalReason ? <div><dt>Motivo</dt><dd>{context.clinicalContext.clinicalReason}</dd></div> : null}
+              {context.clinicalContext?.symptoms ? <div><dt>Síntomas</dt><dd>{context.clinicalContext.symptoms}</dd></div> : null}
+              {context.clinicalContext?.symptomDuration ? <div><dt>Evolución</dt><dd>{context.clinicalContext.symptomDuration}</dd></div> : null}
+              {context.clinicalContext?.relevantHistory ? <div><dt>Antecedentes</dt><dd>{context.clinicalContext.relevantHistory}</dd></div> : null}
+            </dl>
+          </section>
+        ) : null}
 
         <section className="wl-panel-section">
           <h3>Series disponibles</h3>

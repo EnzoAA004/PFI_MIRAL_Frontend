@@ -6,10 +6,11 @@ import type { InputResponse, StudyIngestionResponse } from "../../contracts/inpu
 import type { MultiplanarRunPayload } from "../../contracts/multiplanarHttpTypes";
 import { evaluateRealInferenceReadiness } from "../../inferenceReadiness";
 import {
-  emptyStudyMetadataDraft,
+  emptyNewStudyDraft,
   normalizeStudyMetadataInput,
   subjectRefErrorMessage,
   validateSubjectRef,
+  type NewStudyDraft,
   type StudyMetadataDraft,
 } from "../../studyMetadata";
 import {
@@ -20,7 +21,9 @@ import {
   type ProductAnalysisState,
   type ProductFlowPhase,
 } from "./productAnalysisFlow";
-import { SubjectSelector } from "./SubjectSelector";
+import { PatientSelector } from "./PatientSelector";
+import type { Patient } from "../../patientApi";
+import { resolveStudyAge } from "../../studyAge";
 import {
   analyzeBlockerMessage,
   caseIdError,
@@ -160,7 +163,7 @@ function FileButton({ label, accept, disabled, describedBy, onFile }: {
 
 export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const [caseId, setCaseId] = useState("");
-  const [metadata, setMetadata] = useState<StudyMetadataDraft>(() => emptyStudyMetadataDraft());
+  const [metadata, setMetadata] = useState<NewStudyDraft>(() => emptyNewStudyDraft());
   const [metadataError, setMetadataError] = useState("");
   const [uploads, setUploads] = useState<Record<Plane, UploadState>>(emptyUploads);
   const [studyUpload, setStudyUpload] = useState<StudyUploadState>({ status: "idle" });
@@ -172,6 +175,9 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const [persistedRun, setPersistedRun] = useState<{ caseId: string; runId: string; study?: StudyIngestionResponse } | null>(null);
   const [analysisStage, setAnalysisStage] = useState<AnalysisStage>("idle");
   const [confirmingExit, setConfirmingExit] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [withoutPatient, setWithoutPatient] = useState(false);
+  const [ageOverrideOpen, setAgeOverrideOpen] = useState(false);
   const runInFlightRef = useRef(false);
   const progressRef = useRef<HTMLElement | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
@@ -228,6 +234,17 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
      ser lo que se envió, y salir haría perder el seguimiento de la corrida. */
   const uploadLocked = !studyIdentityReady || interactionLocked;
   const uploadBlocker = uploadBlockerMessage(normalizedCaseId, caseIdIssue);
+  /* Edad al estudio: se calcula con la fecha de nacimiento del paciente y la fecha del estudio;
+     si no se puede, o el usuario sabe otra, la declara. Lo declarado nunca se descarta en silencio. */
+  const calculatedAge = resolveStudyAge({ dateOfBirth: selectedPatient?.dateOfBirth, studyDate: metadata.studyDate, declared: "" }).calculated;
+  const showAgeInput = calculatedAge === null || ageOverrideOpen || metadata.ageDeclared.trim() !== "";
+  const age = resolveStudyAge({
+    dateOfBirth: selectedPatient?.dateOfBirth,
+    studyDate: metadata.studyDate,
+    declared: showAgeInput ? metadata.ageDeclared : "",
+  });
+  const clinicalTextFilled = [metadata.clinicalReason, metadata.symptoms, metadata.symptomDuration, metadata.relevantHistory]
+    .some((value) => value.trim() !== "");
   const analyzeBlocker = analyzeBlockerMessage({
     running: interactionLocked,
     normalizedCaseId,
@@ -235,6 +252,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     uploading,
     zipLoaded: studyUpload.status === "uploaded",
     sagittalInputId,
+    ageIssue: age.issue,
   });
   const footerHint = interactionLocked
     ? "El análisis está en curso. Podés salir cuando termine."
@@ -246,7 +264,8 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     description: metadata.description,
     studyDate: metadata.studyDate,
     reviewPriority: metadata.reviewPriority,
-    subjectRef: metadata.subjectRef,
+    patientSelected: Boolean(selectedPatient) || withoutPatient,
+    contextFilled: metadata.ageDeclared.trim() !== "" || clinicalTextFilled,
     hasLoadedFiles: Boolean(studyUpload.fileName || uploads.sagittal.fileName || uploads.axial.fileName),
     analysisPersisted: Boolean(persistedRun),
   });
@@ -380,6 +399,10 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
 
   async function run() {
     if (!sagittalReady || uploading || running || runInFlightRef.current) return;
+    if (age.issue) {
+      setMessage(age.issue);
+      return;
+    }
     const subjectError = validateSubjectRef(metadata.subjectRef);
     if (subjectError) {
       setMetadataError(subjectError);
@@ -392,7 +415,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     setAnalysisStage("processing");
     setMessage("Procesando el estudio. Podés seguir el estado en esta pantalla.");
     try {
-      const normalizedStudyMetadata = normalizeStudyMetadataInput(metadata);
+      const normalizedStudyMetadata = normalizeStudyMetadataInput(metadata, age);
       const payload: MultiplanarRunPayload = {
         caseId: normalizedCaseId,
         studyMetadata: normalizedStudyMetadata,
@@ -457,7 +480,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
             <ArrowLeft aria-hidden size={15} />Volver a estudios
           </button>
           <h1 id="new-study-title" ref={headingRef} tabIndex={-1}>Nuevo estudio</h1>
-          <p className="ns-head-desc">Cargá las imágenes del estudio, completá sus datos y, si corresponde, asociá un paciente existente.</p>
+          <p className="ns-head-desc">Cargá las imágenes del estudio, completá sus datos y, si corresponde, asociá un paciente y su contexto clínico.</p>
           {confirmingExit && (
             <div className="ns-confirm" role="alert">
               <p><strong>¿Salir sin analizar?</strong> Se van a perder los datos y los archivos cargados en esta pantalla.</p>
@@ -710,14 +733,104 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
           </div>
 
           <div className="ns-side">
-            <SubjectSelector
+            <PatientSelector
               disabled={interactionLocked || Boolean(persistedRun)}
-              onChange={(subjectRef) => {
-                setMetadata((current) => ({ ...current, subjectRef }));
+              onSelect={(patient) => {
+                setSelectedPatient(patient);
+                setWithoutPatient(false);
+                setMetadata((current) => ({ ...current, patientId: patient?.id ?? "" }));
                 setMetadataError("");
               }}
-              value={metadata.subjectRef}
+              onWithoutPatient={setWithoutPatient}
+              selected={selectedPatient}
+              withoutPatient={withoutPatient}
             />
+
+            <section aria-labelledby="new-study-context-title" className="ns-card ns-clinical">
+              <div className="ns-card-head">
+                <h2 id="new-study-context-title">Contexto clínico</h2>
+                <span>opcional</span>
+              </div>
+              <p className="ns-muted">Se guarda con este estudio como contexto, nunca como hallazgo. Si después se edita el paciente, lo registrado acá no cambia.</p>
+
+              <div className="ns-age">
+                <div className="ns-age-head">
+                  <span className="ns-field-label">Edad al estudio</span>
+                  {age.value !== null && (
+                    <span className={`ns-badge is-${age.provenance}`}>{age.provenance === "calculated" ? "Calculada" : "Declarada"}</span>
+                  )}
+                </div>
+                {!showAgeInput && age.calculated !== null && (
+                  <>
+                    <p className="ns-age-value"><strong>{age.calculated} años</strong></p>
+                    <p className="ns-muted">Según la fecha de nacimiento del paciente y la fecha del estudio.</p>
+                    <button className="ns-link-button" disabled={interactionLocked} onClick={() => setAgeOverrideOpen(true)} type="button">Declarar otra edad</button>
+                  </>
+                )}
+                {showAgeInput && (
+                  <>
+                    <label className="wl-field">
+                      <span className="ns-sr-only">Edad declarada en años</span>
+                      <input
+                        aria-describedby="ns-age-help"
+                        disabled={interactionLocked}
+                        inputMode="numeric"
+                        maxLength={3}
+                        onChange={(event) => setMetadata((current) => ({ ...current, ageDeclared: event.target.value }))}
+                        placeholder="Años"
+                        value={metadata.ageDeclared}
+                      />
+                    </label>
+                    <p className="ns-muted" id="ns-age-help">
+                      {age.calculated === null
+                        ? `No se puede calcular: falta ${age.missingForCalculation}. Si la conocés, declarala; queda registrada como declarada.`
+                        : `Calculada con las fechas: ${age.calculated} años. Lo que declares acá se guarda como declarado.`}
+                    </p>
+                    {age.calculated !== null && (
+                      <button
+                        className="ns-link-button"
+                        disabled={interactionLocked}
+                        onClick={() => { setAgeOverrideOpen(false); setMetadata((current) => ({ ...current, ageDeclared: "" })); }}
+                        type="button"
+                      >
+                        Usar la edad calculada
+                      </button>
+                    )}
+                  </>
+                )}
+                {age.issue && <p className="wl-field-error" role="alert">{age.issue}</p>}
+                {age.discrepancy && (
+                  <p className="ns-warning" role="alert">
+                    La edad declarada ({age.value}) difiere de la calculada ({age.calculated}). Se guardará la declarada, marcada como declarada.
+                  </p>
+                )}
+              </div>
+
+              <details className="ns-clinical-details">
+                <summary>
+                  <span>Detalles clínicos</span>
+                  <em className={clinicalTextFilled ? "is-filled" : ""}>{clinicalTextFilled ? "Con información" : "Sin completar"}</em>
+                </summary>
+                <div className="ns-clinical-fields">
+                  <label className="wl-field">
+                    <span>Motivo del estudio</span>
+                    <textarea disabled={interactionLocked} maxLength={1000} onChange={(event) => setMetadata((current) => ({ ...current, clinicalReason: event.target.value }))} placeholder="Opcional" value={metadata.clinicalReason} />
+                  </label>
+                  <label className="wl-field">
+                    <span>Síntomas</span>
+                    <textarea disabled={interactionLocked} maxLength={1000} onChange={(event) => setMetadata((current) => ({ ...current, symptoms: event.target.value }))} placeholder="Opcional" value={metadata.symptoms} />
+                  </label>
+                  <label className="wl-field">
+                    <span>Tiempo de evolución</span>
+                    <input disabled={interactionLocked} maxLength={120} onChange={(event) => setMetadata((current) => ({ ...current, symptomDuration: event.target.value }))} placeholder="Opcional" value={metadata.symptomDuration} />
+                  </label>
+                  <label className="wl-field">
+                    <span>Antecedentes relevantes</span>
+                    <textarea disabled={interactionLocked} maxLength={2000} onChange={(event) => setMetadata((current) => ({ ...current, relevantHistory: event.target.value }))} placeholder="Opcional" value={metadata.relevantHistory} />
+                  </label>
+                </div>
+              </details>
+            </section>
           </div>
         </div>
 

@@ -75,6 +75,8 @@ export type AnalyzeBlockerInput = {
   uploading: boolean;
   zipLoaded: boolean;
   sagittalInputId?: string;
+  /** Error de la edad declarada (vacio si no hay). */
+  ageIssue?: string;
 };
 
 /** Qué falta para habilitar "Analizar estudio". Vacío = se puede analizar. */
@@ -82,6 +84,7 @@ export function analyzeBlockerMessage(input: AnalyzeBlockerInput): string {
   if (input.running) return "";
   if (!input.normalizedCaseId) return "Falta el ID del estudio.";
   if (input.caseIdIssue) return "El ID del estudio no es válido.";
+  if (input.ageIssue) return input.ageIssue;
   if (input.uploading) return "Esperá a que termine la carga de las imágenes.";
   if (!input.sagittalInputId) {
     return input.zipLoaded
@@ -96,7 +99,10 @@ export type UnsavedWorkInput = {
   description: string;
   studyDate: string;
   reviewPriority: string;
-  subjectRef: string;
+  /** Paciente elegido o creado en esta pantalla. */
+  patientSelected: boolean;
+  /** Edad declarada o cualquier texto clinico escrito. */
+  contextFilled: boolean;
   hasLoadedFiles: boolean;
   analysisPersisted: boolean;
 };
@@ -112,7 +118,8 @@ export function hasUnsavedWork(input: UnsavedWorkInput): boolean {
     || input.description.trim()
     || input.studyDate
     || input.reviewPriority !== "medium"
-    || input.subjectRef.trim()
+    || input.patientSelected
+    || input.contextFilled
     || input.hasLoadedFiles,
   );
 }

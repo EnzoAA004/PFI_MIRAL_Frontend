@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 const worklist = readFileSync("src/features/worklist/Worklist.tsx", "utf8");
 const filters = readFileSync("src/features/worklist/studyFilters.ts", "utf8");
 const drawer = readFileSync("src/features/worklist/NewAnalysisDrawer.tsx", "utf8");
-const selector = readFileSync("src/features/worklist/SubjectSelector.tsx", "utf8");
+const selector = readFileSync("src/features/worklist/PatientSelector.tsx", "utf8");
 const routes = readFileSync("src/routes.ts", "utf8");
 
 let count = 0;
@@ -26,14 +26,14 @@ test("Worklist no presenta el modelo como criterio de búsqueda visible", () => 
   assert.doesNotMatch(filters, /displayModelKey|study\.modelKey/);
 });
 
-test("la referencia del estudio usa copy operativo", () => {
-  assert.match(selector, /Referencia interna del estudio \(opcional\)/);
-  assert.match(selector, /referencia breve para reconocer este estudio/);
+test("el paciente usa copy operativo y no pide datos administrativos", () => {
+  assert.match(selector, /Buscar por código o nombre/);
+  assert.match(selector, /No ingreses DNI, domicilio ni otros datos administrativos/);
   assert.doesNotMatch(selector, /Referencia técnica legacy del estudio/);
 });
 
-test("el placeholder ya no parece un dataset técnico", () => {
-  assert.match(selector, /placeholder="EST-2026-001"/);
+test("los placeholders no parecen un dataset técnico", () => {
+  assert.match(selector, /placeholder="PAC-001"/);
   assert.doesNotMatch(selector, /placeholder="SPIDER-101"/);
 });
 
@@ -45,7 +45,7 @@ test("el placeholder ya no parece un dataset técnico", () => {
  * una línea qué se hace ahí.
  */
 test("el flujo explica paciente, estudio, imágenes y análisis", () => {
-  assert.match(drawer, /Cargá las imágenes del estudio, completá sus datos y, si corresponde, asociá un paciente existente/);
+  assert.match(drawer, /Cargá las imágenes del estudio, completá sus datos y, si corresponde, asociá un paciente y su contexto clínico/);
   assert.match(drawer, /<h2 id="new-study-data-title">Datos del estudio<\/h2>/);
   assert.match(drawer, /<h2 id="new-study-images-title">Imágenes<\/h2>/);
   assert.doesNotMatch(drawer, /aria-hidden="true">0\d<\/span>/);

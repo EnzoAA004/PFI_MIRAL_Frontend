@@ -80,17 +80,19 @@ test("el botón de análisis dice qué falta, en orden, y se calla cuando se pue
   assert.match(analyzeBlockerMessage(base), /Falta cargar el ZIP/);
   assert.match(analyzeBlockerMessage({ ...base, zipLoaded: true }), /no incluye una serie sagital/);
   assert.equal(analyzeBlockerMessage({ ...base, sagittalInputId: "in-1" }), "");
+  assert.equal(analyzeBlockerMessage({ ...base, sagittalInputId: "in-1", ageIssue: "La edad declarada debe ser un número entero entre 0 y 130." }), "La edad declarada debe ser un número entero entre 0 y 130.");
   assert.equal(analyzeBlockerMessage({ ...base, running: true }), "", "durante la corrida el pie muestra su propio aviso");
 });
 
 test("solo se pide confirmar al salir cuando hay algo que se perdería", () => {
-  const clean = { caseId: "", description: "", studyDate: "", reviewPriority: "medium", subjectRef: "", hasLoadedFiles: false, analysisPersisted: false };
+  const clean = { caseId: "", description: "", studyDate: "", reviewPriority: "medium", patientSelected: false, contextFilled: false, hasLoadedFiles: false, analysisPersisted: false };
   assert.equal(hasUnsavedWork(clean), false, "formulario intacto: se sale sin preguntar");
   assert.equal(hasUnsavedWork({ ...clean, caseId: "CASE-1" }), true);
   assert.equal(hasUnsavedWork({ ...clean, description: "RM" }), true);
   assert.equal(hasUnsavedWork({ ...clean, studyDate: "2026-10-06" }), true);
   assert.equal(hasUnsavedWork({ ...clean, reviewPriority: "high" }), true);
-  assert.equal(hasUnsavedWork({ ...clean, subjectRef: "PAC-1" }), true);
+  assert.equal(hasUnsavedWork({ ...clean, patientSelected: true }), true, "elegir paciente o sin paciente cuenta");
+  assert.equal(hasUnsavedWork({ ...clean, contextFilled: true }), true, "edad declarada o texto clinico cuentan");
   assert.equal(hasUnsavedWork({ ...clean, hasLoadedFiles: true }), true);
   assert.equal(hasUnsavedWork({ ...clean, caseId: "CASE-1", hasLoadedFiles: true, analysisPersisted: true }), false, "con la corrida guardada no se pierde nada");
 });

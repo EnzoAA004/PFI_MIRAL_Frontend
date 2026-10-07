@@ -250,10 +250,10 @@ async function runSuccess(browser) {
   await seedSession(page);
   assertTruthy(await page.getByRole("columnheader", { name: "Modelo" }).count() === 0, "Worklist no debe mostrar Modelo");
   await openPreparedDrawer(page);
-  await page.getByLabel("Paciente nuevo").check();
-  assertTruthy(await page.getByText("Referencia interna del estudio (opcional)").count() === 1, "debe mostrar el copy operativo");
-  assertTruthy(await page.getByPlaceholder("EST-2026-001").count() === 1, "debe mostrar el placeholder operativo");
-  await page.getByLabel("Paciente existente").check();
+  await page.getByLabel("Crear paciente").check();
+  assertTruthy(await page.getByText("Código visible").count() === 1, "debe mostrar el copy operativo");
+  assertTruthy(await page.getByPlaceholder("PAC-001").count() === 1, "debe mostrar el placeholder operativo");
+  await page.getByLabel("Buscar existente").check();
   for (const [width, height] of [[1920, 1080], [1366, 768], [390, 844]]) await capture(page, "new-analysis", width, height);
 
   const analyze = page.getByRole("button", { name: "Analizar" });

@@ -3,16 +3,22 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Stage 86: "Nuevo análisis" no depende más de la entidad Patient inexistente. El
- * paciente/subjectRef ahora se resuelve directo contra `Study.subjectRef` (Stage 84/85),
- * vía `SubjectSelector.tsx` (reemplaza `PatientSelector.tsx`) y sin un paso de asociación
- * posterior a la corrida. Sigue el mismo patrón source-regex del resto de post-e50: los
- * componentes son hooks de React sin DOM disponible acá, así que su comportamiento
- * observable se verifica contra su propio código fuente (ver p8e2/post-e50-patient-list).
+ * "Nuevo estudio": paciente, edad y contexto clínico.
+ *
+ * Reemplaza a los chequeos de Stage 86, que fijaban un diseño sin entidad Patient (el
+ * paciente era sólo un `subjectRef`). Ahora el paciente es una entidad con código, nombre,
+ * apellido y fecha de nacimiento opcionales (`patientApi.ts`), se asocia por `patientId` y el
+ * backend deriva `subjectRef` de su código, de modo que el historial por referencia y los
+ * estudios históricos siguen funcionando.
+ *
+ * Los componentes son hooks de React sin DOM disponible acá, así que su comportamiento
+ * observable se verifica contra su propio código fuente; la lógica pura (edad, bloqueos,
+ * confirmación) se prueba ejecutándola en new-study-form-tests.mjs y study-age-tests.mjs.
  */
 const root = process.cwd();
 const drawerSource = readFileSync(join(root, "src/features/worklist/NewAnalysisDrawer.tsx"), "utf8");
-const selectorSource = readFileSync(join(root, "src/features/worklist/SubjectSelector.tsx"), "utf8");
+const selectorSource = readFileSync(join(root, "src/features/worklist/PatientSelector.tsx"), "utf8");
+const patientApiSource = readFileSync(join(root, "src/patientApi.ts"), "utf8");
 const studyMetadataSource = readFileSync(join(root, "src/studyMetadata.ts"), "utf8");
 
 let count = 0;
@@ -22,144 +28,156 @@ function test(name, fn) {
   console.log(`ok ${count} - ${name}`);
 }
 
-test("1 el drawer abre con SubjectSelector, no con PatientSelector", () => {
-  assert.match(drawerSource, /<SubjectSelector/);
-  assert.doesNotMatch(drawerSource, /<PatientSelector/);
+test("1 la vista usa PatientSelector y ya no el selector de subjectRef", () => {
+  assert.match(drawerSource, /<PatientSelector/);
+  assert.doesNotMatch(drawerSource, /<SubjectSelector/);
+  assert.ok(!existsSync(join(root, "src/features/worklist/SubjectSelector.tsx")));
 });
 
-test("2 SubjectSelector muestra un estado de carga mientras busca subjects", () => {
+test("2 el paciente se busca por código o nombre y muestra su estado de búsqueda", () => {
+  assert.match(selectorSource, /Buscar por código o nombre/);
+  assert.match(selectorSource, /searchPatients\(trimmed\)/);
   assert.match(selectorSource, /Buscando pacientes…/);
-});
-
-test("3 SubjectSelector consulta la lista real de subjects", () => {
-  assert.match(selectorSource, /fetchSubjectList\(\)/);
-});
-
-test("4 estado vacio de la lista de subjects tiene mensaje propio", () => {
   assert.match(selectorSource, /No se encontraron pacientes/);
+  assert.match(patientApiSource, /\/api\/patients\?query=/);
 });
 
-test("5 seleccionar un subject existente fija el subjectRef elegido", () => {
-  assert.match(selectorSource, /onClick=\{\(\) => onChange\(subject\.subjectRef\)\}/);
+test("3 una búsqueda vieja que llega tarde no pisa a la última (cancelled)", () => {
+  assert.match(selectorSource, /let cancelled = false;/);
+  assert.match(selectorSource, /if \(!cancelled\) setSearch/);
+  assert.match(selectorSource, /window\.clearTimeout\(timer\)/);
 });
 
-test("6 el label visible es generico, nunca el subjectRef crudo como nombre", () => {
-  assert.match(selectorSource, /Paciente existente ·/);
-  assert.doesNotMatch(selectorSource, />\{subject\.subjectRef\}</);
+test("4 el error de búsqueda ofrece reintentar", () => {
+  assert.match(selectorSource, /No se pudo buscar pacientes/);
+  assert.match(selectorSource, /setRetryToken\(\(token\) => token \+ 1\)/);
 });
 
-test("7 el subjectRef nunca se imprime como texto visible en la lista", () => {
-  const listBlock = selectorSource.slice(selectorSource.indexOf("wl-patient-results"), selectorSource.indexOf("</ul>"));
-  assert.doesNotMatch(listBlock, />\s*\{subject\.subjectRef\}\s*</);
+test("5 se puede crear un paciente con código, nombre, apellido y fecha de nacimiento opcional", () => {
+  assert.match(selectorSource, /Código visible/);
+  assert.match(selectorSource, /Nombre <i>\(opcional\)<\/i>/);
+  assert.match(selectorSource, /Apellido <i>\(opcional\)<\/i>/);
+  assert.match(selectorSource, /Fecha de nacimiento <i>\(opcional\)<\/i>/);
+  assert.match(patientApiSource, /method: "POST", body/);
+  assert.match(selectorSource, /No ingreses DNI, domicilio/);
 });
 
-test("8 la busqueda de subjects filtra por caseId, nunca por subjectRef", () => {
-  assert.match(selectorSource, /latestCaseId\.toLowerCase\(\)\.includes/);
-  assert.doesNotMatch(selectorSource, /subjectRef\.toLowerCase\(\)\.includes/);
+test("6 el paciente elegido se resume y se puede cambiar", () => {
+  assert.match(selectorSource, /aria-label="Paciente seleccionado"/);
+  assert.match(selectorSource, /onClick=\{\(\) => onSelect\(null\)\}[^>]*>Cambiar</);
 });
 
-test("9 crear el Study envia el subjectRef elegido dentro de studyMetadata", () => {
-  assert.match(drawerSource, /studyMetadata: normalizedStudyMetadata/);
-  assert.match(drawerSource, /normalizeStudyMetadataInput\(metadata\)/);
+test("7 se puede continuar explícitamente sin asociar paciente, y volver atrás", () => {
+  assert.match(selectorSource, /Continuar sin asociar paciente/);
+  assert.match(selectorSource, /Asociar paciente/);
+  assert.match(drawerSource, /onWithoutPatient=\{setWithoutPatient\}/);
 });
 
-test("10 metadata.subjectRef es alimentado directo por el SubjectSelector", () => {
-  assert.match(drawerSource, /setMetadata\(\(current\) => \(\{ \.\.\.current, subjectRef \}\)\)/);
-  assert.match(drawerSource, /value=\{metadata\.subjectRef\}/);
-});
-
-test("11 no existe ningun paso de asociacion posterior a la corrida", () => {
-  assert.doesNotMatch(drawerSource, /associationState|attemptPatientAssociation|retryPatientAssociation|patientStudyAssociation|Asociando al paciente/);
-});
-
-test("12 ni el drawer ni el selector importan o llaman a patientApi.ts", () => {
-  assert.doesNotMatch(drawerSource, /from ["']\.\.\/\.\.\/patientApi["']|from ["']\.\/patientApi["']/);
-  assert.doesNotMatch(selectorSource, /from ["']\.\.\/\.\.\/patientApi["']|from ["']\.\/patientApi["']/);
-});
-
-test("13 ni el drawer ni el selector llaman al endpoint legacy de asociacion", () => {
-  assert.doesNotMatch(drawerSource, /\/patient["'`]|associateStudyPatient/);
-  assert.doesNotMatch(selectorSource, /\/patient["'`]|associateStudyPatient/);
-});
-
-test("14 un Study puede crearse sin subject seleccionado (86-N)", () => {
-  assert.match(drawerSource, /const studyIdentityReady = caseIdReady;/);
-});
-
-test("15 el modo Paciente nuevo permite declarar un subjectRef manual", () => {
-  assert.match(selectorSource, /Paciente nuevo/);
-  assert.match(selectorSource, /validateSubjectRef\(trimmed\)/);
-});
-
-test("15b la validacion de subjectRef nuevo reutiliza el helper existente, no inventa una regla", () => {
-  assert.match(studyMetadataSource, /export function validateSubjectRef/);
-  assert.match(selectorSource, /import \{ validateSubjectRef \} from "\.\.\/\.\.\/studyMetadata"/);
-});
-
-test("16 el boton de analizar se deshabilita mientras corre", () => {
-  assert.match(drawerSource, /disabled=\{!sagittalReady \|\| uploading \|\| running\}/);
-});
-
-test("17 doble submit queda bloqueado por una referencia sincronica", () => {
-  assert.match(drawerSource, /runInFlightRef\.current/);
-  assert.match(drawerSource, /if \(!sagittalReady \|\| uploading \|\| running \|\| runInFlightRef\.current\) return/);
-});
-
-test("18 un error de creacion muestra mensaje y no rompe el flujo", () => {
-  assert.match(drawerSource, /setMessage\(apiErrorMessage\(error, "ejecutar el análisis"\)\)/);
-});
-
-test("19 la carga de imagenes sigue igual, no fue reescrita", () => {
-  assert.match(drawerSource, /uploadAiInput\(file, normalizedCaseId, plane\)/);
-  assert.match(drawerSource, /uploadStudyArchive\(file, normalizedCaseId\)/);
-});
-
-test("20 exito completo navega al Study creado", () => {
-  assert.match(drawerSource, /function openCompletedStudy\(caseIdToOpen: string\)/);
-  assert.match(drawerSource, /onAnalysisReady\(caseIdToOpen\)/);
-});
-
-test("21 un error de analisis conserva el subjectRef ya elegido (no se resetea metadata)", () => {
-  const runStart = drawerSource.indexOf("async function run()");
-  const catchStart = drawerSource.indexOf("catch (error)", runStart);
-  const errorBlock = drawerSource.slice(catchStart, drawerSource.indexOf("finally", catchStart));
-  assert.doesNotMatch(errorBlock, /setMetadata\(/);
-});
-
-test("22 el selector de modo tiene semantica de radiogroup accesible", () => {
+test("8 el modo de asociación tiene semántica de radiogroup accesible", () => {
   assert.match(selectorSource, /role="radiogroup"/);
   assert.match(selectorSource, /type="radio"/);
 });
 
-test("23 salir de la vista pasa por una sola puerta que se bloquea al analizar y confirma si hay datos", () => {
+test("9 el estudio se envía con patientId, sin subjectRef armado en el cliente", () => {
+  assert.match(drawerSource, /studyMetadata: normalizedStudyMetadata/);
+  assert.match(drawerSource, /normalizeStudyMetadataInput\(metadata, age\)/);
+  assert.match(drawerSource, /patientId: patient\?\.id \?\? ""/);
+  assert.match(studyMetadataSource, /patientId: textOrNull\(draft\.patientId\)/);
+});
+
+test("10 el contexto clínico y la edad viajan solo si hay algo (payload histórico intacto)", () => {
+  assert.match(studyMetadataSource, /if \(value !== null && value !== undefined\)/);
+  for (const key of ["ageAtStudy", "ageProvenance", "clinicalReason", "symptoms", "symptomDuration", "relevantHistory"]) {
+    assert.match(studyMetadataSource, new RegExp(`${key}:`));
+  }
+});
+
+test("11 no existe ningún paso de asociación posterior a la corrida", () => {
+  assert.doesNotMatch(drawerSource, /associationState|attemptPatientAssociation|retryPatientAssociation|patientStudyAssociation|Asociando al paciente/);
+  assert.doesNotMatch(drawerSource, /\/patient["'`]|associateStudyPatient/);
+});
+
+test("12 un estudio puede crearse sin paciente ni contexto", () => {
+  assert.match(drawerSource, /const studyIdentityReady = caseIdReady;/);
+  assert.doesNotMatch(drawerSource, /disabled=\{[^}]*selectedPatient/);
+});
+
+test("13 la edad se resuelve en un módulo puro, con procedencia explícita", () => {
+  assert.match(drawerSource, /resolveStudyAge\(/);
+  assert.match(drawerSource, /Calculada/);
+  assert.match(drawerSource, /Declarada/);
+  assert.match(drawerSource, /Declarar otra edad/);
+  assert.match(drawerSource, /Usar la edad calculada/);
+});
+
+test("14 una discrepancia entre edad declarada y calculada se muestra, no se resuelve en silencio", () => {
+  assert.match(drawerSource, /difiere de la calculada/);
+  assert.match(drawerSource, /age\.discrepancy/);
+});
+
+test("15 lo declarado nunca se descarta al cambiar de paciente", () => {
+  assert.match(drawerSource, /metadata\.ageDeclared\.trim\(\) !== ""/);
+});
+
+test("16 los detalles clínicos extensos van en una sección plegable con indicación de contenido", () => {
+  assert.match(drawerSource, /<details className="ns-clinical-details">/);
+  assert.match(drawerSource, /Con información/);
+  assert.match(drawerSource, /Sin completar/);
+  for (const label of ["Motivo del estudio", "Síntomas", "Tiempo de evolución", "Antecedentes relevantes"]) {
+    assert.match(drawerSource, new RegExp(label));
+  }
+});
+
+test("17 la edad queda visible, fuera de la sección plegable", () => {
+  const detailsStart = drawerSource.indexOf('<details className="ns-clinical-details">');
+  assert.ok(drawerSource.indexOf("Edad al estudio") < detailsStart);
+});
+
+test("18 el botón de analizar se deshabilita mientras corre", () => {
+  assert.match(drawerSource, /disabled=\{!sagittalReady \|\| uploading \|\| running\}/);
+});
+
+test("19 doble submit queda bloqueado por una referencia sincrónica", () => {
+  assert.match(drawerSource, /runInFlightRef\.current/);
+  assert.match(drawerSource, /if \(!sagittalReady \|\| uploading \|\| running \|\| runInFlightRef\.current\) return/);
+});
+
+test("20 un error de creación muestra mensaje y no rompe el flujo", () => {
+  assert.match(drawerSource, /setMessage\(apiErrorMessage\(error, "ejecutar el análisis"\)\)/);
+});
+
+test("21 la carga de imágenes sigue igual, no fue reescrita", () => {
+  assert.match(drawerSource, /uploadAiInput\(file, normalizedCaseId, plane\)/);
+  assert.match(drawerSource, /uploadStudyArchive\(file, normalizedCaseId\)/);
+});
+
+test("22 éxito completo navega al Study creado", () => {
+  assert.match(drawerSource, /function openCompletedStudy\(caseIdToOpen: string\)/);
+  assert.match(drawerSource, /onAnalysisReady\(caseIdToOpen\)/);
+});
+
+test("23 un error de análisis conserva paciente y contexto (no se resetea metadata)", () => {
+  const runStart = drawerSource.indexOf("async function run()");
+  const catchStart = drawerSource.indexOf("catch (error)", runStart);
+  const errorBlock = drawerSource.slice(catchStart, drawerSource.indexOf("finally", catchStart));
+  assert.doesNotMatch(errorBlock, /setMetadata\(|setSelectedPatient\(/);
+});
+
+test("24 salir de la vista pasa por una sola puerta que se bloquea al analizar y confirma si hay datos", () => {
   assert.match(drawerSource, /function requestExit\(\) \{\s+if \(interactionLocked\) return;/);
   assert.match(drawerSource, /className="ns-back" disabled=\{interactionLocked\} onClick=\{requestExit\}/);
   assert.match(drawerSource, /<button className="wl-drawer-cancel" disabled=\{interactionLocked\} onClick=\{requestExit\}/);
   assert.doesNotMatch(drawerSource, /key === "Escape"/, "es una pantalla, no un diálogo");
 });
 
-test("24 la carga de subjects maneja una respuesta obsoleta (cancelled flag)", () => {
-  assert.match(selectorSource, /let cancelled = false;/);
-  assert.match(selectorSource, /if \(!cancelled\) setListState/);
+test("25 el chat y el LLM no se tocan: nada de esta vista los importa", () => {
+  assert.doesNotMatch(drawerSource, /chatApi|chatTypes|llm/i);
+  assert.doesNotMatch(selectorSource, /chatApi|chatTypes|llm/i);
 });
 
-test("25 nunca se fabrica un PatientName ni se usa patientReference", () => {
-  assert.doesNotMatch(drawerSource, /patientReference|PatientName|patientName/);
-  assert.doesNotMatch(selectorSource, /patientReference|PatientName|patientName/);
+test("26 los textos de datos personales no se imprimen en logs ni en el payload de auditoría del cliente", () => {
+  assert.doesNotMatch(drawerSource, /console\.(log|info|warn|error)\([^)]*(patient|firstName|lastName|clinical)/i);
+  assert.doesNotMatch(selectorSource, /console\.(log|info|warn|error)/);
 });
 
-test("26 PatientSelector.tsx y patientStudyAssociation.ts fueron retirados", () => {
-  assert.ok(!existsSync(join(root, "src/features/worklist/PatientSelector.tsx")));
-  assert.ok(!existsSync(join(root, "src/features/worklist/patientStudyAssociation.ts")));
-});
-
-test("27 patientApi.ts fue retirado (sin consumidores reales restantes)", () => {
-  assert.ok(!existsSync(join(root, "src/patientApi.ts")));
-});
-
-test("28 no hay entidad Patient nueva en el dominio del flujo (sólo Study.subjectRef)", () => {
-  assert.doesNotMatch(drawerSource, /new Patient|PatientRepository|patient_id/);
-  assert.doesNotMatch(selectorSource, /new Patient|PatientRepository|patient_id/);
-});
-
-console.log(`Post-E50 Stage 86 new analysis flow tests passed: ${count}`);
+console.log(`Post-E50 new study (patient + context) tests passed: ${count}`);

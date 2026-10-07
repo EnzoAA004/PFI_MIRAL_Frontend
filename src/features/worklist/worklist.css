@@ -318,31 +318,7 @@
     font-family: var(--font-sans);
   }
 
-  /* Cargador de datos ------------------------------------------------------
-   * Los "01 / 02 / 03" en color de acento numeraban tres secciones de un
-   * formulario que se completa en el orden que quiera quien lo usa: no eran
-   * pasos —no hay nada que impida escribir el ID de caso antes de elegir el
-   * paciente— y el número en color pesaba más que el nombre de la sección.
-   * Quedan como rótulos de sección, separados por una línea. */
-  .wl-section-title {
-    display: block;
-    margin: var(--sp-3) 0 0;
-    padding-bottom: var(--sp-1);
-    border-bottom: 1px solid var(--border);
-    color: var(--text-muted);
-    font-size: var(--fs-micro);
-    font-weight: var(--fw-semibold);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-  }
 
-  .wl-patient-heading strong {
-    color: var(--text-muted);
-    font-size: var(--fs-micro);
-    font-weight: var(--fw-semibold);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-  }
 
   /* Los campos toman la altura de control del resto de la aplicación. */
   .wl-field input,
@@ -564,11 +540,6 @@
 
   .wl-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 
-  .wl-section-title {
-    margin: var(--sp-1) 0 0;
-    font-size: var(--fs-small);
-    font-weight: var(--fw-semibold);
-  }
 
   .wl-section-title span,
   .wl-patient-heading strong span {
@@ -583,127 +554,23 @@
     letter-spacing: .04em;
   }
 
-  .wl-patient-selector,
-  .wl-patient-selected,
-  .wl-association-state {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-card);
-    padding: var(--sp-3);
-    background: var(--surface-subtle);
-  }
 
-  .wl-patient-selector { display: flex; flex-direction: column; gap: var(--sp-3); }
 
-  .wl-patient-heading {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--sp-2);
-  }
 
-  .wl-patient-heading strong { font-size: var(--fs-small); }
-  .wl-patient-heading span { color: var(--text-muted); font-size: var(--fs-micro); }
 
-  .wl-patient-modes {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--sp-2);
-  }
 
-  .wl-patient-modes label {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-    min-height: 32px;
-    padding: 0 var(--sp-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-input);
-    background: var(--surface);
-    font-size: var(--fs-micro);
-    cursor: pointer;
-  }
 
-  .wl-patient-search,
-  .wl-patient-create { display: flex; flex-direction: column; gap: var(--sp-2); }
 
-  .wl-patient-search-state p { margin: 0; color: var(--text-muted); font-size: var(--fs-micro); }
 
-  .wl-patient-results {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    max-height: 150px;
-    overflow-y: auto;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
 
-  .wl-patient-results button {
-    width: 100%;
-    min-height: 32px;
-    padding: 0 var(--sp-2);
-    border: 1px solid transparent;
-    border-radius: var(--radius-input);
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
 
-  .wl-patient-results button:hover { border-color: var(--primary); }
 
-  .wl-patient-selected {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 2px var(--sp-3);
-    align-items: center;
-  }
 
-  .wl-patient-selected span { color: var(--text-muted); font-size: var(--fs-micro); }
-  .wl-patient-selected-label b {
-    margin-right: var(--sp-1);
-    color: var(--clinical-accent);
-    font-weight: var(--fw-semibold);
-    letter-spacing: .04em;
-  }
-  .wl-patient-selected strong { grid-column: 1; }
-  .wl-patient-selected button { grid-column: 2; grid-row: 1 / span 2; }
 
-  .wl-patient-selected button,
-  .wl-patient-create-button,
-  .wl-patient-link {
-    min-height: 32px;
-    padding: 0 var(--sp-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-btn);
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-  }
 
-  .wl-patient-create-button { align-self: flex-end; background: var(--primary); border-color: var(--primary); color: #fff; }
-  .wl-patient-link { align-self: flex-start; border: 0; padding: 0; background: transparent; color: var(--primary); }
 
-  .wl-patient-results button:focus-visible,
-  .wl-patient-selected button:focus-visible,
-  .wl-patient-create-button:focus-visible,
-  .wl-patient-link:focus-visible,
-  .wl-patient-modes input:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-  }
 
-  .wl-patient-selected button:disabled,
-  .wl-patient-create-button:disabled { opacity: .45; cursor: not-allowed; }
 
-  .wl-association-state { display: flex; flex-direction: column; gap: var(--sp-1); }
-  .wl-association-state p { margin: 0; font-size: var(--fs-micro); }
-  .wl-association-state.is-associated { border-color: var(--success); }
-  .wl-association-state.is-error,
-  .wl-association-state.is-conflict { border-color: var(--warning); }
 
   .wl-upload {
     border: 1px solid var(--border);
@@ -1308,6 +1175,7 @@
   }
 }
 
+
 /* ==========================================================================
  * Nuevo estudio — vista dedicada.
  *
@@ -1521,5 +1389,157 @@
     .ns-layout { grid-template-columns: 1fr; gap: var(--sp-4); }
     .ns-foot { flex-direction: column; align-items: stretch; margin: 0 calc(-1 * var(--sp-4)); padding: var(--sp-3) var(--sp-4); }
     .ns-foot-actions { justify-content: flex-end; margin-left: 0; }
+  }
+}
+
+/* ==========================================================================
+ * Nuevo estudio — paciente, edad y contexto clínico (columna secundaria).
+ * ======================================================================= */
+@layer components {
+  .ns-muted { margin: 0; color: var(--text-muted); font-size: var(--fs-small); line-height: 1.45; }
+  .ns-two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); align-items: start; }
+  .ns-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .ns-field-label { color: var(--text); font-size: var(--fs-small); font-weight: var(--fw-medium, 500); }
+
+  .ns-link-button {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--primary);
+    font: inherit;
+    font-size: var(--fs-small);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .ns-link-button:disabled { color: var(--text-muted); cursor: not-allowed; text-decoration: none; }
+  .ns-link-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
+  .ns-skip { margin-top: var(--sp-1); }
+
+  .ns-primary-small {
+    align-self: flex-start;
+    min-height: 36px;
+    padding: 0 var(--sp-4);
+    border: 0;
+    border-radius: var(--radius-btn);
+    background: color-mix(in srgb, var(--primary) 72%, #0b1220);
+    color: #fff;
+    font: inherit;
+    font-size: var(--fs-small);
+    font-weight: var(--fw-semibold);
+    cursor: pointer;
+  }
+  .ns-primary-small:disabled { opacity: .5; cursor: not-allowed; }
+  .ns-primary-small:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  /* Selector de modo (buscar / crear) */
+  .ns-segmented { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+  .ns-segmented label {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 36px;
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    background: var(--surface);
+    color: var(--text);
+    font-size: var(--fs-small);
+    cursor: pointer;
+  }
+  .ns-segmented label.is-active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); }
+  .ns-segmented label:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  .ns-patient-search, .ns-patient-create { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .ns-patient-results-state p { margin: 0; }
+  .ns-patient-results { display: flex; flex-direction: column; gap: var(--sp-1); max-height: 240px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+  .ns-patient-results button {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--fs-small);
+    text-align: left;
+    cursor: pointer;
+  }
+  .ns-patient-results button span { color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-patient-results button:hover:not(:disabled) { border-color: var(--primary); }
+  .ns-patient-results button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  /* Resumen del paciente elegido */
+  .ns-facts { display: grid; gap: var(--sp-2); margin: 0; }
+  .ns-facts div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-2); }
+  .ns-facts dt { color: var(--text-muted); font-size: var(--fs-small); }
+  .ns-facts dd { margin: 0; color: var(--text); font-size: var(--fs-small); overflow-wrap: anywhere; }
+
+  /* Edad al estudio */
+  .ns-age { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .ns-age-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+  .ns-age-value { margin: 0; font-size: var(--fs-body); }
+  .ns-age-value strong { font-size: 20px; font-weight: var(--fw-semibold); }
+  .ns-badge {
+    padding: 2px var(--sp-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text);
+    font-size: var(--fs-micro);
+    font-weight: var(--fw-semibold);
+  }
+  .ns-badge.is-calculated { border-color: var(--success); color: var(--success); }
+  .ns-badge.is-reported { border-color: var(--warning); color: var(--text); background: color-mix(in srgb, var(--warning) 14%, transparent); }
+  .ns-warning {
+    margin: 0;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-input);
+    background: color-mix(in srgb, var(--warning) 12%, transparent);
+    color: var(--text);
+    font-size: var(--fs-small);
+  }
+
+  /* Detalles clínicos plegables */
+  .wl-new-study .wl-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 76px;
+    padding: var(--sp-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--fs-small);
+    resize: vertical;
+  }
+  .wl-new-study .wl-field textarea:disabled { opacity: .6; cursor: not-allowed; }
+  .wl-new-study .wl-field textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+  .ns-clinical-details { border: 1px solid var(--border); border-radius: var(--radius-input); }
+  .ns-clinical-details > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    min-height: 40px;
+    padding: 0 var(--sp-3);
+    color: var(--text);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-semibold);
+    cursor: pointer;
+  }
+  .ns-clinical-details > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-input); }
+  .ns-clinical-details > summary em { margin-left: auto; color: var(--text-muted); font-size: var(--fs-micro); font-style: normal; font-weight: 400; }
+  .ns-clinical-details > summary em.is-filled { color: var(--success); font-weight: var(--fw-semibold); }
+  .ns-clinical-fields { display: flex; flex-direction: column; gap: var(--sp-3); padding: 0 var(--sp-3) var(--sp-3); }
+
+  @media (max-width: 900px) {
+    .ns-two-fields { grid-template-columns: 1fr; }
   }
 }

@@ -95,7 +95,8 @@ test("seleccionar una fila abre el panel del estudio sin abrir la revisión", ()
 
 /* El panel no promete datos que el contrato de estudios no transporta. */
 test("el panel del estudio no inventa filiación ni derivador", () => {
-  assert.doesNotMatch(panel, /Accession|Médico solicitante|Centro derivador|<dt>Sexo|<dt>Edad/);
+  // La edad se muestra solo como "Edad al estudio" (dato guardado con el estudio, con su procedencia).
+  assert.doesNotMatch(panel, /Accession|Médico solicitante|Centro derivador|<dt>Sexo|<dt>Edad<\/dt>/);
   assert.match(panel, /archiveSeries/);
 });
 
