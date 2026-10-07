@@ -33,6 +33,7 @@ export function SubjectSelector({ disabled = false, value, onChange }: Props) {
   const [listState, setListState] = useState<ListState>({ status: "loading", subjects: [] });
   const [newSubjectRef, setNewSubjectRef] = useState("");
   const [newSubjectError, setNewSubjectError] = useState("");
+  const [retryToken, setRetryToken] = useState(0);
 
   const selectedExisting = listState.status === "ready"
     ? listState.subjects.find((subject) => subject.subjectRef === value) ?? null
@@ -52,7 +53,7 @@ export function SubjectSelector({ disabled = false, value, onChange }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [mode, value]);
+  }, [mode, value, retryToken]);
 
   function changeMode(next: Mode) {
     setMode(next);
@@ -155,7 +156,12 @@ export function SubjectSelector({ disabled = false, value, onChange }: Props) {
           </label>
           <div aria-live="polite" className="wl-patient-search-state">
             {listState.status === "loading" && <p>Buscando pacientes…</p>}
-            {listState.status === "error" && <p className="wl-drawer-error">No se pudieron buscar pacientes. Reintentá.</p>}
+            {listState.status === "error" && (
+              <p className="wl-drawer-error">
+                No se pudieron buscar pacientes.{" "}
+                <button className="wl-patient-link" disabled={disabled} onClick={() => setRetryToken((token) => token + 1)} type="button">Reintentar</button>
+              </p>
+            )}
             {listState.status === "ready" && visibleSubjects.length === 0 && <p>No se encontraron pacientes.</p>}
             {listState.status === "ready" && visibleSubjects.length > 0 && (
               <ul aria-label="Resultados de pacientes" className="wl-patient-results">

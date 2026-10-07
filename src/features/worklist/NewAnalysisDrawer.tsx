@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { LoaderCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, ChevronDown, ChevronRight, LoaderCircle } from "lucide-react";
 import { BackendApiError, runMultiplanarAnalysis, uploadAiInput, uploadStudyArchive } from "../../multiplanarApi";
 import type { Plane } from "../../appTypes";
 import type { InputResponse, StudyIngestionResponse } from "../../contracts/inputApiTypes";
@@ -21,15 +21,24 @@ import {
   type ProductFlowPhase,
 } from "./productAnalysisFlow";
 import { SubjectSelector } from "./SubjectSelector";
+import {
+  analyzeBlockerMessage,
+  caseIdError,
+  createRequestGate,
+  hasUnsavedWork,
+  uploadBlockerMessage,
+} from "./newStudyForm";
 
 /**
- * Carga de un estudio nuevo, como panel sobre la lista de trabajo.
+ * Vista "Nuevo estudio": carga de un estudio, procesamiento y apertura en la sala de lectura.
  *
- * Reemplaza al asistente de cuatro pasos: cargar → procesar → evaluar → aprobar.
- * Los dos últimos pasos duplicaban la sala de lectura con otro contrato de
- * revisión, y el patrón de asistente numerado es de alta de SaaS, no de lectura
- * radiológica. Acá el flujo es el que describieron los médicos: se carga el
- * estudio, se procesa, y aparece en la lista para leerlo.
+ * Es una pantalla dentro de la aplicación, no un diálogo: reemplaza a la lista en el área
+ * central (la navegación principal se conserva) y se vuelve a ella con "Volver a estudios".
+ * Por eso no atrapa el foco: lleva el foco a su encabezado al abrirse y es la lista quien
+ * lo devuelve al control de origen al volver.
+ *
+ * El flujo es el que describieron los médicos: se carga el estudio, se procesa, y aparece
+ * en la lista para leerlo.
  */
 
 const allowedInputExtensions = [".npy", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".mha", ".mhd", ".dcm", ".zip"];
@@ -97,30 +106,6 @@ function hasAllowedExtension(fileName: string) {
   return allowedInputExtensions.some((extension) => lowered.endsWith(extension));
 }
 
-/**
- * Misma regla que aplica el backend al identificador de caso.
- *
- * Se repite acá a propósito: el backend la valida porque es quien no puede confiar en
- * el cliente, y la pantalla la valida porque el médico tiene que enterarse mientras
- * escribe y no después de elegir el archivo. Un error que aparece recién al subir
- * obliga a rehacer el paso entero sin decir qué carácter sobraba.
- */
-const CASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/;
-
-function caseIdError(value: string): string {
-  if (!value) return "";
-  if (!/^[A-Za-z0-9]/.test(value)) return "Tiene que empezar con una letra o un número.";
-  if (value.length > 80) return "Máximo 80 caracteres.";
-  const invalid = [...value].find((character) => !/[A-Za-z0-9._:-]/.test(character));
-  if (invalid) {
-    // Se nombra el carácter que sobra: "caracteres inválidos" obliga a adivinar cuál.
-    return invalid === " "
-      ? "No puede llevar espacios. Usá guion o guion bajo."
-      : `El carácter «${invalid}» no está permitido. Usá letras, números, punto, guion, guion bajo o dos puntos.`;
-  }
-  return CASE_ID_PATTERN.test(value) ? "" : "Formato no permitido.";
-}
-
 function apiErrorMessage(error: unknown, action: string) {
   if (error instanceof BackendApiError) {
     return `No se pudo ${action}: ${error.message}`;
@@ -146,6 +131,33 @@ function productSeriesLabel(status: ProductAnalysisState["series"]["sagittal_t1"
   return "Error";
 }
 
+/**
+ * Botón de carga accesible. El control real es el input de archivo (conserva teclado,
+ * foco y nombre accesible); la etiqueta es lo que se ve como botón, en lugar del input
+ * nativo "Seleccionar archivo / Ningún archivo seleccionado".
+ */
+function FileButton({ label, accept, disabled, describedBy, onFile }: {
+  label: string;
+  accept: string;
+  disabled: boolean;
+  describedBy?: string;
+  onFile: (file?: File) => void;
+}) {
+  return (
+    <label className={`ns-file-button${disabled ? " is-disabled" : ""}`}>
+      <input
+        accept={accept}
+        aria-describedby={describedBy}
+        className="ns-file-input"
+        disabled={disabled}
+        onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ""; }}
+        type="file"
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const [caseId, setCaseId] = useState("");
   const [metadata, setMetadata] = useState<StudyMetadataDraft>(() => emptyStudyMetadataDraft());
@@ -159,30 +171,35 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const [productState, setProductState] = useState<ProductAnalysisState | null>(null);
   const [persistedRun, setPersistedRun] = useState<{ caseId: string; runId: string; study?: StudyIngestionResponse } | null>(null);
   const [analysisStage, setAnalysisStage] = useState<AnalysisStage>("idle");
+  const [confirmingExit, setConfirmingExit] = useState(false);
   const runInFlightRef = useRef(false);
   const progressRef = useRef<HTMLElement | null>(null);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const keepEditingRef = useRef<HTMLButtonElement | null>(null);
+  /* Cargas en vuelo: ver createRequestGate. */
+  const [requestGate] = useState(createRequestGate);
   const interactionLocked = running || analysisStage === "opening";
   const productRetryLock = useRef(false);
 
-  /*
-   * Escape cierra el drawer. Es el equivalente por teclado del clic en el fondo, y lo
-   * que cualquiera espera de un modal. No cierra durante una corrida: perder de vista
-   * un análisis en curso por apoyar una tecla es peor que tener que apuntar al botón.
-   */
+  /* Al abrir la vista el foco va al encabezado: es una pantalla nueva, y quien navega
+     con teclado o lector tiene que enterarse de dónde está. */
   useEffect(() => {
-    if (interactionLocked) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [interactionLocked, onClose]);
+    const frame = window.requestAnimationFrame(() => headingRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  /* Al salir, ninguna respuesta pendiente puede volver a tocar el estado. */
+  useEffect(() => () => requestGate.invalidateAll(), [requestGate]);
 
   useEffect(() => {
     if (analysisStage === "idle") return;
     const frame = window.requestAnimationFrame(() => progressRef.current?.scrollIntoView({ block: "nearest" }));
     return () => window.cancelAnimationFrame(frame);
   }, [analysisStage]);
+
+  useEffect(() => {
+    if (confirmingExit) keepEditingRef.current?.focus();
+  }, [confirmingExit]);
 
   const normalizedCaseId = caseId.trim();
   const caseIdIssue = caseIdError(normalizedCaseId);
@@ -202,9 +219,56 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
    */
   const sagittalInputId = studyUpload.study?.sagittal?.inputId ?? uploads.sagittal.input?.inputId;
   const axialInputId = studyUpload.study?.axial?.inputId ?? uploads.axial.input?.inputId;
-  const sagittalReady = Boolean(normalizedCaseId && sagittalInputId);
+  /* Un ID inválido invalida lo cargado aunque el archivo siga ahí: no se analiza. */
+  const sagittalReady = Boolean(caseIdReady && sagittalInputId);
   const axialReady = Boolean(axialInputId);
+  const uploading = studyUpload.status === "uploading" || uploads.sagittal.status === "uploading" || uploads.axial.status === "uploading";
   const activeAnalysisStep = analysisStage === "idle" ? -1 : analysisSteps.findIndex((step) => step.id === analysisStage);
+  /* Mientras corre un análisis la vista no se edita ni se cierra: lo que se ve tiene que
+     ser lo que se envió, y salir haría perder el seguimiento de la corrida. */
+  const uploadLocked = !studyIdentityReady || interactionLocked;
+  const uploadBlocker = uploadBlockerMessage(normalizedCaseId, caseIdIssue);
+  const analyzeBlocker = analyzeBlockerMessage({
+    running: interactionLocked,
+    normalizedCaseId,
+    caseIdIssue,
+    uploading,
+    zipLoaded: studyUpload.status === "uploaded",
+    sagittalInputId,
+  });
+  const footerHint = interactionLocked
+    ? "El análisis está en curso. Podés salir cuando termine."
+    : persistedRun ? "" : analyzeBlocker;
+  const sagittalSource = studyUpload.study?.sagittal ? "el ZIP del estudio" : uploads.sagittal.input ? "el archivo por plano" : null;
+  const axialSource = studyUpload.study?.axial ? "el ZIP del estudio" : uploads.axial.input ? "el archivo por plano" : null;
+  const unsavedWork = hasUnsavedWork({
+    caseId,
+    description: metadata.description,
+    studyDate: metadata.studyDate,
+    reviewPriority: metadata.reviewPriority,
+    subjectRef: metadata.subjectRef,
+    hasLoadedFiles: Boolean(studyUpload.fileName || uploads.sagittal.fileName || uploads.axial.fileName),
+    analysisPersisted: Boolean(persistedRun),
+  });
+
+  /* El aviso del navegador cubre cerrar la pestaña o recargar; la confirmación propia, "Volver" y "Cancelar". */
+  useEffect(() => {
+    if (!unsavedWork) return;
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [unsavedWork]);
+
+  function requestExit() {
+    if (interactionLocked) return;
+    if (unsavedWork) {
+      setConfirmingExit(true);
+      return;
+    }
+    onClose();
+  }
 
   function openCompletedStudy(caseIdToOpen: string) {
     setAnalysisStage("opening");
@@ -214,8 +278,11 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
 
   async function uploadStudy(file?: File) {
     if (!file) return;
+    /* Elegir un archivo reemplaza al anterior aunque este se rechace: su respuesta, si
+       llega tarde, ya no vale. */
+    const token = requestGate.begin("study");
     if (!studyIdentityReady) {
-      setMessage(caseIdIssue || "Ingresá un identificador de caso de-identificado antes de cargar el estudio.");
+      setMessage(caseIdIssue || "Ingresá un ID de estudio válido antes de cargar el estudio.");
       return;
     }
     if (!file.name.toLowerCase().endsWith(".zip")) {
@@ -228,17 +295,20 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     setStudyUpload({ fileName: file.name, status: "uploading" });
     try {
       const study = await uploadStudyArchive(file, normalizedCaseId);
+      if (!requestGate.isCurrent(token)) return;
       setStudyUpload({ fileName: file.name, status: "uploaded", study });
       setMessage("");
     } catch (error) {
+      if (!requestGate.isCurrent(token)) return;
       setStudyUpload({ fileName: file.name, status: "error", error: apiErrorMessage(error, "cargar el estudio") });
     }
   }
 
   async function upload(plane: Plane, file?: File) {
     if (!file) return;
+    const token = requestGate.begin(plane);
     if (!studyIdentityReady) {
-      setMessage(caseIdIssue || "Ingresá un identificador de caso de-identificado antes de cargar archivos.");
+      setMessage(caseIdIssue || "Ingresá un ID de estudio válido antes de cargar archivos.");
       return;
     }
     if (!hasAllowedExtension(file.name)) {
@@ -251,19 +321,16 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     setUploads((current) => ({ ...current, [plane]: { fileName: file.name, status: "uploading" } }));
     try {
       const input = await uploadAiInput(file, normalizedCaseId, plane);
+      if (!requestGate.isCurrent(token)) return;
       setUploads((current) => ({ ...current, [plane]: { fileName: file.name, status: "uploaded", input } }));
       setMessage("");
     } catch (error) {
+      if (!requestGate.isCurrent(token)) return;
       setUploads((current) => ({
         ...current,
         [plane]: { fileName: file.name, status: "error", error: apiErrorMessage(error, "cargar archivo") },
       }));
     }
-  }
-
-  function onFileChange(plane: Plane, event: ChangeEvent<HTMLInputElement>) {
-    void upload(plane, event.target.files?.[0]);
-    event.target.value = "";
   }
 
   async function runProductExtensions(context: { caseId: string; runId: string; study?: StudyIngestionResponse }) {
@@ -312,7 +379,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   }
 
   async function run() {
-    if (!sagittalReady || running || runInFlightRef.current) return;
+    if (!sagittalReady || uploading || running || runInFlightRef.current) return;
     const subjectError = validateSubjectRef(metadata.subjectRef);
     if (subjectError) {
       setMetadataError(subjectError);
@@ -323,7 +390,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     runInFlightRef.current = true;
     setRunning(true);
     setAnalysisStage("processing");
-    setMessage("Procesando el estudio. Podés seguir el estado en este panel.");
+    setMessage("Procesando el estudio. Podés seguir el estado en esta pantalla.");
     try {
       const normalizedStudyMetadata = normalizeStudyMetadataInput(metadata);
       const payload: MultiplanarRunPayload = {
@@ -383,257 +450,308 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   }
 
   return (
-    // El fondo cierra el drawer al hacerle clic. Es una comodidad de mouse: el
-    // equivalente por teclado es Escape, que se maneja arriba, mas el boton de cerrar.
-    <div className="wl-drawer-backdrop" role="presentation" onClick={() => { if (!interactionLocked) onClose(); }}>
-      {/*
-        El onClick del panel no hace nada propio: solo frena la propagacion para que un
-        clic adentro no llegue al fondo y cierre el drawer. Es una preocupacion de mouse
-        y no tiene equivalente de teclado, porque por teclado nunca se dispara el fondo.
-      */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
-      <aside
-        aria-label="Nuevo análisis"
-        className="wl-drawer"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <header className="wl-drawer-head">
-          <h2>Nuevo análisis</h2>
-          <button aria-label="Cerrar" className="wl-drawer-close" disabled={interactionLocked} onClick={onClose} type="button">×</button>
+    <div className="wl-new-study-page">
+      <section aria-labelledby="new-study-title" className="wl-new-study">
+        <header className="ns-head">
+          <button className="ns-back" disabled={interactionLocked} onClick={requestExit} type="button">
+            <ArrowLeft aria-hidden size={15} />Volver a estudios
+          </button>
+          <h1 id="new-study-title" ref={headingRef} tabIndex={-1}>Nuevo estudio</h1>
+          <p className="ns-head-desc">Cargá las imágenes del estudio, completá sus datos y, si corresponde, asociá un paciente existente.</p>
+          {confirmingExit && (
+            <div className="ns-confirm" role="alert">
+              <p><strong>¿Salir sin analizar?</strong> Se van a perder los datos y los archivos cargados en esta pantalla.</p>
+              <div className="ns-confirm-actions">
+                <button ref={keepEditingRef} className="wl-drawer-run" onClick={() => setConfirmingExit(false)} type="button">Seguir editando</button>
+                <button className="wl-drawer-cancel" onClick={onClose} type="button">Salir sin guardar</button>
+              </div>
+            </div>
+          )}
         </header>
 
-        <div className="wl-drawer-body">
-          <p className="wl-drawer-intro">
-            Seleccioná el paciente, completá los datos del estudio, cargá las imágenes y ejecutá el análisis.
-          </p>
-          <SubjectSelector
-            disabled={running || Boolean(persistedRun)}
-            onChange={(subjectRef) => {
-              setMetadata((current) => ({ ...current, subjectRef }));
-              setMetadataError("");
-            }}
-            value={metadata.subjectRef}
-          />
+        <div className="ns-layout">
+          <div className="ns-main">
+            <section aria-labelledby="new-study-data-title" className="ns-card">
+              <div className="ns-card-head">
+                <h2 id="new-study-data-title">Datos del estudio</h2>
+                <span><b aria-hidden="true">*</b> obligatorio</span>
+              </div>
 
-          <h3 className="wl-section-title">Datos del estudio</h3>
+              <label className="wl-field">
+                <span>ID del estudio <b aria-hidden="true" className="ns-req">*</b></span>
+                <input
+                  aria-required="true"
+                  disabled={interactionLocked}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    const hadLoadedInput = Boolean(studyUpload.fileName || Object.values(uploads).some((uploadState) => uploadState.fileName));
+                    /* Lo que está en vuelo se subió con el ID anterior: su respuesta ya no vale. */
+                    requestGate.invalidateAll();
+                    setCaseId(nextValue);
+                    setUploads(emptyUploads);
+                    setStudyUpload({ status: "idle" });
+                    setPersistedRun(null);
+                    setProductState(null);
+                    setAnalysisStage("idle");
+                    if (hadLoadedInput) setMessage("Cambiaste el ID del estudio. Volvé a cargar las imágenes para asociarlas al nuevo ID.");
+                  }}
+                  placeholder="CASE-XXXX"
+                  value={caseId}
+                />
+                {caseIdIssue
+                  ? <em className="wl-field-error">{caseIdIssue}</em>
+                  : <em>Letras, números, punto, guion, guion bajo o dos puntos.</em>}
+              </label>
 
-          <label className="wl-field">
-            <span>ID de caso de-identificado</span>
-            <input
-              onChange={(event) => {
-                setCaseId(event.target.value);
-                setPersistedRun(null);
-                setProductState(null);
-                setAnalysisStage("idle");
-              }}
-              placeholder="CASE-XXXX"
-              value={caseId}
-            />
-            {caseIdIssue
-              ? <em className="wl-field-error">{caseIdIssue}</em>
-              : <em>Letras, números, punto, guion, guion bajo o dos puntos.</em>}
-          </label>
+              <div className="wl-field-row">
+                <label className="wl-field">
+                  <span>Fecha del estudio <i>(opcional)</i></span>
+                  <input
+                    disabled={interactionLocked}
+                    onChange={(event) => setMetadata((current) => ({ ...current, studyDate: event.target.value }))}
+                    type="date"
+                    value={metadata.studyDate}
+                  />
+                </label>
+                <label className="wl-field">
+                  <span>Prioridad</span>
+                  <select
+                    disabled={interactionLocked}
+                    onChange={(event) => setMetadata((current) => ({ ...current, reviewPriority: event.target.value as StudyMetadataDraft["reviewPriority"] }))}
+                    value={metadata.reviewPriority}
+                  >
+                    <option value="low">Baja</option>
+                    <option value="medium">Media</option>
+                    <option value="high">Alta</option>
+                  </select>
+                </label>
+              </div>
 
-          <div className="wl-field-row">
-            <label className="wl-field">
-              <span>Fecha del estudio</span>
-              <input
-                onChange={(event) => setMetadata((current) => ({ ...current, studyDate: event.target.value }))}
-                type="date"
-                value={metadata.studyDate}
-              />
-            </label>
-            <label className="wl-field">
-              <span>Prioridad</span>
-              <select
-                onChange={(event) => setMetadata((current) => ({ ...current, reviewPriority: event.target.value as StudyMetadataDraft["reviewPriority"] }))}
-                value={metadata.reviewPriority}
-              >
-                <option value="low">Baja</option>
-                <option value="medium">Media</option>
-                <option value="high">Alta</option>
-              </select>
-            </label>
-          </div>
+              <label className="wl-field">
+                <span>Descripción <i>(opcional)</i></span>
+                <input
+                  disabled={interactionLocked}
+                  maxLength={200}
+                  onChange={(event) => setMetadata((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="RM lumbar sagital T2"
+                  value={metadata.description}
+                />
+              </label>
 
-          <label className="wl-field">
-            <span>Descripción</span>
-            <input
-              maxLength={200}
-              onChange={(event) => setMetadata((current) => ({ ...current, description: event.target.value }))}
-              placeholder="RM lumbar sagital T2"
-              value={metadata.description}
-            />
-          </label>
+              {metadataError && <p className="wl-drawer-error">{metadataError}</p>}
+            </section>
 
-          {metadataError && <p className="wl-drawer-error">{metadataError}</p>}
+            <section aria-labelledby="new-study-images-title" className="ns-card">
+              <div className="ns-card-head">
+                <h2 id="new-study-images-title">Imágenes</h2>
+                <span><b aria-hidden="true">*</b> sagital obligatorio</span>
+              </div>
 
-          <h3 className="wl-section-title">Imágenes</h3>
+              <div className="wl-upload ns-zip">
+                <div className="wl-upload-head">
+                  <strong>Estudio completo (.zip)</strong>
+                  <span>las series se separan solas</span>
+                </div>
+                <div className="ns-file-row">
+                  <FileButton
+                    accept=".zip"
+                    describedBy={uploadBlocker ? "ns-upload-blocker" : undefined}
+                    disabled={uploadLocked}
+                    label={studyUpload.fileName ? "Cambiar ZIP" : "Seleccionar ZIP"}
+                    onFile={(file) => { void uploadStudy(file); }}
+                  />
+                  <span className="ns-file-name">{studyUpload.fileName ?? "Ningún archivo seleccionado"}</span>
+                </div>
+                {uploadBlocker && <p className="ns-blocker" id="ns-upload-blocker">{uploadBlocker}</p>}
+                {studyUpload.status === "uploading" && <p className="wl-upload-state" role="status">Leyendo {studyUpload.fileName}…</p>}
+                {studyUpload.status === "error" && <p className="wl-drawer-error">{studyUpload.error}</p>}
+                {studyUpload.status === "uploaded" && studyUpload.study && (
+                  <div className="wl-study-result">
+                    {/*
+                      Se listan todas las series que traía el estudio y no solo las dos
+                      elegidas. El médico necesita ver qué había para entender por qué se
+                      eligió lo que se eligió, y sobre todo para notar cuando falta una
+                      serie que esperaba encontrar.
+                    */}
+                    <p className="wl-upload-state is-ok">
+                      {studyUpload.fileName}: {studyUpload.study.seriesFound.length} series encontradas.
+                    </p>
+                    <ul className="wl-series-list">
+                      {studyUpload.study.seriesFound.map((series, index) => {
+                        // Se empareja por posición: el identificador de la serie no sale
+                        // del backend, porque llevaría de vuelta al estudio de origen.
+                        const roles = [
+                          studyUpload.study?.sagittal?.seriesIndex === index ? "multiplanar sagital" : null,
+                          studyUpload.study?.axial?.seriesIndex === index ? "multiplanar axial" : null,
+                          studyUpload.study?.sagittalT1?.seriesIndex === index ? "fuente de hallazgos T1" : null,
+                          studyUpload.study?.sagittalT2?.seriesIndex === index ? "fuente de hallazgos T2" : null,
+                        ].filter((role): role is string => Boolean(role));
+                        const usedFor = roles.length ? roles.join(" · ") : null;
+                        return (
+                          <li className={usedFor ? "is-selected" : ""} key={`${series.plane}-${series.description}-${index}`}>
+                            <span>{seriesLabel(series)}</span>
+                            {usedFor && <em>se analiza como {usedFor}</em>}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {/*
+                      Las advertencias del módulo llegan tal cual: que no haya sagital, o
+                      que el axial no sea T2 cuando el modelo axial fue entrenado sobre T2,
+                      cambia lo que se puede concluir de la corrida.
+                    */}
+                    {studyUpload.study.warnings.map((warning) => (
+                      <p className="wl-drawer-warning" key={warning}>{warning}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-          <div className="wl-upload">
-            <div className="wl-upload-head">
-              <strong>Estudio completo</strong>
-              <span>.zip · las series se separan solas</span>
-            </div>
-            <input
-              accept=".zip"
-              disabled={!studyIdentityReady}
-              onChange={(event) => { void uploadStudy(event.target.files?.[0]); event.target.value = ""; }}
-              type="file"
-            />
-            {studyUpload.status === "uploading" && <p className="wl-upload-state">Leyendo {studyUpload.fileName}…</p>}
-            {studyUpload.status === "error" && <p className="wl-drawer-error">{studyUpload.error}</p>}
-            {studyUpload.status === "uploaded" && studyUpload.study && (
-              <div className="wl-study-result">
-                {/*
-                  Se listan todas las series que traía el estudio y no solo las dos
-                  elegidas. El médico necesita ver qué había para entender por qué se
-                  eligió lo que se eligió, y sobre todo para notar cuando falta una
-                  serie que esperaba encontrar.
-                */}
-                <p className="wl-upload-state is-ok">
-                  {studyUpload.fileName}: {studyUpload.study.seriesFound.length} series encontradas.
+              {/*
+                Camino secundario y plegado: acepta lo que el de estudio completo no puede
+                recibir —un .mha o un .npy sueltos de un dataset—, donde el plano no viene
+                en la metadata y lo tiene que declarar el médico.
+              */}
+              <div className="wl-upload">
+                <button
+                  aria-controls="ns-by-plane"
+                  aria-expanded={byPlaneOpen}
+                  className="ns-disclosure"
+                  onClick={() => setByPlaneOpen((value) => !value)}
+                  type="button"
+                >
+                  {byPlaneOpen ? <ChevronDown aria-hidden size={16} /> : <ChevronRight aria-hidden size={16} />}
+                  Cargar archivos por plano
+                </button>
+                {byPlaneOpen && (
+                  <div id="ns-by-plane">
+                    {(["sagittal", "axial"] as Plane[]).map((plane) => (
+                      <div className="wl-upload-plane" key={plane}>
+                        <div className="wl-upload-head">
+                          <strong>{planeLabel(plane)}</strong>
+                          <span>{plane === "sagittal" ? "obligatorio si no hay ZIP" : "opcional · experimental"}</span>
+                        </div>
+                        <div className="ns-file-row">
+                          <FileButton
+                            accept={uploadAccept}
+                            describedBy={uploadBlocker ? "ns-upload-blocker" : undefined}
+                            disabled={uploadLocked}
+                            label={uploads[plane].fileName ? "Cambiar archivo" : "Seleccionar archivo"}
+                            onFile={(file) => { void upload(plane, file); }}
+                          />
+                          <span className="ns-file-name">{uploads[plane].fileName ?? "Ningún archivo seleccionado"}</span>
+                        </div>
+                        {uploads[plane].status === "uploading" && <p className="wl-upload-state" role="status">Cargando {uploads[plane].fileName}…</p>}
+                        {uploads[plane].status === "uploaded" && <p className="wl-upload-state is-ok">{uploads[plane].fileName} cargado.</p>}
+                        {uploads[plane].status === "error" && <p className="wl-drawer-error">{uploads[plane].error}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {sagittalInputId && (
+                <p className="ns-source">
+                  Se analizará: sagital desde {sagittalSource}; axial {axialSource ? `desde ${axialSource}` : "no cargado (opcional)"}.
                 </p>
-                <ul className="wl-series-list">
-                  {studyUpload.study.seriesFound.map((series, index) => {
-                    // Se empareja por posición: el identificador de la serie no sale
-                    // del backend, porque llevaría de vuelta al estudio de origen.
-                    const roles = [
-                      studyUpload.study?.sagittal?.seriesIndex === index ? "multiplanar sagital" : null,
-                      studyUpload.study?.axial?.seriesIndex === index ? "multiplanar axial" : null,
-                      studyUpload.study?.sagittalT1?.seriesIndex === index ? "fuente de hallazgos T1" : null,
-                      studyUpload.study?.sagittalT2?.seriesIndex === index ? "fuente de hallazgos T2" : null,
-                    ].filter((role): role is string => Boolean(role));
-                    const usedFor = roles.length ? roles.join(" · ") : null;
+              )}
+            </section>
+
+            {analysisStage !== "idle" && (
+              <section ref={progressRef} className="wl-analysis-progress" aria-live="polite" aria-label="Progreso del análisis" role="status">
+                <div className="wl-analysis-progress-head">
+                  <LoaderCircle aria-hidden className="wl-analysis-spinner" size={20} />
+                  <div>
+                    <strong>{analysisSteps[activeAnalysisStep]?.label}</strong>
+                    <p>{analysisStageCopy[analysisStage]}</p>
+                  </div>
+                </div>
+                <ol>
+                  {analysisSteps.map((step, index) => (
+                    <li
+                      className={index < activeAnalysisStep ? "is-complete" : index === activeAnalysisStep ? "is-active" : ""}
+                      key={step.id}
+                    >
+                      <span aria-hidden="true">{index < activeAnalysisStep ? "✓" : index + 1}</span>
+                      {step.label}
+                    </li>
+                  ))}
+                </ol>
+                <small>El sistema no informa porcentajes; los estados cambian sólo cuando cada etapa termina.</small>
+              </section>
+            )}
+
+            {productState && (
+              <section className={`wl-product-progress is-${productState.phase}`} aria-live="polite">
+                <strong>{productPhaseLabel[productState.phase]}</strong>
+                <ul>
+                  {(["sagittal_t1", "sagittal_t2"] as const).map((role) => {
+                    const item = productState.series[role];
                     return (
-                      <li className={usedFor ? "is-selected" : ""} key={`${series.plane}-${series.description}-${index}`}>
-                        <span>{seriesLabel(series)}</span>
-                        {usedFor && <em>se analiza como {usedFor}</em>}
+                      <li key={role}>
+                        <span>{role === "sagittal_t1" ? "Sagittal T1" : "Sagittal T2"}</span>
+                        <em>{productSeriesLabel(item.status)}</em>
+                        {item.segmentationRunId && <small>run {item.segmentationRunId}</small>}
+                        {item.status === "completed" && <small>{item.discLocalizations.length} localizaciones discales</small>}
+                        {item.error && <small className="wl-field-error">{item.error}</small>}
                       </li>
                     );
                   })}
                 </ul>
-                {/*
-                  Las advertencias del módulo llegan tal cual: que no haya sagital, o
-                  que el axial no sea T2 cuando el modelo axial fue entrenado sobre T2,
-                  cambia lo que se puede concluir de la corrida.
-                */}
-                {studyUpload.study.warnings.map((warning) => (
-                  <p className="wl-drawer-warning" key={warning}>{warning}</p>
-                ))}
-              </div>
+                {productState.failureStage === "disc_findings" && (
+                  <p className="wl-upload-state">
+                    <strong>Clasificación discal</strong> · No se pudo completar
+                  </p>
+                )}
+              </section>
             )}
+
+            {message && <p className="wl-drawer-message" role="status">{message}</p>}
           </div>
 
-          {/*
-            Camino secundario y plegado: acepta lo que el de estudio completo no puede
-            recibir —un .mha o un .npy sueltos de un dataset—, donde el plano no viene
-            en la metadata y lo tiene que declarar el médico.
-          */}
-          <div className="wl-upload">
-            <button className="wl-upload-toggle" onClick={() => setByPlaneOpen((value) => !value)} type="button">
-              {byPlaneOpen ? "▾" : "▸"} Cargar un archivo por plano
-            </button>
-            {byPlaneOpen && (["sagittal", "axial"] as Plane[]).map((plane) => (
-              <div className="wl-upload-plane" key={plane}>
-                <div className="wl-upload-head">
-                  <strong>{planeLabel(plane)}</strong>
-                  <span>{plane === "sagittal" ? "obligatorio" : "opcional · experimental"}</span>
-                </div>
-                <input
-                  accept={uploadAccept}
-                  disabled={!studyIdentityReady}
-                  onChange={(event) => onFileChange(plane, event)}
-                  type="file"
-                />
-                {uploads[plane].status === "uploading" && <p className="wl-upload-state">Cargando {uploads[plane].fileName}…</p>}
-                {uploads[plane].status === "uploaded" && <p className="wl-upload-state is-ok">{uploads[plane].fileName} cargado.</p>}
-                {uploads[plane].status === "error" && <p className="wl-drawer-error">{uploads[plane].error}</p>}
-              </div>
-            ))}
+          <div className="ns-side">
+            <SubjectSelector
+              disabled={interactionLocked || Boolean(persistedRun)}
+              onChange={(subjectRef) => {
+                setMetadata((current) => ({ ...current, subjectRef }));
+                setMetadataError("");
+              }}
+              value={metadata.subjectRef}
+            />
           </div>
-
-          {analysisStage !== "idle" && (
-            <section ref={progressRef} className="wl-analysis-progress" aria-live="polite" aria-label="Progreso del análisis" role="status">
-              <div className="wl-analysis-progress-head">
-                <LoaderCircle aria-hidden className="wl-analysis-spinner" size={20} />
-                <div>
-                  <strong>{analysisSteps[activeAnalysisStep]?.label}</strong>
-                  <p>{analysisStageCopy[analysisStage]}</p>
-                </div>
-              </div>
-              <ol>
-                {analysisSteps.map((step, index) => (
-                  <li
-                    className={index < activeAnalysisStep ? "is-complete" : index === activeAnalysisStep ? "is-active" : ""}
-                    key={step.id}
-                  >
-                    <span aria-hidden="true">{index < activeAnalysisStep ? "✓" : index + 1}</span>
-                    {step.label}
-                  </li>
-                ))}
-              </ol>
-              <small>El sistema no informa porcentajes; los estados cambian sólo cuando cada etapa termina.</small>
-            </section>
-          )}
-
-          {productState && (
-            <section className={`wl-product-progress is-${productState.phase}`} aria-live="polite">
-              <strong>{productPhaseLabel[productState.phase]}</strong>
-              <ul>
-                {(["sagittal_t1", "sagittal_t2"] as const).map((role) => {
-                  const item = productState.series[role];
-                  return (
-                    <li key={role}>
-                      <span>{role === "sagittal_t1" ? "Sagittal T1" : "Sagittal T2"}</span>
-                      <em>{productSeriesLabel(item.status)}</em>
-                      {item.segmentationRunId && <small>run {item.segmentationRunId}</small>}
-                      {item.status === "completed" && <small>{item.discLocalizations.length} localizaciones discales</small>}
-                      {item.error && <small className="wl-field-error">{item.error}</small>}
-                    </li>
-                  );
-                })}
-              </ul>
-              {productState.failureStage === "disc_findings" && (
-                <p className="wl-upload-state">
-                  <strong>Clasificación discal</strong> · No se pudo completar
-                </p>
-              )}
-            </section>
-          )}
-
-          {message && <p className="wl-drawer-message">{message}</p>}
         </div>
 
-        <footer className="wl-drawer-foot">
-          <button className="wl-drawer-cancel" disabled={interactionLocked} onClick={onClose} type="button">Cancelar</button>
-          {persistedRun && productState?.phase === "error" ? (
-            <>
-              <button className="wl-drawer-cancel" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
-                Abrir sin hallazgos discales
+        <footer className="ns-foot">
+          <p className="ns-foot-hint" id="ns-run-hint" role="status">{footerHint}</p>
+          <div className="ns-foot-actions">
+            <button className="wl-drawer-cancel" disabled={interactionLocked} onClick={requestExit} type="button">Cancelar</button>
+            {persistedRun && productState?.phase === "error" ? (
+              <>
+                <button className="wl-drawer-cancel" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
+                  Abrir sin hallazgos discales
+                </button>
+                <button className="wl-drawer-run" disabled={running || !productState.retryable} onClick={() => void retryProductExtensions()} type="button">
+                  {running ? "Reintentando…" : productState.retryable ? "Reintentar hallazgos discales" : "Hallazgos discales no disponibles"}
+                </button>
+              </>
+            ) : persistedRun && productState && ["completed", "degraded"].includes(productState.phase) ? (
+              <button className="wl-drawer-run" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
+                Abrir sala de lectura
               </button>
-              <button className="wl-drawer-run" disabled={running || !productState.retryable} onClick={() => void retryProductExtensions()} type="button">
-                {running ? "Reintentando…" : productState.retryable ? "Reintentar hallazgos discales" : "Hallazgos discales no disponibles"}
+            ) : (
+              <button
+                aria-describedby="ns-run-hint"
+                className="wl-drawer-run"
+                disabled={!sagittalReady || uploading || running}
+                onClick={() => void run()}
+                type="button"
+              >
+                {running ? <><LoaderCircle aria-hidden className="wl-button-spinner" size={15} />Procesando…</> : "Analizar estudio"}
               </button>
-            </>
-          ) : persistedRun && productState && ["completed", "degraded"].includes(productState.phase) ? (
-            <button className="wl-drawer-run" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
-              Abrir sala de lectura
-            </button>
-          ) : (
-            <button
-              className="wl-drawer-run"
-              disabled={!sagittalReady || running}
-              onClick={() => void run()}
-              type="button"
-            >
-              {running ? <><LoaderCircle aria-hidden className="wl-button-spinner" size={15} />Procesando…</> : "Analizar"}
-            </button>
-          )}
+            )}
+          </div>
         </footer>
-      </aside>
+      </section>
     </div>
   );
 }

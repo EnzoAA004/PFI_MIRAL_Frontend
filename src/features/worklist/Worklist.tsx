@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NewAnalysisDrawer } from "./NewAnalysisDrawer";
 import { SelectedStudyPanel } from "./SelectedStudyPanel";
 import { ChevronDown, ChevronUp, ChevronsUpDown, Plus, Search, SlidersHorizontal } from "lucide-react";
@@ -98,11 +98,13 @@ interface WorklistProps {
 
 export function Worklist({ studies, loading = false, onOpenReview, onAnalysisReady }: WorklistProps) {
   /*
-   * Cargar un estudio es un panel sobre la lista, no un destino aparte: el
-   * asistente de cuatro pasos sacaba al médico de su lista de trabajo para
-   * volver a dejarlo ahí cinco pantallas después.
+   * "Nuevo estudio" es una vista que reemplaza a la lista en el área central; la
+   * navegación principal queda. Filtros, orden y página viven en este componente, que
+   * sigue montado mientras la vista está abierta, así que al volver están como se dejaron.
    */
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const newStudyButtonRef = useRef<HTMLButtonElement | null>(null);
+  const returnFocusRef = useRef(false);
   const [filters, setFilters] = useState<WorklistFilters>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [query, setQuery] = useState("");
@@ -111,6 +113,13 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(readStoredPageSize);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  /* Al volver de "Nuevo estudio" el foco regresa al control que lo abrió. */
+  useEffect(() => {
+    if (drawerOpen || !returnFocusRef.current) return;
+    returnFocusRef.current = false;
+    newStudyButtonRef.current?.focus();
+  }, [drawerOpen]);
 
   useEffect(() => {
     try { window.localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize)); } catch { /* storage disabled */ }
@@ -175,6 +184,15 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
     );
   }
 
+  if (drawerOpen) {
+    return (
+      <NewAnalysisDrawer
+        onAnalysisReady={(caseId) => { setDrawerOpen(false); onAnalysisReady(caseId); }}
+        onClose={() => { returnFocusRef.current = true; setDrawerOpen(false); }}
+      />
+    );
+  }
+
   return (
     <div className="wl">
       <OperationsPageHeader
@@ -203,7 +221,7 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
               Filtros
               {activeCount ? <em>{activeCount}</em> : null}
             </button>
-            <button className="wl-primary" onClick={() => setDrawerOpen(true)} type="button"><Plus aria-hidden size={15} />Nuevo análisis</button>
+            <button className="wl-primary" onClick={() => setDrawerOpen(true)} ref={newStudyButtonRef} type="button"><Plus aria-hidden size={15} />Nuevo estudio</button>
           </div>
         )}
       />
@@ -375,13 +393,6 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
           <SelectedStudyPanel study={selectedStudy} onClose={() => setSelectedKey(null)} onOpen={openStudy} />
         ) : null}
       </div>
-
-      {drawerOpen && (
-        <NewAnalysisDrawer
-          onAnalysisReady={(caseId) => { setDrawerOpen(false); onAnalysisReady(caseId); }}
-          onClose={() => setDrawerOpen(false)}
-        />
-      )}
     </div>
   );
 }

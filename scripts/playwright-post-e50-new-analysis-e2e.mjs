@@ -74,13 +74,13 @@ async function main() {
   console.log("ok 1 - la lista de trabajo abre contra el Backend real");
 
   // 2. "Nuevo análisis" abre el drawer.
-  await page.getByRole("button", { name: /Nuevo análisis/ }).click();
-  await page.locator('.wl-drawer[aria-label="Nuevo análisis"]').waitFor({ state: "visible", timeout: 10000 });
+  await page.getByRole("button", { name: /Nuevo estudio/ }).click();
+  await page.locator('.wl-new-study').waitFor({ state: "visible", timeout: 10000 });
   console.log("ok 2 - el drawer 'Nuevo análisis' abre");
 
   // 3. El selector de paciente carga subjects reales desde GET /api/subjects (nunca /api/patients).
   await page.waitForSelector("text=Paciente existente ·", { timeout: 10000 });
-  const drawerText = await page.locator(".wl-drawer").innerText();
+  const drawerText = await page.locator(".wl-new-study").innerText();
   assertTruthy(drawerText.includes("Paciente existente ·"), "el selector no mostró ningún subject existente");
   assertTruthy(!drawerText.includes("PAT-86-A") && !drawerText.includes("PAT-86-B") && !drawerText.includes("PAT-86-C"), "el subjectRef crudo se imprimió en pantalla (86-F)");
   console.log("ok 3 - el selector muestra subjects reales con etiquetas seguras, sin subjectRef crudo");
@@ -110,7 +110,7 @@ async function main() {
   console.log("ok 8 - legacyPatientRequests.length === 0 (nunca /api/patients ni /api/studies/{caseId}/patient)");
 
   // 9. Cerrar el drawer y navegar a /pacientes: la lista refleja el fixture (studyCount correcto).
-  await page.getByRole("button", { name: "Cerrar" }).click();
+  await page.getByRole("button", { name: "Volver a estudios" }).click();
   await page.goto(`${frontendUrl}/pacientes`, { waitUntil: "networkidle" });
   await page.waitForSelector("text=3 pacientes", { timeout: 10000 });
   const patientsText = await page.textContent("body");

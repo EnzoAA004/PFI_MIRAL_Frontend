@@ -547,62 +547,6 @@
   }
 
   /* Nuevo análisis (panel sobre la lista) -------------------------------- */
-  .wl-drawer-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    background: rgb(15 23 42 / .32);
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .wl-drawer {
-    width: min(440px, 100%);
-    height: 100%;
-    background: var(--surface);
-    border-left: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-  }
-
-  .wl-drawer-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--sp-3) var(--sp-4);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .wl-drawer-head h2 { font-size: var(--fs-body); font-weight: var(--fw-semibold); margin: 0; }
-
-  .wl-drawer-close {
-    background: transparent;
-    border: 0;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 20px;
-    line-height: 1;
-    padding: 0 var(--sp-1);
-  }
-
-  .wl-drawer-close:disabled { cursor: not-allowed; opacity: .4; }
-
-  .wl-drawer-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: var(--sp-4);
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-3);
-  }
-
-  .wl-drawer-intro {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: var(--fs-small);
-    line-height: 1.5;
-  }
-
   .wl-field { display: flex; flex-direction: column; gap: 4px; }
   .wl-field > span { font-size: var(--fs-micro); color: var(--text-muted); }
   .wl-field > em { font-size: var(--fs-micro); color: var(--text-muted); font-style: normal; opacity: .8; }
@@ -935,14 +879,6 @@
   @media (prefers-reduced-motion: reduce) {
     .wl-analysis-spinner,
     .wl-button-spinner { animation-duration: 1800ms; }
-  }
-
-  .wl-drawer-foot {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--sp-2);
-    padding: var(--sp-3) var(--sp-4);
-    border-top: 1px solid var(--border);
   }
 
   .wl-drawer-cancel,
@@ -1369,5 +1305,221 @@
     bottom: 0;
     padding-top: var(--sp-2);
     background: var(--operations-canvas, var(--bg-app));
+  }
+}
+
+/* ==========================================================================
+ * Nuevo estudio — vista dedicada.
+ *
+ * Todo cuelga de .wl-new-study(-page) o lleva prefijo ns-: no toca la lista, el
+ * visor ni otras pantallas. Las clases wl-field, wl-upload, wl-series-list y las de
+ * progreso se reutilizan tal cual; acá solo se ordena el contenedor.
+ *
+ * Dos columnas independientes (.ns-main y .ns-side), cada una con su propio flujo
+ * vertical: no hay filas de grilla compartidas, así que el alto de una columna no
+ * empuja a la otra. No hay scroll interno: la vista scrollea con la página y el pie
+ * queda pegado al borde inferior.
+ * ======================================================================= */
+@layer components {
+  .wl-new-study-page {
+    min-height: 100%;
+    padding: var(--sp-6) clamp(var(--sp-4), 3vw, var(--sp-8)) 0;
+  }
+
+  .wl-new-study {
+    display: flex;
+    flex-direction: column;
+    width: min(1120px, 100%);
+    min-height: calc(100vh - 56px);
+    margin: 0 auto;
+    color: var(--text);
+  }
+
+  .ns-head { display: grid; gap: var(--sp-1); padding-bottom: var(--sp-4); }
+  .ns-head h1 { margin: 0; font-size: var(--fs-h2, 18px); font-weight: var(--fw-semibold); }
+  .ns-head h1:focus { outline: none; }
+  .ns-head h1:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 4px; }
+  .ns-head-desc { margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
+
+  .ns-back {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    justify-self: start;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--fs-small);
+    cursor: pointer;
+  }
+  .ns-back:hover:not(:disabled) { color: var(--text); }
+  .ns-back:disabled { cursor: not-allowed; opacity: .5; }
+  .ns-back:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
+
+  .ns-confirm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-top: var(--sp-2);
+    padding: var(--sp-3);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-card);
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+    font-size: var(--fs-small);
+  }
+  .ns-confirm p { margin: 0; }
+  .ns-confirm-actions { display: flex; gap: var(--sp-2); }
+
+  .ns-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: var(--sp-6);
+    align-items: start;
+    flex: 1;
+    padding-bottom: var(--sp-6);
+  }
+  .ns-main, .ns-side { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+
+  .ns-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .ns-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+  .ns-card-head h2 { margin: 0; font-size: var(--fs-body); font-weight: var(--fw-semibold); }
+  .ns-card-head span { color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-card-head span b, .ns-req { color: var(--danger); font-weight: var(--fw-semibold); }
+
+  /* Campos: una receta única de etiqueta, altura y tipografía. */
+  .wl-new-study .wl-field { gap: 6px; }
+  .wl-new-study .wl-field > span { color: var(--text); font-size: var(--fs-small); font-weight: var(--fw-medium, 500); }
+  .wl-new-study .wl-field > span i { color: var(--text-muted); font-style: normal; font-weight: 400; }
+  .wl-new-study .wl-field > em { color: var(--text-muted); opacity: 1; }
+  .wl-new-study .wl-field input,
+  .wl-new-study .wl-field select {
+    height: 36px;
+    font-size: var(--fs-small);
+  }
+  .wl-new-study .wl-field input:disabled,
+  .wl-new-study .wl-field select:disabled { opacity: .6; cursor: not-allowed; }
+  .wl-new-study .wl-field input:focus-visible,
+  .wl-new-study .wl-field select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+  /* Carga: el ZIP es la acción principal. El input real queda en el DOM (teclado,
+     foco, lector de pantalla); la etiqueta es lo que se ve como botón. */
+  .wl-new-study .wl-upload { padding: var(--sp-3); }
+  .ns-zip { border-style: dashed; }
+  .ns-file-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+  .ns-file-name { min-width: 0; color: var(--text-muted); font-size: var(--fs-small); overflow-wrap: anywhere; }
+
+  .ns-file-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 var(--sp-4);
+    border-radius: var(--radius-btn);
+    background: color-mix(in srgb, var(--primary) 72%, #0b1220);
+    color: #fff;
+    font-size: var(--fs-small);
+    font-weight: var(--fw-semibold);
+    cursor: pointer;
+  }
+  .ns-file-button:hover:not(.is-disabled) { background: color-mix(in srgb, var(--primary) 82%, #0b1220); }
+  .ns-file-button.is-disabled { background: var(--surface-subtle); color: var(--text-muted); border: 1px solid var(--border); cursor: not-allowed; }
+  .ns-file-button:focus-within { outline: 2px solid var(--primary); outline-offset: 3px; }
+  .ns-file-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
+
+  .ns-blocker {
+    margin: 0;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent);
+    border-radius: var(--radius-input);
+    background: color-mix(in srgb, var(--warning) 12%, transparent);
+    color: var(--text);
+    font-size: var(--fs-small);
+  }
+
+  .ns-disclosure {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: 100%;
+    min-height: 36px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: var(--fs-small);
+    font-weight: var(--fw-semibold);
+    cursor: pointer;
+    text-align: left;
+  }
+  .ns-disclosure:hover { color: var(--primary); }
+  .ns-disclosure:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+
+  .ns-source { margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
+
+  /* Texto de ayuda de las cargas y mensajes: legibles, no 10-11 px apagados. */
+  .wl-new-study .wl-upload-head span,
+  .wl-new-study .wl-upload-state,
+  .wl-new-study .wl-drawer-error,
+  .wl-new-study .wl-drawer-message,
+  .wl-new-study .wl-drawer-warning { font-size: var(--fs-small); }
+
+  /* Paciente: columna secundaria, compacta. */
+  .ns-side .wl-patient-selector,
+  .ns-side .wl-patient-selected { background: var(--surface); }
+  .ns-side .wl-patient-heading { flex-direction: column; align-items: flex-start; gap: var(--sp-1); }
+  .ns-side .wl-patient-modes { grid-template-columns: 1fr; }
+  .ns-side .wl-patient-results { max-height: 220px; }
+  .ns-side .wl-patient-results button {
+    height: auto;
+    min-height: 36px;
+    padding: var(--sp-2);
+    border-color: var(--border);
+    font-size: var(--fs-small);
+    line-height: 1.35;
+    white-space: normal;
+  }
+  .ns-side .wl-patient-results button:hover { border-color: var(--primary); }
+  .ns-side .wl-patient-link { color: var(--primary); text-decoration: underline; }
+
+  /* Pie: pegado al borde inferior mientras se scrollea, dentro del flujo —no
+     superpuesto—, así que no cubre campos ni mensajes. */
+  .ns-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    margin: 0 calc(-1 * clamp(var(--sp-4), 3vw, var(--sp-8)));
+    padding: var(--sp-3) clamp(var(--sp-4), 3vw, var(--sp-8));
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .ns-foot-hint { margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
+  .ns-foot-actions { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; }
+  .wl-new-study .wl-drawer-cancel,
+  .wl-new-study .wl-drawer-run { height: 36px; font-size: var(--fs-small); }
+  .wl-new-study .wl-drawer-run:not(:disabled) { background: color-mix(in srgb, var(--primary) 72%, #0b1220); border-color: transparent; }
+
+  @media (max-width: 900px) {
+    .ns-layout { grid-template-columns: 1fr; gap: var(--sp-4); }
+    .ns-foot { flex-direction: column; align-items: stretch; margin: 0 calc(-1 * var(--sp-4)); padding: var(--sp-3) var(--sp-4); }
+    .ns-foot-actions { justify-content: flex-end; margin-left: 0; }
   }
 }

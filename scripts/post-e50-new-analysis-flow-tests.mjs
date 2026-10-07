@@ -97,12 +97,12 @@ test("15b la validacion de subjectRef nuevo reutiliza el helper existente, no in
 });
 
 test("16 el boton de analizar se deshabilita mientras corre", () => {
-  assert.match(drawerSource, /disabled=\{!sagittalReady \|\| running\}/);
+  assert.match(drawerSource, /disabled=\{!sagittalReady \|\| uploading \|\| running\}/);
 });
 
 test("17 doble submit queda bloqueado por una referencia sincronica", () => {
   assert.match(drawerSource, /runInFlightRef\.current/);
-  assert.match(drawerSource, /if \(!sagittalReady \|\| running \|\| runInFlightRef\.current\) return/);
+  assert.match(drawerSource, /if \(!sagittalReady \|\| uploading \|\| running \|\| runInFlightRef\.current\) return/);
 });
 
 test("18 un error de creacion muestra mensaje y no rompe el flujo", () => {
@@ -131,9 +131,11 @@ test("22 el selector de modo tiene semantica de radiogroup accesible", () => {
   assert.match(selectorSource, /type="radio"/);
 });
 
-test("23 cerrar el drawer sigue funcionando igual (Escape y boton)", () => {
-  assert.match(drawerSource, /if \(event\.key === "Escape"\) onClose\(\);/);
-  assert.match(drawerSource, /onClick=\{onClose\}/);
+test("23 salir de la vista pasa por una sola puerta que se bloquea al analizar y confirma si hay datos", () => {
+  assert.match(drawerSource, /function requestExit\(\) \{\s+if \(interactionLocked\) return;/);
+  assert.match(drawerSource, /className="ns-back" disabled=\{interactionLocked\} onClick=\{requestExit\}/);
+  assert.match(drawerSource, /<button className="wl-drawer-cancel" disabled=\{interactionLocked\} onClick=\{requestExit\}/);
+  assert.doesNotMatch(drawerSource, /key === "Escape"/, "es una pantalla, no un diálogo");
 });
 
 test("24 la carga de subjects maneja una respuesta obsoleta (cancelled flag)", () => {

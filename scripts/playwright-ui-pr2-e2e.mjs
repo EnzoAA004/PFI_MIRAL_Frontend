@@ -215,11 +215,11 @@ async function installBackendMocks(page, { failRun = false } = {}) {
 
 async function openPreparedDrawer(page) {
   await page.getByRole("heading", { name: "Lista de estudios" }).waitFor({ timeout: 10_000 });
-  await page.getByRole("button", { name: /Nuevo análisis/ }).click();
+  await page.getByRole("button", { name: /Nuevo estudio/ }).click();
   // Stage 86: el paciente/subjectRef es opcional -- este flujo prueba el caso "sin
   // asociar" a propósito, para confirmar que ya no depende de una selección previa.
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
-  await page.getByRole("button", { name: /Cargar un archivo por plano/ }).click();
+  await page.getByRole("button", { name: /Cargar archivos por plano/ }).click();
   await page.locator('input[type="file"]').nth(1).setInputFiles({
     name: "sagittal.dcm",
     mimeType: "application/dicom",
@@ -233,7 +233,7 @@ async function capture(page, name, width, height) {
   await page.waitForTimeout(100);
   const dimensions = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
   assertTruthy(dimensions.scrollWidth <= dimensions.clientWidth, `${width}x${height} no debe tener overflow horizontal`);
-  const drawer = page.locator(".wl-drawer");
+  const drawer = page.locator(".wl-new-study");
   if (await drawer.count()) {
     const box = await drawer.boundingBox();
     assertTruthy(Boolean(box && box.width <= width && box.x + box.width <= width + 1), `${width}x${height} debe mantener el drawer dentro del viewport`);
@@ -278,7 +278,7 @@ async function runError(browser) {
   await page.getByRole("button", { name: "Analizar" }).click();
   await page.getByText(/No se pudo ejecutar el análisis/).waitFor({ timeout: 10_000 });
   assertTruthy(!new URL(page.url()).pathname.startsWith("/estudio/"), "un error no debe navegar a Study Review");
-  assertTruthy(await page.locator(".wl-drawer").isVisible(), "un error debe mantener abierto el flujo de creación");
+  assertTruthy(await page.locator(".wl-new-study").isVisible(), "un error debe mantener abierto el flujo de creación");
   assertTruthy(await page.getByRole("button", { name: "Analizar" }).isEnabled(), "el análisis debe poder reintentarse");
   assertTruthy(calls.run === 1, "un fallo no debe navegar");
   assertTruthy(calls.legacyPatient === 0, "un fallo no debe haber tocado el endpoint legacy de patients");

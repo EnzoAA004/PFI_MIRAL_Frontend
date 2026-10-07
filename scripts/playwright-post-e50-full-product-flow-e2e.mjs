@@ -79,9 +79,9 @@ async function main() {
 
   // 3. Nuevo análisis.
   await page.goto(`${frontendUrl}/worklist`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: /Nuevo análisis/ }).click();
-  await page.locator('.wl-drawer[aria-label="Nuevo análisis"]').waitFor({ state: "visible", timeout: 10000 });
-  console.log("ok 3 - drawer 'Nuevo análisis' abre");
+  await page.getByRole("button", { name: /Nuevo estudio/ }).click();
+  await page.locator('.wl-new-study').waitFor({ state: "visible", timeout: 10000 });
+  console.log("ok 3 - la vista Nuevo estudio abre");
 
   // 4. Seleccionar paciente existente.
   await page.waitForSelector("text=Paciente existente ·", { timeout: 10000 });
@@ -91,7 +91,7 @@ async function main() {
 
   // 5. Cargar fixture sintético mínimo (caseId + archivo por plano sagital).
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
-  await page.locator("button", { hasText: "Cargar un archivo por plano" }).click();
+  await page.locator("button", { hasText: "Cargar archivos por plano" }).click();
   await page.locator('input[type="file"]').nth(1).setInputFiles({
     name: "synthetic-sagittal.dcm",
     mimeType: "application/octet-stream",

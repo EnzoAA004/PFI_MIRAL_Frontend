@@ -45,9 +45,9 @@ test("el placeholder ya no parece un dataset técnico", () => {
  * una línea qué se hace ahí.
  */
 test("el flujo explica paciente, estudio, imágenes y análisis", () => {
-  assert.match(drawer, /Seleccioná el paciente, completá los datos del estudio, cargá las imágenes y ejecutá el análisis/);
-  assert.match(drawer, /<h3 className="wl-section-title">Datos del estudio<\/h3>/);
-  assert.match(drawer, /<h3 className="wl-section-title">Imágenes<\/h3>/);
+  assert.match(drawer, /Cargá las imágenes del estudio, completá sus datos y, si corresponde, asociá un paciente existente/);
+  assert.match(drawer, /<h2 id="new-study-data-title">Datos del estudio<\/h2>/);
+  assert.match(drawer, /<h2 id="new-study-images-title">Imágenes<\/h2>/);
   assert.doesNotMatch(drawer, /aria-hidden="true">0\d<\/span>/);
 });
 
@@ -61,8 +61,8 @@ test("el análisis muestra progreso honesto sin porcentaje inventado", () => {
 
 test("doble submit queda bloqueado de forma síncrona", () => {
   assert.match(drawer, /runInFlightRef\.current/);
-  assert.match(drawer, /if \(!sagittalReady \|\| running \|\| runInFlightRef\.current\) return/);
-  assert.match(drawer, /disabled=\{!sagittalReady \|\| running\}/);
+  assert.match(drawer, /if \(!sagittalReady \|\| uploading \|\| running \|\| runInFlightRef\.current\) return/);
+  assert.match(drawer, /disabled=\{!sagittalReady \|\| uploading \|\| running\}/);
 });
 
 test("éxito completo abre automáticamente el Study creado con subjectRef", () => {
@@ -93,6 +93,44 @@ test("el estudio se crea con el subjectRef elegido en un único request", () => 
 test("Study Review conserva la ruta funcional por caseId", () => {
   assert.match(routes, /return `\$\{ROUTES\.study\}\/\$\{encodeURIComponent\(caseId\)\}`/);
   assert.match(routes, /study: "\/estudio"/);
+});
+
+/*
+ * "Nuevo estudio" es una vista que reemplaza a la lista, no un panel ni una capa.
+ */
+test("Nuevo estudio reemplaza a la lista y no se renderiza debajo ni como overlay", () => {
+  const gate = worklist.indexOf("if (drawerOpen) {");
+  assert.ok(gate > 0, "la lista corta su render cuando la vista está abierta");
+  assert.ok(gate < worklist.indexOf('<div className="wl">'), "el corte ocurre antes de pintar la tabla");
+  assert.doesNotMatch(worklist, /drawerOpen && \(/);
+  assert.doesNotMatch(drawer, /wl-drawer-backdrop|aria-modal|role="dialog"/);
+});
+
+test("al volver, la lista conserva filtros y página y el foco regresa al control de origen", () => {
+  assert.match(worklist, /newStudyButtonRef\.current\?\.focus\(\)/);
+  assert.match(worklist, /returnFocusRef\.current = true; setDrawerOpen\(false\)/);
+  assert.doesNotMatch(worklist, /setFilters\(EMPTY_FILTERS\);\s*setDrawerOpen/);
+});
+
+test("al abrir la vista el foco va al encabezado y no hay trampa de Tab", () => {
+  assert.match(drawer, /headingRef\.current\?\.focus\(\)/);
+  assert.match(drawer, /<h1 id="new-study-title" ref=\{headingRef\} tabIndex=\{-1\}>Nuevo estudio<\/h1>/);
+  assert.doesNotMatch(drawer, /key === "Tab"|focusTrap/i);
+});
+
+test("la carga usa botones accesibles, muestra el archivo y explica qué falta", () => {
+  assert.match(drawer, /"Seleccionar ZIP"/);
+  assert.match(drawer, /Ningún archivo seleccionado/);
+  assert.match(drawer, /aria-expanded=\{byPlaneOpen\}/);
+  assert.match(drawer, /Cargar archivos por plano/);
+  assert.match(drawer, /ID del estudio/);
+});
+
+test("las respuestas tardías de una carga se descartan por casillero y por ID", () => {
+  assert.match(drawer, /requestGate\.begin\("study"\)/);
+  assert.match(drawer, /requestGate\.begin\(plane\)/);
+  assert.equal((drawer.match(/requestGate\.isCurrent\(token\)/g) ?? []).length, 4);
+  assert.match(drawer, /requestGate\.invalidateAll\(\);\s+setCaseId\(nextValue\)/);
 });
 
 console.log(`UI-PR2 study creation tests: ${count} passed`);

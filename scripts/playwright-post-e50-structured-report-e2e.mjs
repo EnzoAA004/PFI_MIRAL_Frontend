@@ -79,8 +79,8 @@ async function main() {
   await page.getByRole("heading", { name: "Lista de trabajo" }).waitFor({ timeout: 10000 });
   console.log("ok 1 - sesión profesional y worklist real abiertas");
 
-  await page.getByRole("button", { name: /Nuevo análisis/ }).click();
-  await page.locator('.wl-drawer[aria-label="Nuevo análisis"]').waitFor({ state: "visible", timeout: 10000 });
+  await page.getByRole("button", { name: /Nuevo estudio/ }).click();
+  await page.locator('.wl-new-study').waitFor({ state: "visible", timeout: 10000 });
   await page.getByLabel("Paciente nuevo").check();
   await page.getByLabel(/Referencia interna del estudio/i).fill(subjectRef);
   await page.getByRole("button", { name: "Usar esta referencia" }).click();
@@ -88,7 +88,7 @@ async function main() {
   console.log("ok 2 - nuevo paciente/subjectRef de-identificado seleccionado");
 
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
-  await page.locator("button", { hasText: "Cargar un archivo por plano" }).click();
+  await page.locator("button", { hasText: "Cargar archivos por plano" }).click();
   await page.locator('input[type="file"]').nth(1).setInputFiles({
     name: "stage-88-report-sagittal.dcm",
     mimeType: "application/octet-stream",
