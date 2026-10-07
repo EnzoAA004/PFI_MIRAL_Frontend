@@ -55,12 +55,16 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const legacyPatientRequests = [];
+  const patientApiRequests = [];
   const allApiRequests = [];
   page.on("request", (request) => {
     const url = request.url();
     if (!url.includes("/api/")) return;
     allApiRequests.push(`${request.method()} ${url}`);
-    if (url.includes("/api/patients") || /\/api\/studies\/[^/]+\/patient\b/.test(url)) {
+    // Los pacientes son una entidad propia (`/api/patients`): buscar o crear es parte del flujo.
+    // Lo que sigue prohibido es el paso de asociacion posterior a la corrida, que ya no existe.
+    if (url.includes("/api/patients")) patientApiRequests.push(`${request.method()} ${url}`);
+    if (/\/api\/studies\/[^/]+\/patient\b/.test(url)) {
       legacyPatientRequests.push(`${request.method()} ${url}`);
     }
   });
@@ -69,7 +73,7 @@ async function main() {
   await page.goto(`${frontendUrl}/worklist`, { waitUntil: "networkidle" });
 
   // 1. Login/demo auth ya sembrado; worklist abre.
-  await page.getByRole("heading", { name: "Lista de trabajo" }).waitFor({ timeout: 10000 });
+  await page.getByRole("heading", { name: "Lista de estudios" }).waitFor({ timeout: 10000 });
   console.log("ok 1 - login/demo auth + worklist abre contra el Backend real");
 
   // 2. /pacientes muestra el subject existente.
@@ -83,11 +87,12 @@ async function main() {
   await page.locator('.wl-new-study').waitFor({ state: "visible", timeout: 10000 });
   console.log("ok 3 - la vista Nuevo estudio abre");
 
-  // 4. Seleccionar paciente existente.
-  await page.waitForSelector("text=Paciente existente ·", { timeout: 10000 });
-  await page.getByRole("button", { name: /Paciente existente ·/ }).first().click();
-  await page.waitForSelector("text=Paciente seleccionado", { timeout: 10000 });
-  console.log("ok 4 - seleccionar paciente existente");
+  // 4. Buscar por codigo y seleccionar el paciente existente (PAT-87-A, con 2 estudios previos).
+  await page.getByLabel("Buscar por código o nombre").fill("PAT-87");
+  await page.getByRole("list", { name: "Resultados de pacientes" }).getByRole("button").first().click();
+  await page.locator('[aria-label="Paciente seleccionado"]').waitFor({ timeout: 10000 });
+  assertTruthy((await page.locator('[aria-label="Paciente seleccionado"]').innerText()).includes("PAT-87-A"), "el resumen no muestra el paciente PAT-87-A");
+  console.log("ok 4 - buscar por código y seleccionar paciente existente");
 
   // 5. Cargar fixture sintético mínimo (caseId + archivo por plano sagital).
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
@@ -101,7 +106,7 @@ async function main() {
   console.log("ok 5 - fixture sintético cargado (input real vía mock-ai /inputs)");
 
   // 6. Submit.
-  await page.getByRole("button", { name: "Analizar" }).click();
+  await page.getByRole("button", { name: "Analizar estudio", exact: true }).click();
   console.log("ok 6 - submit ejecutado");
 
   // 7. Esperar creación/run -> navega a /estudio/{caseId} cuando el pipeline completo termina.
@@ -191,14 +196,14 @@ async function main() {
 
   // Network assertions (87-T).
   assertTruthy(legacyPatientRequests.length === 0, `se observaron requests legacy: ${legacyPatientRequests.join(", ")}`);
-  console.log("ok 19 - legacyPatientRequests.length === 0 en toda la sesión");
+  console.log("ok 19 - legacyPatientRequests.length === 0 en toda la sesión (nunca /api/studies/{caseId}/patient)");
 
   // Core creation-path requests are asserted hard (these are what Stage 87 actually built/fixed).
-  const coreExpected = { subjects: /\/api\/subjects$/, upload: /\/api\/ai\/inputs$/, run: /\/api\/ai\/multiplanar\/run$/, productAnalysis: /\/product-analysis$/, review: /\/review$/ };
+  const coreExpected = { patientSearch: /^GET .*\/api\/patients\?query=/, upload: /\/api\/ai\/inputs$/, run: /\/api\/ai\/multiplanar\/run$/, productAnalysis: /\/product-analysis$/, review: /\/review$/ };
   for (const [label, pattern] of Object.entries(coreExpected)) {
     assertTruthy(allApiRequests.some((entry) => pattern.test(entry)), `no se observó el request esperado: ${label}`);
   }
-  console.log("ok 20 - requests esperados de creación (subjects/upload/run/product-analysis/review) observados");
+  console.log("ok 20 - requests esperados de creación (búsqueda de pacientes/upload/run/product-analysis/review) observados");
 
   // Comparison/chat requests are logged, not hard-asserted here -- both were independently
   // verified end-to-end via direct API calls in this stage's own report (curl evidence), and this

@@ -203,6 +203,12 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     if (confirmingExit) keepEditingRef.current?.focus();
   }, [confirmingExit]);
 
+  /* Si la confirmacion de salida estaba abierta cuando arranco el analisis, se cierra: durante
+     la corrida no hay salida, ni siquiera confirmada. */
+  useEffect(() => {
+    if (interactionLocked) setConfirmingExit(false);
+  }, [interactionLocked]);
+
   const normalizedCaseId = caseId.trim();
   const caseIdIssue = caseIdError(normalizedCaseId);
   /* Sin un identificador válido no se habilita la carga: el archivo se subiría para
@@ -489,7 +495,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
               <p><strong>¿Salir sin analizar?</strong> Se van a perder los datos y los archivos cargados en esta pantalla.</p>
               <div className="ns-confirm-actions">
                 <button ref={keepEditingRef} className="wl-drawer-run" onClick={() => setConfirmingExit(false)} type="button">Seguir editando</button>
-                <button className="wl-drawer-cancel" onClick={onClose} type="button">Salir sin guardar</button>
+                <button className="wl-drawer-cancel" disabled={interactionLocked} onClick={() => { if (!interactionLocked) onClose(); }} type="button">Salir sin guardar</button>
               </div>
             </div>
           )}

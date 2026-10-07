@@ -64,28 +64,32 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
   const apiRequests = [];
   const legacyPatientRequests = [];
+  const patientApiRequests = [];
 
   page.on("request", (request) => {
     const url = request.url();
     if (!url.includes("/api/")) return;
     apiRequests.push(`${request.method()} ${url}`);
-    if (url.includes("/api/patients") || /\/api\/studies\/[^/]+\/patient\b/.test(url)) {
+    // Los pacientes son una entidad propia (`/api/patients`): buscar o crear es parte del flujo.
+    // Lo que sigue prohibido es el paso de asociacion posterior a la corrida, que ya no existe.
+    if (url.includes("/api/patients")) patientApiRequests.push(`${request.method()} ${url}`);
+    if (/\/api\/studies\/[^/]+\/patient\b/.test(url)) {
       legacyPatientRequests.push(`${request.method()} ${url}`);
     }
   });
 
   await seedSession(page);
   await page.goto(`${frontendUrl}/worklist`, { waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Lista de trabajo" }).waitFor({ timeout: 10000 });
+  await page.getByRole("heading", { name: "Lista de estudios" }).waitFor({ timeout: 10000 });
   console.log("ok 1 - sesión profesional y worklist real abiertas");
 
   await page.getByRole("button", { name: /Nuevo estudio/ }).click();
   await page.locator('.wl-new-study').waitFor({ state: "visible", timeout: 10000 });
-  await page.getByLabel("Paciente nuevo").check();
-  await page.getByLabel(/Referencia interna del estudio/i).fill(subjectRef);
-  await page.getByRole("button", { name: "Usar esta referencia" }).click();
-  await page.waitForSelector("text=Paciente seleccionado", { timeout: 10000 });
-  console.log("ok 2 - nuevo paciente/subjectRef de-identificado seleccionado");
+  await page.getByLabel("Crear paciente").check();
+  await page.locator("#new-patient-reference").fill(subjectRef);
+  await page.getByRole("button", { name: "Crear y seleccionar" }).click();
+  await page.locator('[aria-label="Paciente seleccionado"]').waitFor({ timeout: 10000 });
+  console.log("ok 2 - paciente nuevo (código de-identificado) creado y seleccionado");
 
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
   await page.locator("button", { hasText: "Cargar archivos por plano" }).click();
@@ -97,7 +101,7 @@ async function main() {
   await page.waitForSelector("text=stage-88-report-sagittal.dcm cargado", { timeout: 10000 });
   console.log("ok 3 - input sagital cargado por flujo real");
 
-  await page.getByRole("button", { name: "Analizar" }).click();
+  await page.getByRole("button", { name: "Analizar estudio", exact: true }).click();
   await page.waitForURL(`${frontendUrl.replace(/\/$/, "")}/estudio/${caseId}`, { timeout: 30000 });
   await page.getByText(caseId, { exact: false }).first().waitFor({ timeout: 10000 });
   console.log("ok 4 - Study creado y sala de lectura abierta");
@@ -158,8 +162,9 @@ async function main() {
   console.log("ok 10 - GET /report.pdf descarga PDF real");
 
   assertTruthy(legacyPatientRequests.length === 0, `se observaron requests legacy: ${legacyPatientRequests.join(", ")}`);
+  assertTruthy(patientApiRequests.some((entry) => entry.startsWith("POST ")), "el paciente no se creó por POST /api/patients");
   assertTruthy(apiRequests.some((entry) => /\/api\/studies\/[^/]+\/report$/.test(entry)), "la UI no consultó /report");
-  console.log("ok 11 - sin requests legacy /api/patients y con request UI /report observado");
+  console.log("ok 11 - sin paso de asociación legacy (/api/studies/{caseId}/patient), paciente creado por /api/patients y request UI /report observado");
 
   await browser.close();
   console.log(`Stage 88 structured report/export E2E contra ${frontendUrl}: OK (${caseId})`);

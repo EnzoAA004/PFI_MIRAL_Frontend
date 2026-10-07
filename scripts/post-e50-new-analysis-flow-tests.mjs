@@ -210,4 +210,15 @@ test("30 el resultado del ZIP ordena archivo, series, uso, limitaciones y detall
   assert.doesNotMatch(visible, /\{series\.description \|\||\{series\.inputId\}|P10\.7/, "identificadores y jerga técnica solo en los detalles");
 });
 
+test("31 la confirmación de salida se cierra al iniciar el análisis y su botón queda protegido", () => {
+  assert.match(drawerSource, /if \(interactionLocked\) setConfirmingExit\(false\);/);
+  assert.match(drawerSource, /disabled=\{interactionLocked\} onClick=\{\(\) => \{ if \(!interactionLocked\) onClose\(\); \}\}[^>]*>Salir sin guardar</);
+});
+
+test("32 una advertencia desconocida del ZIP se muestra tal cual en Limitaciones", () => {
+  assert.match(drawerSource, /describeStudyWarning\(warning\)\.text/);
+  const limitations = drawerSource.slice(drawerSource.indexOf('className="ns-limitations"'), drawerSource.indexOf('<details className="ns-tech">'));
+  assert.doesNotMatch(limitations, /\.filter\(|known/i, "no se filtran advertencias");
+});
+
 console.log(`Post-E50 new study (patient + context) tests passed: ${count}`);
