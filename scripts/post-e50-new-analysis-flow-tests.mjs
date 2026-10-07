@@ -180,4 +180,34 @@ test("26 los textos de datos personales no se imprimen en logs ni en el payload 
   assert.doesNotMatch(selectorSource, /console\.(log|info|warn|error)/);
 });
 
+test("27 el contexto clínico dice una sola línea y deja la explicación en una ayuda accesible", () => {
+  assert.match(drawerSource, /Información clínica registrada para este estudio/);
+  assert.match(drawerSource, /aria-controls="ns-context-help"/);
+  assert.match(drawerSource, /aria-expanded=\{contextHelpOpen\}/);
+});
+
+test("28 el motivo por el que no se calcula la edad sale de lo que falta, y con edad declarada no se repite la instrucción", () => {
+  assert.match(drawerSource, /ageUnavailableReason\(age\.missing, Boolean\(selectedPatient\)\)/);
+  assert.match(drawerSource, /Se guardará como edad declarada\. No se calculó:/);
+});
+
+test("29 Calculada y Declarada usan el mismo estilo neutro; solo la discrepancia advierte", () => {
+  assert.match(drawerSource, /className="ns-badge"/);
+  assert.doesNotMatch(drawerSource, /ns-badge is-/);
+  assert.match(drawerSource, /className="ns-warning"/);
+});
+
+test("30 el resultado del ZIP ordena archivo, series, uso, limitaciones y detalles técnicos", () => {
+  assert.match(drawerSource, /"Cambiar ZIP"/);
+  assert.match(drawerSource, /serie detectada" : "series detectadas"/);
+  assert.match(drawerSource, /seriesPlaneLabel\(series\.plane\)/);
+  assert.match(drawerSource, /seriesSequenceLabel\(series\.weighting\)/);
+  assert.match(drawerSource, /series\.sliceCount\} cortes/);
+  assert.match(drawerSource, /describeSeriesUse\(roles, series\)/);
+  assert.match(drawerSource, /<strong>Limitaciones<\/strong>/);
+  assert.match(drawerSource, /<summary>Detalles técnicos<\/summary>/);
+  const visible = drawerSource.slice(drawerSource.indexOf('className="ns-study-result"'), drawerSource.indexOf('<details className="ns-tech">'));
+  assert.doesNotMatch(visible, /\{series\.description \|\||\{series\.inputId\}|P10\.7/, "identificadores y jerga técnica solo en los detalles");
+});
+
 console.log(`Post-E50 new study (patient + context) tests passed: ${count}`);

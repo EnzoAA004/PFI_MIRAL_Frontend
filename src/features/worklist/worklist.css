@@ -1245,7 +1245,7 @@
 
   .ns-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 34%, 400px);
     gap: var(--sp-6);
     align-items: start;
     flex: 1;
@@ -1344,7 +1344,7 @@
   .wl-new-study .wl-upload-state,
   .wl-new-study .wl-drawer-error,
   .wl-new-study .wl-drawer-message,
-  .wl-new-study .wl-drawer-warning { font-size: var(--fs-small); }
+  .wl-new-study .wl-drawer-warning { font-size: var(--fs-micro); }
 
   /* Paciente: columna secundaria, compacta. */
   .ns-side .wl-patient-selector,
@@ -1397,7 +1397,7 @@
  * ======================================================================= */
 @layer components {
   .ns-muted { margin: 0; color: var(--text-muted); font-size: var(--fs-small); line-height: 1.45; }
-  .ns-two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); align-items: start; }
+  .ns-two-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: var(--sp-3); align-items: start; }
   .ns-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .ns-field-label { color: var(--text); font-size: var(--fs-small); font-weight: var(--fw-medium, 500); }
 
@@ -1434,7 +1434,7 @@
   .ns-primary-small:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
   /* Selector de modo (buscar / crear) */
-  .ns-segmented { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+  .ns-segmented { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: var(--sp-2); }
   .ns-segmented label {
     display: flex;
     align-items: center;
@@ -1492,8 +1492,6 @@
     font-size: var(--fs-micro);
     font-weight: var(--fw-semibold);
   }
-  .ns-badge.is-calculated { border-color: var(--success); color: var(--success); }
-  .ns-badge.is-reported { border-color: var(--warning); color: var(--text); background: color-mix(in srgb, var(--warning) 14%, transparent); }
   .ns-warning {
     margin: 0;
     padding: var(--sp-2) var(--sp-3);
@@ -1542,4 +1540,66 @@
   @media (max-width: 900px) {
     .ns-two-fields { grid-template-columns: 1fr; }
   }
+}
+
+/* ==========================================================================
+ * Nuevo estudio — ajuste de presentación (legibilidad, columnas, resultado del ZIP).
+ * Todo cuelga de .wl-new-study o lleva prefijo ns-.
+ * ======================================================================= */
+@layer components {
+  /* Escala de texto de esta pantalla: campos y texto principal a 14 px, ayudas a 13 px. Se
+     redefine el token solo dentro de la vista, así que no cambia nada fuera de ella. */
+  .wl-new-study { --fs-small: 14px; --fs-micro: 13px; }
+
+  /* Nada se sale de su tarjeta: los hijos de una grilla o columna pueden encogerse. */
+  .wl-new-study .wl-field,
+  .ns-card,
+  .ns-two-fields > *,
+  .wl-new-study .wl-field-row > * { min-width: 0; }
+  .wl-new-study .wl-field input,
+  .wl-new-study .wl-field select,
+  .wl-new-study .wl-field textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+  /* Pares de campos: dos columnas solo si cada una conserva al menos 150 px; si no, se apilan. */
+  .wl-new-study .wl-field-row { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+
+  /* Un campo enfocado por teclado no queda tapado por el pie de acciones. */
+  .wl-new-study :is(input, select, textarea, button, summary) { scroll-margin-bottom: 104px; }
+
+  .ns-muted { font-size: var(--fs-micro); }
+  .ns-help-text { padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--border); background: var(--surface-subtle); }
+
+  /* Resultado del ZIP: archivo, cantidad de series, qué se usa de cada una, limitaciones. */
+  .ns-study-result { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .ns-series-count { margin: 0; color: var(--text); font-size: var(--fs-small); font-weight: var(--fw-semibold); }
+  .ns-series { display: flex; flex-direction: column; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+  .ns-series li { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-input); background: var(--surface); }
+  .ns-series li.is-used { border-left: 3px solid var(--primary); }
+  .ns-series li.is-unused { background: var(--surface-subtle); }
+  .ns-series-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-small); }
+  .ns-series-main strong { color: var(--text); }
+  .ns-series-main span { color: var(--text-muted); }
+  .ns-series-use { margin: 0; color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-series li.is-used .ns-series-use { color: var(--text); }
+
+  .ns-limitations {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent);
+    border-radius: var(--radius-input);
+    background: color-mix(in srgb, var(--warning) 12%, transparent);
+    color: var(--text);
+    font-size: var(--fs-small);
+  }
+  .ns-limitations ul { margin: 0; padding-left: var(--sp-4); }
+  .ns-limitations li + li { margin-top: var(--sp-1); }
+
+  .ns-tech { border: 1px solid var(--border); border-radius: var(--radius-input); }
+  .ns-tech > summary { min-height: 36px; display: flex; align-items: center; padding: 0 var(--sp-3); color: var(--text-muted); font-size: var(--fs-small); cursor: pointer; }
+  .ns-tech > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-input); }
+  .ns-tech-body { padding: 0 var(--sp-3) var(--sp-3); color: var(--text-muted); font-size: var(--fs-micro); overflow-wrap: anywhere; }
+  .ns-tech-body p { margin: 0 0 var(--sp-1); }
+  .ns-tech-body ol, .ns-tech-body ul { margin: 0 0 var(--sp-2); padding-left: var(--sp-4); }
+  .ns-tech-body li { font-family: var(--font-mono); }
 }

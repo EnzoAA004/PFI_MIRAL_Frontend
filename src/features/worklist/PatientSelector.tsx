@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createPatient, patientDisplayName, searchPatients, type Patient } from "../../patientApi";
-import { displayStudyDate } from "../../studyDisplay";
+import { formatIsoDateDMY } from "../../studyAge";
 
 type Mode = "search" | "create";
 
@@ -89,7 +89,7 @@ export function PatientSelector({ disabled = false, selected, withoutPatient, on
         <dl className="ns-facts">
           <div><dt>Nombre</dt><dd>{summaryLine(selected)}</dd></div>
           <div><dt>Código</dt><dd>{selected.patientReference}</dd></div>
-          <div><dt>Nacimiento</dt><dd>{selected.dateOfBirth ? displayStudyDate(selected.dateOfBirth) : "No informada"}</dd></div>
+          <div><dt>Nacimiento</dt><dd>{selected.dateOfBirth ? formatIsoDateDMY(selected.dateOfBirth) : "No informada"}</dd></div>
         </dl>
       </section>
     );
@@ -154,7 +154,7 @@ export function PatientSelector({ disabled = false, selected, withoutPatient, on
                   <li key={patient.id}>
                     <button disabled={disabled} onClick={() => onSelect(patient)} type="button">
                       <strong>{summaryLine(patient)}</strong>
-                      <span>{patient.patientReference}{patient.dateOfBirth ? ` · ${displayStudyDate(patient.dateOfBirth)}` : ""}</span>
+                      <span>{patient.patientReference}{patient.dateOfBirth ? ` · ${formatIsoDateDMY(patient.dateOfBirth)}` : ""}</span>
                     </button>
                   </li>
                 ))}

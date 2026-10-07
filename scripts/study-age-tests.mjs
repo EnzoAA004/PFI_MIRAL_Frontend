@@ -49,10 +49,10 @@ test("sin con quÃ© calcular y sin declarar no se inventa una edad, y se dice quÃ
   const noDob = resolveStudyAge({ dateOfBirth: null, studyDate: "2026-10-06", declared: "" });
   assert.equal(noDob.value, null);
   assert.equal(noDob.provenance, null);
-  assert.match(noDob.missingForCalculation, /fecha de nacimiento/);
+  assert.deepEqual({ ...noDob.missing }, { birthDate: true, studyDate: false, studyBeforeBirth: false });
   const noDate = resolveStudyAge({ dateOfBirth: "1980-01-01", studyDate: "", declared: "" });
   assert.equal(noDate.value, null);
-  assert.match(noDate.missingForCalculation, /fecha del estudio/);
+  assert.deepEqual({ ...noDate.missing }, { birthDate: false, studyDate: true, studyBeforeBirth: false });
 });
 
 test("la edad declarada se guarda como reported cuando no se puede calcular", () => {

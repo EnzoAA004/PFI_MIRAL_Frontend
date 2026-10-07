@@ -23,7 +23,8 @@ import {
 } from "./productAnalysisFlow";
 import { PatientSelector } from "./PatientSelector";
 import type { Patient } from "../../patientApi";
-import { resolveStudyAge } from "../../studyAge";
+import { ageUnavailableReason, resolveStudyAge } from "../../studyAge";
+import { describeSeriesUse, describeStudyWarning, seriesPlaneLabel, seriesSequenceLabel, type SeriesRole } from "../../studyWarnings";
 import {
   analyzeBlockerMessage,
   caseIdError,
@@ -87,12 +88,6 @@ const analysisStageCopy: Record<Exclude<AnalysisStage, "idle">, string> = {
   completing: "La corrida principal está lista. Se están guardando los resultados complementarios disponibles.",
   opening: "Todo quedó guardado correctamente. Abriendo la sala de lectura.",
 };
-
-function seriesLabel(series: { plane: string; weighting: string; description: string; sliceCount: number }) {
-  const plane = series.plane === "sagittal" ? "Sagital" : series.plane === "axial" ? "Axial" : series.plane === "coronal" ? "Coronal" : series.plane;
-  const weighting = series.weighting === "t1" || series.weighting === "t2" ? series.weighting.toUpperCase() : series.weighting;
-  return `${plane} ${weighting} · ${series.sliceCount} cortes${series.description ? ` · ${series.description}` : ""}`;
-}
 
 type Props = {
   onClose: () => void;
@@ -178,6 +173,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [withoutPatient, setWithoutPatient] = useState(false);
   const [ageOverrideOpen, setAgeOverrideOpen] = useState(false);
+  const [contextHelpOpen, setContextHelpOpen] = useState(false);
   const runInFlightRef = useRef(false);
   const progressRef = useRef<HTMLElement | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
@@ -243,6 +239,13 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     studyDate: metadata.studyDate,
     declared: showAgeInput ? metadata.ageDeclared : "",
   });
+  const unavailableReason = ageUnavailableReason(age.missing, Boolean(selectedPatient));
+  /* Con la edad ya declarada no se repite una instrucción como si el dato faltara. */
+  const ageHelp = age.calculated !== null
+    ? `Calculada con las fechas: ${age.calculated} años. Lo que declares acá se guarda como declarado.`
+    : age.provenance === "reported"
+      ? `Se guardará como edad declarada. No se calculó: ${unavailableReason.charAt(0).toLowerCase()}${unavailableReason.slice(1)}`
+      : `${unavailableReason} Si la conocés, podés declarar la edad.`;
   const clinicalTextFilled = [metadata.clinicalReason, metadata.symptoms, metadata.symptomDuration, metadata.relevantHistory]
     .some((value) => value.trim() !== "");
   const analyzeBlocker = analyzeBlockerMessage({
@@ -589,43 +592,76 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                 {studyUpload.status === "uploading" && <p className="wl-upload-state" role="status">Leyendo {studyUpload.fileName}…</p>}
                 {studyUpload.status === "error" && <p className="wl-drawer-error">{studyUpload.error}</p>}
                 {studyUpload.status === "uploaded" && studyUpload.study && (
-                  <div className="wl-study-result">
+                  <div className="ns-study-result">
                     {/*
-                      Se listan todas las series que traía el estudio y no solo las dos
-                      elegidas. El médico necesita ver qué había para entender por qué se
-                      eligió lo que se eligió, y sobre todo para notar cuando falta una
-                      serie que esperaba encontrar.
+                      Se listan todas las series que traía el estudio y no solo las usadas. El
+                      médico necesita ver qué había para entender por qué se eligió lo que se
+                      eligió, y sobre todo para notar cuando falta una serie que esperaba.
                     */}
-                    <p className="wl-upload-state is-ok">
-                      {studyUpload.fileName}: {studyUpload.study.seriesFound.length} series encontradas.
+                    <p className="ns-series-count">
+                      {studyUpload.study.seriesFound.length} {studyUpload.study.seriesFound.length === 1 ? "serie detectada" : "series detectadas"}
                     </p>
-                    <ul className="wl-series-list">
+                    <ul className="ns-series">
                       {studyUpload.study.seriesFound.map((series, index) => {
                         // Se empareja por posición: el identificador de la serie no sale
                         // del backend, porque llevaría de vuelta al estudio de origen.
-                        const roles = [
-                          studyUpload.study?.sagittal?.seriesIndex === index ? "multiplanar sagital" : null,
-                          studyUpload.study?.axial?.seriesIndex === index ? "multiplanar axial" : null,
-                          studyUpload.study?.sagittalT1?.seriesIndex === index ? "fuente de hallazgos T1" : null,
-                          studyUpload.study?.sagittalT2?.seriesIndex === index ? "fuente de hallazgos T2" : null,
-                        ].filter((role): role is string => Boolean(role));
-                        const usedFor = roles.length ? roles.join(" · ") : null;
+                        const roles: SeriesRole[] = [
+                          studyUpload.study?.sagittal?.seriesIndex === index ? "sagittal" : null,
+                          studyUpload.study?.axial?.seriesIndex === index ? "axial" : null,
+                          studyUpload.study?.sagittalT1?.seriesIndex === index ? "findings-t1" : null,
+                          studyUpload.study?.sagittalT2?.seriesIndex === index ? "findings-t2" : null,
+                        ].filter((role): role is SeriesRole => role !== null);
+                        const use = describeSeriesUse(roles, series);
                         return (
-                          <li className={usedFor ? "is-selected" : ""} key={`${series.plane}-${series.description}-${index}`}>
-                            <span>{seriesLabel(series)}</span>
-                            {usedFor && <em>se analiza como {usedFor}</em>}
+                          <li className={use.used ? "is-used" : "is-unused"} key={`${series.plane}-${series.description}-${index}`}>
+                            <div className="ns-series-main">
+                              <strong>{seriesPlaneLabel(series.plane)}</strong>
+                              <span>{seriesSequenceLabel(series.weighting)}</span>
+                              <span>{series.sliceCount} cortes</span>
+                            </div>
+                            <p className="ns-series-use">{use.text}</p>
                           </li>
                         );
                       })}
                     </ul>
                     {/*
-                      Las advertencias del módulo llegan tal cual: que no haya sagital, o
-                      que el axial no sea T2 cuando el modelo axial fue entrenado sobre T2,
-                      cambia lo que se puede concluir de la corrida.
+                      Las advertencias del módulo se reformulan pero no se descartan: que no haya
+                      sagital, o que el axial no sea T2 cuando el modelo axial espera T2, cambia
+                      lo que se puede concluir de la corrida. El texto original va en los
+                      detalles técnicos.
                     */}
-                    {studyUpload.study.warnings.map((warning) => (
-                      <p className="wl-drawer-warning" key={warning}>{warning}</p>
-                    ))}
+                    {studyUpload.study.warnings.length > 0 && (
+                      <div className="ns-limitations" role="status">
+                        <strong>Limitaciones</strong>
+                        <ul>
+                          {studyUpload.study.warnings.map((warning) => (
+                            <li key={warning}>{describeStudyWarning(warning).text}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <details className="ns-tech">
+                      <summary>Detalles técnicos</summary>
+                      <div className="ns-tech-body">
+                        <p>Archivo: {studyUpload.fileName}</p>
+                        <ol>
+                          {studyUpload.study.seriesFound.map((series, index) => (
+                            <li key={`${series.inputId}-${index}`}>
+                              {series.description || "Sin descripción"} · {series.inputId}
+                              {series.multiplanar ? " · localizador" : ""}{series.derived ? " · derivada" : ""}
+                            </li>
+                          ))}
+                        </ol>
+                        {studyUpload.study.warnings.length > 0 && (
+                          <>
+                            <p>Mensajes originales del módulo de IA:</p>
+                            <ul>
+                              {studyUpload.study.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                            </ul>
+                          </>
+                        )}
+                      </div>
+                    </details>
                   </div>
                 )}
               </div>
@@ -751,13 +787,27 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                 <h2 id="new-study-context-title">Contexto clínico</h2>
                 <span>opcional</span>
               </div>
-              <p className="ns-muted">Se guarda con este estudio como contexto, nunca como hallazgo. Si después se edita el paciente, lo registrado acá no cambia.</p>
+              <p className="ns-muted">Información clínica registrada para este estudio</p>
+              <button
+                aria-controls="ns-context-help"
+                aria-expanded={contextHelpOpen}
+                className="ns-link-button"
+                onClick={() => setContextHelpOpen((open) => !open)}
+                type="button"
+              >
+                Cómo se conserva
+              </button>
+              {contextHelpOpen && (
+                <p className="ns-muted ns-help-text" id="ns-context-help">
+                  Se guarda con este estudio como contexto, nunca como hallazgo. Si después se edita el paciente, lo registrado acá no cambia.
+                </p>
+              )}
 
               <div className="ns-age">
                 <div className="ns-age-head">
                   <span className="ns-field-label">Edad al estudio</span>
                   {age.value !== null && (
-                    <span className={`ns-badge is-${age.provenance}`}>{age.provenance === "calculated" ? "Calculada" : "Declarada"}</span>
+                    <span className="ns-badge">{age.provenance === "calculated" ? "Calculada" : "Declarada"}</span>
                   )}
                 </div>
                 {!showAgeInput && age.calculated !== null && (
@@ -782,9 +832,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                       />
                     </label>
                     <p className="ns-muted" id="ns-age-help">
-                      {age.calculated === null
-                        ? `No se puede calcular: falta ${age.missingForCalculation}. Si la conocés, declarala; queda registrada como declarada.`
-                        : `Calculada con las fechas: ${age.calculated} años. Lo que declares acá se guarda como declarado.`}
+                      {ageHelp}
                     </p>
                     {age.calculated !== null && (
                       <button

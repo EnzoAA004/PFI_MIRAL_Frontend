@@ -21,8 +21,8 @@ export type ResolvedAge = {
   calculated: number | null;
   /** Se declaró una edad y difiere de la calculada. */
   discrepancy: boolean;
-  /** Qué falta para poder calcularla (vacío si se puede). */
-  missingForCalculation: string;
+  /** Por qué no se pudo calcular (todo false si se pudo). */
+  missing: { birthDate: boolean; studyDate: boolean; studyBeforeBirth: boolean };
   /** Error de entrada que impide guardar. Vacío si no hay. */
   issue: string;
 };
@@ -58,30 +58,53 @@ export function resolveStudyAge(input: {
   const calculated = calculateAgeOn(input.dateOfBirth, input.studyDate);
   const birth = parseIsoDate(input.dateOfBirth);
   const study = parseIsoDate(input.studyDate);
-  const missing = !birth
-    ? "la fecha de nacimiento del paciente"
-    : !study
-      ? "la fecha del estudio"
-      : calculated === null
-        ? "una fecha de estudio posterior al nacimiento"
-        : "";
+  const missing = {
+    birthDate: !birth,
+    studyDate: !study,
+    studyBeforeBirth: Boolean(birth && study && calculated === null),
+  };
 
   const declaredText = input.declared.trim();
   if (declaredText) {
     if (!/^\d{1,3}$/.test(declaredText) || Number(declaredText) > 130) {
-      return { value: null, provenance: null, calculated, discrepancy: false, missingForCalculation: missing, issue: "La edad declarada debe ser un número entero entre 0 y 130." };
+      return { value: null, provenance: null, calculated, discrepancy: false, missing, issue: "La edad declarada debe ser un número entero entre 0 y 130." };
     }
     const declared = Number(declaredText);
-    return { value: declared, provenance: "reported", calculated, discrepancy: calculated !== null && calculated !== declared, missingForCalculation: missing, issue: "" };
+    return { value: declared, provenance: "reported", calculated, discrepancy: calculated !== null && calculated !== declared, missing, issue: "" };
   }
   if (calculated !== null) {
-    return { value: calculated, provenance: "calculated", calculated, discrepancy: false, missingForCalculation: "", issue: "" };
+    return { value: calculated, provenance: "calculated", calculated, discrepancy: false, missing, issue: "" };
   }
-  return { value: null, provenance: null, calculated: null, discrepancy: false, missingForCalculation: missing, issue: "" };
+  return { value: null, provenance: null, calculated: null, discrepancy: false, missing, issue: "" };
+}
+
+/** Motivo real por el que la edad no se puede calcular con las fechas ("" si se puede). */
+export function ageUnavailableReason(missing: ResolvedAge["missing"], hasPatient: boolean): string {
+  if (missing.studyBeforeBirth) return "La fecha del estudio es anterior al nacimiento.";
+  if (missing.birthDate && missing.studyDate) {
+    return hasPatient
+      ? "Faltan la fecha de nacimiento del paciente y la fecha del estudio."
+      : "No hay paciente con fecha de nacimiento y falta la fecha del estudio.";
+  }
+  if (missing.birthDate) {
+    return hasPatient ? "El paciente no tiene fecha de nacimiento cargada." : "No hay paciente asociado con fecha de nacimiento.";
+  }
+  if (missing.studyDate) return "Falta la fecha del estudio.";
+  return "";
 }
 
 export function ageProvenanceLabel(provenance: string | null | undefined): string {
   if (provenance === "calculated") return "Calculada con la fecha de nacimiento";
   if (provenance === "reported") return "Declarada al cargar el estudio";
   return "Procedencia no informada";
+}
+
+/**
+ * Fecha de lectura dd/mm/aaaa a partir de un YYYY-MM-DD, solo con texto: no se construye un
+ * Date, así que no hay conversión de zona horaria ni corrimiento de un día. Lo que no es una
+ * fecha ISO se devuelve tal cual.
+ */
+export function formatIsoDateDMY(value: string | null | undefined): string {
+  const match = value ? ISO_DATE.exec(value.trim()) : null;
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : (value ?? "");
 }
