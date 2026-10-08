@@ -1175,24 +1175,26 @@
   }
 }
 
-
 /* ==========================================================================
- * Nuevo estudio — vista dedicada.
+ * Nuevo estudio — flujo en tres pasos.
  *
- * Todo cuelga de .wl-new-study(-page) o lleva prefijo ns-: no toca la lista, el
- * visor ni otras pantallas. Las clases wl-field, wl-upload, wl-series-list y las de
- * progreso se reutilizan tal cual; acá solo se ordena el contenedor.
- *
- * Dos columnas independientes (.ns-main y .ns-side), cada una con su propio flujo
- * vertical: no hay filas de grilla compartidas, así que el alto de una columna no
- * empuja a la otra. No hay scroll interno: la vista scrollea con la página y el pie
- * queda pegado al borde inferior.
+ * Todo cuelga de .wl-new-study / .ns-dialog o lleva prefijo ns-: no toca la lista, el visor ni
+ * otras pantallas. Estructura: encabezado, navegación de pasos, cuerpo (paso activo en una única
+ * superficie + resumen lateral de solo lectura) y pie de acciones. El paso activo es una sola
+ * columna principal: no hay dos columnas que crezcan por separado, y la vista tiene un único
+ * scroll (el de la página).
  * ======================================================================= */
 @layer components {
-  .wl-new-study-page {
-    min-height: 100%;
-    padding: var(--sp-6) clamp(var(--sp-4), 3vw, var(--sp-8)) 0;
-  }
+  /* Escala de texto de esta pantalla: campos y texto principal a 14 px, ayudas a 13 px. Se
+     redefine el token solo dentro de la vista, así que no cambia nada fuera de ella. */
+  .wl-new-study { --fs-small: 14px; --fs-micro: 13px; color-scheme: light; }
+  :root[data-theme="clinical"] .wl-new-study { color-scheme: dark; }
+
+  /* Una única tipografía, también en controles nativos y en el diálogo. */
+  .wl-new-study,
+  .wl-new-study :is(input, select, textarea, button, summary, dialog) { font-family: var(--font-sans); }
+
+  .wl-new-study-page { min-height: 100%; padding: var(--sp-6) clamp(var(--sp-4), 3vw, var(--sp-8)) 0; }
 
   .wl-new-study {
     display: flex;
@@ -1201,405 +1203,235 @@
     min-height: calc(100vh - 56px);
     margin: 0 auto;
     color: var(--text);
+    font-size: var(--fs-small);
   }
 
-  .ns-head { display: grid; gap: var(--sp-1); padding-bottom: var(--sp-4); }
-  .ns-head h1 { margin: 0; font-size: var(--fs-h2, 18px); font-weight: var(--fw-semibold); }
+  /* ---- encabezado ---- */
+  .ns-head { display: grid; gap: var(--sp-1); }
+  .ns-head h1 { margin: 0; font-size: 22px; font-weight: var(--fw-semibold); line-height: 1.25; }
   .ns-head h1:focus { outline: none; }
   .ns-head h1:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 4px; }
   .ns-head-desc { margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
-
-  .ns-back {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-1);
-    justify-self: start;
-    min-height: 28px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--text-muted);
-    font: inherit;
-    font-size: var(--fs-small);
-    cursor: pointer;
-  }
+  .ns-back { display: inline-flex; align-items: center; gap: var(--sp-1); justify-self: start; min-height: 28px; padding: 0; border: 0; background: transparent; color: var(--text-muted); font-size: var(--fs-small); cursor: pointer; }
   .ns-back:hover:not(:disabled) { color: var(--text); }
   .ns-back:disabled { cursor: not-allowed; opacity: .5; }
   .ns-back:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
 
-  .ns-confirm {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--sp-3);
-    margin-top: var(--sp-2);
-    padding: var(--sp-3);
-    border: 1px solid var(--warning);
-    border-radius: var(--radius-card);
-    background: color-mix(in srgb, var(--warning) 12%, var(--surface));
-    font-size: var(--fs-small);
-  }
+  .ns-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--warning); border-radius: var(--radius-card); background: color-mix(in srgb, var(--warning) 12%, var(--surface)); }
   .ns-confirm p { margin: 0; }
   .ns-confirm-actions { display: flex; gap: var(--sp-2); }
 
-  .ns-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(320px, 34%, 400px);
-    gap: var(--sp-6);
-    align-items: start;
-    flex: 1;
-    padding-bottom: var(--sp-6);
-  }
-  .ns-main, .ns-side { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+  /* ---- navegación de pasos ---- */
+  .ns-stepper ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: var(--sp-5, 20px) 0 var(--sp-6); padding: 0; list-style: none; border-bottom: 1px solid var(--border); }
+  .ns-stepper button { display: flex; align-items: center; gap: var(--sp-3); width: 100%; margin-bottom: -1px; padding: var(--sp-3) var(--sp-3) var(--sp-3) 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
+  .ns-stepper button:disabled { cursor: not-allowed; opacity: .6; }
+  .ns-stepper button:hover:not(:disabled) { color: var(--text); }
+  .ns-stepper button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 4px; }
+  .ns-stepper li.is-current button { border-bottom-color: var(--primary); color: var(--text); }
+  .ns-step-index { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 50%; font-size: var(--fs-micro); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+  .ns-stepper li.is-current .ns-step-index { border-color: var(--primary); color: var(--primary); }
+  .ns-stepper li.is-complete .ns-step-index { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 72%, #0b1220); color: #fff; }
+  .ns-step-text { display: flex; flex-direction: column; min-width: 0; }
+  .ns-step-label { font-size: var(--fs-small); font-weight: var(--fw-semibold); }
+  .ns-step-state { font-size: var(--fs-micro); color: var(--text-muted); }
 
-  .ns-card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-3);
-    padding: var(--sp-4);
+  /* ---- cuerpo: paso activo + resumen ---- */
+  .ns-body { display: grid; grid-template-columns: minmax(0, 1fr) 264px; grid-template-areas: "main summary"; gap: var(--sp-8); align-items: start; flex: 1; padding-bottom: var(--sp-6); }
+  .ns-main { grid-area: main; display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; padding: var(--sp-6); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+  .ns-summary { grid-area: summary; position: sticky; top: var(--sp-4); padding-left: var(--sp-6); border-left: 1px solid var(--border); }
+  .ns-summary h2 { margin: 0 0 var(--sp-3); color: var(--text-muted); font-size: var(--fs-micro); font-weight: var(--fw-semibold); letter-spacing: .06em; text-transform: uppercase; }
+  .ns-summary dl { display: grid; gap: var(--sp-3); margin: 0; }
+  .ns-summary dt { color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-summary dd { margin: 2px 0 0; color: var(--text); font-size: var(--fs-small); overflow-wrap: anywhere; }
+  .ns-summary-sub { display: block; color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-summary dd.is-none, .ns-summary dd.is-uploading { color: var(--text-muted); }
+  .ns-summary dd.is-error { color: var(--danger); }
+  .ns-summary dd.is-invalidated { color: var(--text); font-weight: var(--fw-semibold); }
+
+  .ns-step { display: flex; flex-direction: column; gap: var(--sp-6); }
+  .ns-step > h2 { margin: 0; font-size: 18px; font-weight: var(--fw-semibold); }
+  .ns-step > h2:focus { outline: none; }
+  .ns-step > h2:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 4px; }
+  .ns-step-lead { margin: calc(-1 * var(--sp-3)) 0 0; color: var(--text-muted); }
+  .ns-block { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .ns-block + .ns-block { padding-top: var(--sp-6); border-top: 1px solid var(--border-subtle); }
+  .ns-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+  .ns-block-head h3 { margin: 0; font-size: var(--fs-small); font-weight: var(--fw-semibold); }
+  .ns-block-head span { color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-req, .ns-block-head b { color: var(--danger); font-weight: var(--fw-semibold); }
+
+  /* Las listas de datos de la vista no heredan el estilo global de <dt> (mayúsculas y negrita). */
+  .wl-new-study dt { font-weight: 400; text-transform: none; letter-spacing: normal; }
+  .ns-muted { margin: 0; color: var(--text-muted); font-size: var(--fs-micro); line-height: 1.45; }
+  .ns-help-text { padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--border); background: var(--surface-subtle); }
+  .ns-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .ns-notice { margin: 0; padding: var(--sp-2) var(--sp-3); border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent); border-radius: var(--radius-input); background: color-mix(in srgb, var(--warning) 12%, transparent); }
+  .ns-note { margin: 0; color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-warning { margin: 0; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--warning); border-radius: var(--radius-input); background: color-mix(in srgb, var(--warning) 12%, transparent); }
+  .ns-blocker { margin: 0; padding: var(--sp-2) var(--sp-3); border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent); border-radius: var(--radius-input); background: color-mix(in srgb, var(--warning) 12%, transparent); }
+
+  /* ---- campos: una sola receta ---- */
+  .wl-new-study .wl-field, .ns-dialog .wl-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 0; }
+  .wl-new-study .wl-field > span, .ns-dialog .wl-field > span { color: var(--text); font-size: var(--fs-small); font-weight: var(--fw-medium, 500); }
+  .wl-new-study .wl-field > span i, .ns-dialog .wl-field > span i { color: var(--text-muted); font-style: normal; font-weight: 400; }
+  .wl-new-study .wl-field > em, .ns-dialog .wl-field > em { color: var(--text-muted); font-size: var(--fs-micro); font-style: normal; opacity: 1; }
+  .wl-new-study .wl-field-error, .ns-dialog .wl-field-error { color: var(--danger); font-size: var(--fs-micro); font-style: normal; }
+  .wl-new-study .wl-field :is(input, select, textarea), .ns-dialog .wl-field :is(input, select, textarea) {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    height: 40px;
+    padding: 0 var(--sp-3);
     border: 1px solid var(--border);
-    border-radius: var(--radius-card);
+    border-radius: var(--radius-input);
     background: var(--surface);
-  }
-  .ns-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
-  .ns-card-head h2 { margin: 0; font-size: var(--fs-body); font-weight: var(--fw-semibold); }
-  .ns-card-head span { color: var(--text-muted); font-size: var(--fs-micro); }
-  .ns-card-head span b, .ns-req { color: var(--danger); font-weight: var(--fw-semibold); }
-
-  /* Campos: una receta única de etiqueta, altura y tipografía. */
-  .wl-new-study .wl-field { gap: 6px; }
-  .wl-new-study .wl-field > span { color: var(--text); font-size: var(--fs-small); font-weight: var(--fw-medium, 500); }
-  .wl-new-study .wl-field > span i { color: var(--text-muted); font-style: normal; font-weight: 400; }
-  .wl-new-study .wl-field > em { color: var(--text-muted); opacity: 1; }
-  .wl-new-study .wl-field input,
-  .wl-new-study .wl-field select {
-    height: 36px;
+    color: var(--text);
+    font-family: inherit;
     font-size: var(--fs-small);
+    line-height: 1.4;
   }
-  .wl-new-study .wl-field input:disabled,
-  .wl-new-study .wl-field select:disabled { opacity: .6; cursor: not-allowed; }
-  .wl-new-study .wl-field input:focus-visible,
-  .wl-new-study .wl-field select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .wl-new-study .wl-field textarea, .ns-dialog .wl-field textarea { height: auto; min-height: 104px; padding: var(--sp-2) var(--sp-3); resize: vertical; }
+  .wl-new-study .wl-field :is(input, select, textarea):disabled { opacity: .6; cursor: not-allowed; }
+  .wl-new-study .wl-field :is(input, select, textarea):focus-visible, .ns-dialog .wl-field :is(input, select, textarea):focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .wl-new-study .wl-field ::placeholder, .ns-dialog .wl-field ::placeholder { color: var(--text-muted); opacity: .8; }
+  .ns-field-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: var(--sp-4); align-items: start; }
+  .wl-new-study :is(input, select, textarea, button, summary) { scroll-margin-bottom: 104px; }
 
-  /* Carga: el ZIP es la acción principal. El input real queda en el DOM (teclado,
-     foco, lector de pantalla); la etiqueta es lo que se ve como botón. */
-  .wl-new-study .wl-upload { padding: var(--sp-3); }
-  .ns-zip { border-style: dashed; }
-  .ns-file-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
-  .ns-file-name { min-width: 0; color: var(--text-muted); font-size: var(--fs-small); overflow-wrap: anywhere; }
-
-  .ns-file-button {
-    position: relative;
+  /* ---- botones ---- */
+  .ns-btn, .ns-file-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 36px;
-    padding: 0 var(--sp-4);
-    border-radius: var(--radius-btn);
-    background: color-mix(in srgb, var(--primary) 72%, #0b1220);
-    color: #fff;
-    font-size: var(--fs-small);
-    font-weight: var(--fw-semibold);
-    cursor: pointer;
-  }
-  .ns-file-button:hover:not(.is-disabled) { background: color-mix(in srgb, var(--primary) 82%, #0b1220); }
-  .ns-file-button.is-disabled { background: var(--surface-subtle); color: var(--text-muted); border: 1px solid var(--border); cursor: not-allowed; }
-  .ns-file-button:focus-within { outline: 2px solid var(--primary); outline-offset: 3px; }
-  .ns-file-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
-
-  .ns-blocker {
-    margin: 0;
-    padding: var(--sp-2) var(--sp-3);
-    border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent);
-    border-radius: var(--radius-input);
-    background: color-mix(in srgb, var(--warning) 12%, transparent);
-    color: var(--text);
-    font-size: var(--fs-small);
-  }
-
-  .ns-disclosure {
-    display: flex;
-    align-items: center;
     gap: var(--sp-2);
-    width: 100%;
-    min-height: 36px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--text);
-    font: inherit;
-    font-size: var(--fs-small);
-    font-weight: var(--fw-semibold);
-    cursor: pointer;
-    text-align: left;
-  }
-  .ns-disclosure:hover { color: var(--primary); }
-  .ns-disclosure:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
-
-  .ns-source { margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
-
-  /* Texto de ayuda de las cargas y mensajes: legibles, no 10-11 px apagados. */
-  .wl-new-study .wl-upload-head span,
-  .wl-new-study .wl-upload-state,
-  .wl-new-study .wl-drawer-error,
-  .wl-new-study .wl-drawer-message,
-  .wl-new-study .wl-drawer-warning { font-size: var(--fs-micro); }
-
-  /* Paciente: columna secundaria, compacta. */
-  .ns-side .wl-patient-selector,
-  .ns-side .wl-patient-selected { background: var(--surface); }
-  .ns-side .wl-patient-heading { flex-direction: column; align-items: flex-start; gap: var(--sp-1); }
-  .ns-side .wl-patient-modes { grid-template-columns: 1fr; }
-  .ns-side .wl-patient-results { max-height: 220px; }
-  .ns-side .wl-patient-results button {
-    height: auto;
-    min-height: 36px;
-    padding: var(--sp-2);
-    border-color: var(--border);
-    font-size: var(--fs-small);
-    line-height: 1.35;
-    white-space: normal;
-  }
-  .ns-side .wl-patient-results button:hover { border-color: var(--primary); }
-  .ns-side .wl-patient-link { color: var(--primary); text-decoration: underline; }
-
-  /* Pie: pegado al borde inferior mientras se scrollea, dentro del flujo —no
-     superpuesto—, así que no cubre campos ni mensajes. */
-  .ns-foot {
-    position: sticky;
-    bottom: 0;
-    z-index: 5;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--sp-4);
-    margin: 0 calc(-1 * clamp(var(--sp-4), 3vw, var(--sp-8)));
-    padding: var(--sp-3) clamp(var(--sp-4), 3vw, var(--sp-8));
-    border-top: 1px solid var(--border);
+    height: 40px;
+    padding: 0 var(--sp-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-btn);
     background: var(--surface);
-  }
-  .ns-foot-hint { margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
-  .ns-foot-actions { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; }
-  .wl-new-study .wl-drawer-cancel,
-  .wl-new-study .wl-drawer-run { height: 36px; font-size: var(--fs-small); }
-  .wl-new-study .wl-drawer-run:not(:disabled) { background: color-mix(in srgb, var(--primary) 72%, #0b1220); border-color: transparent; }
-
-  @media (max-width: 900px) {
-    .ns-layout { grid-template-columns: 1fr; gap: var(--sp-4); }
-    .ns-foot { flex-direction: column; align-items: stretch; margin: 0 calc(-1 * var(--sp-4)); padding: var(--sp-3) var(--sp-4); }
-    .ns-foot-actions { justify-content: flex-end; margin-left: 0; }
-  }
-}
-
-/* ==========================================================================
- * Nuevo estudio — paciente, edad y contexto clínico (columna secundaria).
- * ======================================================================= */
-@layer components {
-  .ns-muted { margin: 0; color: var(--text-muted); font-size: var(--fs-small); line-height: 1.45; }
-  .ns-two-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: var(--sp-3); align-items: start; }
-  .ns-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-  .ns-field-label { color: var(--text); font-size: var(--fs-small); font-weight: var(--fw-medium, 500); }
-
-  .ns-link-button {
-    align-self: flex-start;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--primary);
-    font: inherit;
+    color: var(--text);
+    font-family: inherit;
     font-size: var(--fs-small);
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    font-weight: var(--fw-medium, 500);
+    white-space: nowrap;
     cursor: pointer;
   }
+  .ns-btn:hover:not(:disabled), .ns-file-button:hover:not(.is-disabled) { background: var(--surface-subtle); }
+  .ns-btn:disabled, .ns-file-button.is-disabled { opacity: .5; cursor: not-allowed; }
+  .ns-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .ns-btn.is-primary, .ns-file-button.is-primary { border-color: transparent; background: color-mix(in srgb, var(--primary) 72%, #0b1220); color: #fff; font-weight: var(--fw-semibold); }
+  .ns-btn.is-primary:hover:not(:disabled), .ns-file-button.is-primary:hover:not(.is-disabled) { background: color-mix(in srgb, var(--primary) 82%, #0b1220); }
+  .ns-btn.is-quiet { border-color: transparent; background: transparent; color: var(--text-muted); }
+  .ns-btn.is-quiet:hover:not(:disabled) { color: var(--text); background: var(--surface-subtle); }
+  .ns-link-button { align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--primary); font-family: inherit; font-size: var(--fs-small); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
   .ns-link-button:disabled { color: var(--text-muted); cursor: not-allowed; text-decoration: none; }
   .ns-link-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
-  .ns-skip { margin-top: var(--sp-1); }
 
-  .ns-primary-small {
-    align-self: flex-start;
-    min-height: 36px;
-    padding: 0 var(--sp-4);
-    border: 0;
-    border-radius: var(--radius-btn);
-    background: color-mix(in srgb, var(--primary) 72%, #0b1220);
-    color: #fff;
-    font: inherit;
-    font-size: var(--fs-small);
-    font-weight: var(--fw-semibold);
-    cursor: pointer;
-  }
-  .ns-primary-small:disabled { opacity: .5; cursor: not-allowed; }
-  .ns-primary-small:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  /* ---- paciente ---- */
+  .ns-patient-search { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .ns-search-state p { margin: 0; }
+  .ns-results { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-input); }
+  .ns-results li + li { border-top: 1px solid var(--border-subtle); }
+  .ns-results button { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); width: 100%; min-height: 40px; padding: var(--sp-2) var(--sp-3); border: 0; background: transparent; color: var(--text); font-family: inherit; font-size: var(--fs-small); text-align: left; cursor: pointer; }
+  .ns-results button:hover:not(:disabled) { background: var(--surface-subtle); }
+  .ns-results button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+  .ns-results button span { color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-patient-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); }
+  .ns-patient-selected { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2) var(--sp-4); align-items: start; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-input); background: var(--surface-subtle); }
+  .ns-patient-selected .ns-note { grid-column: 1 / -1; }
+  .ns-patient-none { margin: 0; }
+  .ns-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); margin: 0; }
+  .ns-facts dt { color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-facts dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 
-  /* Selector de modo (buscar / crear) */
-  .ns-segmented { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: var(--sp-2); }
-  .ns-segmented label {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-    min-height: 36px;
-    padding: 0 var(--sp-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-input);
-    background: var(--surface);
-    color: var(--text);
-    font-size: var(--fs-small);
-    cursor: pointer;
-  }
-  .ns-segmented label.is-active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); }
-  .ns-segmented label:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+  /* ---- diálogo de crear paciente ---- */
+  .ns-dialog { width: min(480px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); color: var(--text); font-family: var(--font-sans); font-size: var(--fs-small, 14px); box-shadow: 0 16px 48px rgb(0 0 0 / .28); }
+  .ns-dialog::backdrop { background: rgb(15 23 42 / .5); }
+  .ns-dialog-form { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-6); }
+  .ns-dialog-head h2 { margin: 0; font-size: 18px; font-weight: var(--fw-semibold); }
+  .ns-dialog-head p { margin: var(--sp-1) 0 0; color: var(--text-muted); font-size: 13px; }
+  .ns-dialog .ns-muted { font-size: 13px; }
+  .ns-dialog .wl-drawer-error { margin: 0; color: var(--danger); font-size: 13px; }
+  .ns-dialog-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); padding-top: var(--sp-2); }
 
-  .ns-patient-search, .ns-patient-create { display: flex; flex-direction: column; gap: var(--sp-3); }
-  .ns-patient-results-state p { margin: 0; }
-  .ns-patient-results { display: flex; flex-direction: column; gap: var(--sp-1); max-height: 240px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
-  .ns-patient-results button {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    width: 100%;
-    padding: var(--sp-2) var(--sp-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-input);
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    font-size: var(--fs-small);
-    text-align: left;
-    cursor: pointer;
-  }
-  .ns-patient-results button span { color: var(--text-muted); font-size: var(--fs-micro); }
-  .ns-patient-results button:hover:not(:disabled) { border-color: var(--primary); }
-  .ns-patient-results button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  /* ---- imágenes ---- */
+  .ns-zip { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-6); border: 1px dashed var(--border); border-radius: var(--radius-card); background: var(--surface-subtle); }
+  .ns-zip-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); }
+  .ns-zip .ns-file-button.is-primary { height: 44px; padding: 0 var(--sp-6); }
+  .ns-file-button { position: relative; }
+  .ns-file-button:focus-within { outline: 2px solid var(--primary); outline-offset: 3px; }
+  .ns-file-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
+  .ns-file-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); min-width: 0; }
+  .ns-file-name { min-width: 0; color: var(--text-muted); overflow-wrap: anywhere; }
+  .ns-file-status .ns-chip ~ .ns-file-name, .ns-zip .ns-file-name { color: var(--text); }
+  .ns-chip { display: inline-flex; align-items: center; gap: var(--sp-1); padding: 2px var(--sp-2); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--fs-micro); font-weight: var(--fw-semibold); }
+  .ns-chip.is-loaded { color: var(--text); }
+  .ns-chip.is-error { border-color: var(--danger); color: var(--danger); }
 
-  /* Resumen del paciente elegido */
-  .ns-facts { display: grid; gap: var(--sp-2); margin: 0; }
-  .ns-facts div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-2); }
-  .ns-facts dt { color: var(--text-muted); font-size: var(--fs-small); }
-  .ns-facts dd { margin: 0; color: var(--text); font-size: var(--fs-small); overflow-wrap: anywhere; }
-
-  /* Edad al estudio */
-  .ns-age { display: flex; flex-direction: column; gap: var(--sp-2); }
-  .ns-age-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
-  .ns-age-value { margin: 0; font-size: var(--fs-body); }
-  .ns-age-value strong { font-size: 20px; font-weight: var(--fw-semibold); }
-  .ns-badge {
-    padding: 2px var(--sp-2);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    color: var(--text);
-    font-size: var(--fs-micro);
-    font-weight: var(--fw-semibold);
-  }
-  .ns-warning {
-    margin: 0;
-    padding: var(--sp-2) var(--sp-3);
-    border: 1px solid var(--warning);
-    border-radius: var(--radius-input);
-    background: color-mix(in srgb, var(--warning) 12%, transparent);
-    color: var(--text);
-    font-size: var(--fs-small);
-  }
-
-  /* Detalles clínicos plegables */
-  .wl-new-study .wl-field textarea {
-    width: 100%;
-    box-sizing: border-box;
-    min-height: 76px;
-    padding: var(--sp-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-input);
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    font-size: var(--fs-small);
-    resize: vertical;
-  }
-  .wl-new-study .wl-field textarea:disabled { opacity: .6; cursor: not-allowed; }
-  .wl-new-study .wl-field textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
-
-  .ns-clinical-details { border: 1px solid var(--border); border-radius: var(--radius-input); }
-  .ns-clinical-details > summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--sp-2);
-    min-height: 40px;
-    padding: 0 var(--sp-3);
-    color: var(--text);
-    font-size: var(--fs-small);
-    font-weight: var(--fw-semibold);
-    cursor: pointer;
-  }
-  .ns-clinical-details > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-input); }
-  .ns-clinical-details > summary em { margin-left: auto; color: var(--text-muted); font-size: var(--fs-micro); font-style: normal; font-weight: 400; }
-  .ns-clinical-details > summary em.is-filled { color: var(--success); font-weight: var(--fw-semibold); }
-  .ns-clinical-fields { display: flex; flex-direction: column; gap: var(--sp-3); padding: 0 var(--sp-3) var(--sp-3); }
-
-  @media (max-width: 900px) {
-    .ns-two-fields { grid-template-columns: 1fr; }
-  }
-}
-
-/* ==========================================================================
- * Nuevo estudio — ajuste de presentación (legibilidad, columnas, resultado del ZIP).
- * Todo cuelga de .wl-new-study o lleva prefijo ns-.
- * ======================================================================= */
-@layer components {
-  /* Escala de texto de esta pantalla: campos y texto principal a 14 px, ayudas a 13 px. Se
-     redefine el token solo dentro de la vista, así que no cambia nada fuera de ella. */
-  .wl-new-study { --fs-small: 14px; --fs-micro: 13px; }
-
-  /* Nada se sale de su tarjeta: los hijos de una grilla o columna pueden encogerse. */
-  .wl-new-study .wl-field,
-  .ns-card,
-  .ns-two-fields > *,
-  .wl-new-study .wl-field-row > * { min-width: 0; }
-  .wl-new-study .wl-field input,
-  .wl-new-study .wl-field select,
-  .wl-new-study .wl-field textarea { width: 100%; min-width: 0; box-sizing: border-box; }
-  /* Pares de campos: dos columnas solo si cada una conserva al menos 150 px; si no, se apilan. */
-  .wl-new-study .wl-field-row { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
-
-  /* Un campo enfocado por teclado no queda tapado por el pie de acciones. */
-  .wl-new-study :is(input, select, textarea, button, summary) { scroll-margin-bottom: 104px; }
-
-  .ns-muted { font-size: var(--fs-micro); }
-  .ns-help-text { padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--border); background: var(--surface-subtle); }
-
-  /* Resultado del ZIP: archivo, cantidad de series, qué se usa de cada una, limitaciones. */
   .ns-study-result { display: flex; flex-direction: column; gap: var(--sp-3); }
-  .ns-series-count { margin: 0; color: var(--text); font-size: var(--fs-small); font-weight: var(--fw-semibold); }
-  .ns-series { display: flex; flex-direction: column; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
-  .ns-series li { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-input); background: var(--surface); }
-  .ns-series li.is-used { border-left: 3px solid var(--primary); }
+  .ns-series-count { margin: 0; font-weight: var(--fw-semibold); }
+  .ns-series { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-input); }
+  .ns-series li { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-3) var(--sp-4); }
+  .ns-series li + li { border-top: 1px solid var(--border-subtle); }
   .ns-series li.is-unused { background: var(--surface-subtle); }
-  .ns-series-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-small); }
-  .ns-series-main strong { color: var(--text); }
+  .ns-series-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); }
   .ns-series-main span { color: var(--text-muted); }
   .ns-series-use { margin: 0; color: var(--text-muted); font-size: var(--fs-micro); }
   .ns-series li.is-used .ns-series-use { color: var(--text); }
-
-  .ns-limitations {
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-1);
-    padding: var(--sp-2) var(--sp-3);
-    border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent);
-    border-radius: var(--radius-input);
-    background: color-mix(in srgb, var(--warning) 12%, transparent);
-    color: var(--text);
-    font-size: var(--fs-small);
-  }
+  .ns-limitations { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-3) var(--sp-4); border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent); border-radius: var(--radius-input); background: color-mix(in srgb, var(--warning) 12%, transparent); }
   .ns-limitations ul { margin: 0; padding-left: var(--sp-4); }
   .ns-limitations li + li { margin-top: var(--sp-1); }
-
-  .ns-tech { border: 1px solid var(--border); border-radius: var(--radius-input); }
-  .ns-tech > summary { min-height: 36px; display: flex; align-items: center; padding: 0 var(--sp-3); color: var(--text-muted); font-size: var(--fs-small); cursor: pointer; }
-  .ns-tech > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-input); }
-  .ns-tech-body { padding: 0 var(--sp-3) var(--sp-3); color: var(--text-muted); font-size: var(--fs-micro); overflow-wrap: anywhere; }
+  .ns-tech > summary { display: inline-flex; align-items: center; min-height: 32px; color: var(--text-muted); cursor: pointer; }
+  .ns-tech > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+  .ns-tech-body { padding: var(--sp-2) 0 0; color: var(--text-muted); font-size: var(--fs-micro); overflow-wrap: anywhere; }
   .ns-tech-body p { margin: 0 0 var(--sp-1); }
   .ns-tech-body ol, .ns-tech-body ul { margin: 0 0 var(--sp-2); padding-left: var(--sp-4); }
-  .ns-tech-body li { font-family: var(--font-mono); }
+
+  .ns-alt { border-top: 1px solid var(--border-subtle); padding-top: var(--sp-4); }
+  .ns-disclosure { display: flex; align-items: center; gap: var(--sp-2); min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--text); font-family: inherit; font-size: var(--fs-small); font-weight: var(--fw-semibold); cursor: pointer; text-align: left; }
+  .ns-disclosure:hover { color: var(--primary); }
+  .ns-disclosure:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+  .ns-alt-body { display: flex; flex-direction: column; gap: var(--sp-4); padding-top: var(--sp-3); }
+  .ns-plane { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .ns-plane-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+  .ns-plane-head span { color: var(--text-muted); font-size: var(--fs-micro); }
+  .ns-source { margin: 0; color: var(--text-muted); }
+
+  /* ---- contexto y revisión ---- */
+  .ns-age-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); }
+  .ns-age-value { margin: 0; }
+  .ns-age-value strong { font-size: 24px; font-weight: var(--fw-semibold); }
+  .ns-age-field { width: 140px; }
+  .ns-badge { padding: 2px var(--sp-2); border: 1px solid var(--border); border-radius: 999px; color: var(--text); font-size: var(--fs-micro); font-weight: var(--fw-semibold); }
+  .ns-clinical-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+  .ns-clinical-grid .is-wide { grid-column: 1 / -1; }
+  .ns-review { display: flex; flex-direction: column; margin: 0; }
+  .ns-review > div { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: var(--sp-3); align-items: baseline; padding: var(--sp-3) 0; }
+  .ns-review > div + div { border-top: 1px solid var(--border-subtle); }
+  .ns-review dt { color: var(--text-muted); font-size: var(--fs-small); }
+  .ns-review dd { margin: 0; overflow-wrap: anywhere; }
+
+  /* ---- pie de acciones ---- */
+  .ns-foot { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: var(--sp-4); margin: 0 calc(-1 * clamp(var(--sp-4), 3vw, var(--sp-8))); padding: var(--sp-3) clamp(var(--sp-4), 3vw, var(--sp-8)); border-top: 1px solid var(--border); background: var(--surface); }
+  .ns-foot-hint { flex: 1; margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
+  .ns-foot-actions { display: flex; align-items: center; gap: var(--sp-2); }
+
+  /* ---- ancho reducido ---- */
+  @media (max-width: 900px) {
+    .ns-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "summary" "main"; gap: var(--sp-4); }
+    .ns-summary { position: static; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-left: 1px solid var(--border); border-radius: var(--radius-card); }
+    .ns-summary h2 { margin-bottom: var(--sp-2); }
+    .ns-summary dl { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-2) var(--sp-4); }
+    .ns-main { padding: var(--sp-4); }
+    .ns-review > div { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
+    .ns-clinical-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 700px) {
+    .ns-step-label { display: none; }
+    .ns-stepper li.is-current .ns-step-label { display: block; }
+    .ns-step-state { display: none; }
+    .ns-stepper li.is-current .ns-step-state { display: block; }
+    .ns-foot { flex-wrap: wrap; margin: 0 calc(-1 * var(--sp-4)); padding: var(--sp-3) var(--sp-4); }
+    .ns-foot-hint { order: -1; flex-basis: 100%; }
+    .ns-foot-actions { margin-left: auto; }
+  }
 }

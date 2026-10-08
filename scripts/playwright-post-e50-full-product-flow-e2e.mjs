@@ -88,14 +88,16 @@ async function main() {
   console.log("ok 3 - la vista Nuevo estudio abre");
 
   // 4. Buscar por codigo y seleccionar el paciente existente (PAT-87-A, con 2 estudios previos).
-  await page.getByLabel("Buscar por código o nombre").fill("PAT-87");
+  await page.getByLabel("Buscar paciente por código o nombre").fill("PAT-87");
   await page.getByRole("list", { name: "Resultados de pacientes" }).getByRole("button").first().click();
   await page.locator('[aria-label="Paciente seleccionado"]').waitFor({ timeout: 10000 });
   assertTruthy((await page.locator('[aria-label="Paciente seleccionado"]').innerText()).includes("PAT-87-A"), "el resumen no muestra el paciente PAT-87-A");
   console.log("ok 4 - buscar por código y seleccionar paciente existente");
 
-  // 5. Cargar fixture sintético mínimo (caseId + archivo por plano sagital).
+  // 5. Cargar fixture sintético mínimo (caseId + archivo por plano sagital): pasos 1 y 2.
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Imágenes", level: 2 }).waitFor({ timeout: 10000 });
   await page.locator("button", { hasText: "Cargar archivos por plano" }).click();
   await page.locator('input[type="file"]').nth(1).setInputFiles({
     name: "synthetic-sagittal.dcm",
@@ -103,7 +105,9 @@ async function main() {
     buffer: Buffer.from("synthetic-test-fixture-not-real-dicom-no-patient-data"),
   });
   await page.waitForSelector("text=synthetic-sagittal.dcm cargado", { timeout: 10000 });
-  console.log("ok 5 - fixture sintético cargado (input real vía mock-ai /inputs)");
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Contexto y revisión", level: 2 }).waitFor({ timeout: 10000 });
+  console.log("ok 5 - fixture sintético cargado (input real vía mock-ai /inputs) y paso de revisión alcanzado");
 
   // 6. Submit.
   await page.getByRole("button", { name: "Analizar estudio", exact: true }).click();

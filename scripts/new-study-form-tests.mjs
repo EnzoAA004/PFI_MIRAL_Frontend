@@ -20,6 +20,7 @@ const sandbox = { exports: {}, console };
 vm.runInNewContext(js, sandbox);
 const {
   analyzeBlockerMessage, caseIdError, createRequestGate, hasUnsavedWork, uploadBlockerMessage,
+  computeSteps, continueBlockerMessage, nextStep, previousStep, describeImagesStatus,
 } = sandbox.exports;
 
 test("la respuesta tardía de un archivo A no pisa al B elegido después", () => {
@@ -95,4 +96,89 @@ test("solo se pide confirmar al salir cuando hay algo que se perdería", () => {
   assert.equal(hasUnsavedWork({ ...clean, contextFilled: true }), true, "edad declarada o texto clinico cuentan");
   assert.equal(hasUnsavedWork({ ...clean, hasLoadedFiles: true }), true);
   assert.equal(hasUnsavedWork({ ...clean, caseId: "CASE-1", hasLoadedFiles: true, analysisPersisted: true }), false, "con la corrida guardada no se pierde nada");
+});
+
+
+/* ---- pasos: Paciente y estudio -> Imagenes -> Contexto y revision ---- */
+
+const stepsOf = (overrides) => computeSteps({ active: "study", studyReady: false, imagesReady: false, imagesInvalidated: false, uploading: false, ...overrides });
+const byId = (steps, id) => steps.find((step) => step.id === id);
+
+test("al empezar solo el primer paso esta habilitado: es el actual y los otros estan pendientes", () => {
+  const steps = stepsOf({});
+  assert.deepEqual([...steps.map((step) => step.state)], ["current", "pending", "pending"]);
+  assert.deepEqual([...steps.map((step) => step.reachable)], [true, false, false]);
+  assert.deepEqual([...steps.map((step) => step.label)], ["Paciente y estudio", "Imágenes", "Contexto y revisión"]);
+});
+
+test("con un ID valido se puede ir a Imagenes, pero no a Contexto hasta que haya imagenes", () => {
+  const steps = stepsOf({ studyReady: true });
+  assert.equal(byId(steps, "images").reachable, true);
+  assert.equal(byId(steps, "context").reachable, false);
+  assert.equal(byId(steps, "study").state, "current", "es el paso actual aunque ya este completo");
+});
+
+test("con ID e imagenes listas todo es alcanzable y los pasos previos figuran completados", () => {
+  const steps = stepsOf({ active: "context", studyReady: true, imagesReady: true });
+  assert.deepEqual([...steps.map((step) => step.state)], ["complete", "complete", "current"]);
+  assert.deepEqual([...steps.map((step) => step.reachable)], [true, true, true]);
+});
+
+test("volver a un paso anterior no pierde lo completado de los posteriores", () => {
+  const steps = stepsOf({ active: "study", studyReady: true, imagesReady: true });
+  assert.equal(byId(steps, "images").state, "complete");
+  assert.equal(byId(steps, "context").reachable, true);
+});
+
+test("cambiar el ID despues de cargar imagenes marca Imagenes como pendiente y dice que hay que recargarlas", () => {
+  const steps = stepsOf({ active: "study", studyReady: true, imagesReady: false, imagesInvalidated: true });
+  const images = byId(steps, "images");
+  assert.equal(images.state, "pending");
+  assert.match(images.note, /volver a cargarlas/);
+  assert.equal(byId(steps, "context").reachable, false, "Contexto vuelve a quedar bloqueado");
+});
+
+test("mientras se cargan imagenes el paso lo indica y Contexto no se habilita", () => {
+  const steps = stepsOf({ active: "images", studyReady: true, imagesReady: false, uploading: true });
+  assert.equal(byId(steps, "images").note, "Cargando…");
+  assert.equal(byId(steps, "context").reachable, false);
+});
+
+test("Continuar desde Paciente y estudio exige solo un ID valido; el paciente es opcional", () => {
+  const base = { running: false, normalizedCaseId: "", caseIdIssue: "", uploading: false, zipLoaded: false, sagittalInputId: undefined };
+  assert.equal(continueBlockerMessage("study", base), "Falta el ID del estudio.");
+  assert.equal(continueBlockerMessage("study", { ...base, normalizedCaseId: "x#", caseIdIssue: "no" }), "El ID del estudio no es válido.");
+  assert.equal(continueBlockerMessage("study", { ...base, normalizedCaseId: "CASE-1" }), "");
+});
+
+test("Continuar desde Imagenes exige una carga terminada con serie sagital", () => {
+  const base = { running: false, normalizedCaseId: "CASE-1", caseIdIssue: "", uploading: false, zipLoaded: false, sagittalInputId: undefined };
+  assert.match(continueBlockerMessage("images", base), /Falta cargar el ZIP/);
+  assert.match(continueBlockerMessage("images", { ...base, uploading: true }), /Esperá a que termine la carga/);
+  assert.match(continueBlockerMessage("images", { ...base, zipLoaded: true }), /no incluye una serie sagital/);
+  assert.equal(continueBlockerMessage("images", { ...base, sagittalInputId: "in-1" }), "");
+});
+
+test("el ultimo paso no pide textos clinicos: el contexto es opcional", () => {
+  assert.equal(continueBlockerMessage("context", { running: false, normalizedCaseId: "CASE-1", caseIdIssue: "", uploading: false, zipLoaded: true, sagittalInputId: "in-1" }), "");
+});
+
+test("siguiente y anterior recorren los tres pasos y se detienen en los extremos", () => {
+  assert.equal(nextStep("study"), "images");
+  assert.equal(nextStep("images"), "context");
+  assert.equal(nextStep("context"), null);
+  assert.equal(previousStep("context"), "images");
+  assert.equal(previousStep("images"), "study");
+  assert.equal(previousStep("study"), null);
+});
+
+test("una seleccion local no es una carga completada: solo el servidor la confirma", () => {
+  const base = { uploading: false, zipStatus: "idle", planeErrors: false, sagittalInputId: undefined, seriesCount: undefined, invalidated: false };
+  assert.equal(describeImagesStatus(base).state, "none");
+  assert.equal(describeImagesStatus({ ...base, uploading: true, zipStatus: "uploading" }).state, "uploading");
+  assert.equal(describeImagesStatus({ ...base, zipStatus: "error" }).state, "error");
+  const loaded = describeImagesStatus({ ...base, zipStatus: "uploaded", sagittalInputId: "in-1", seriesCount: 2 });
+  assert.equal(loaded.state, "loaded");
+  assert.match(loaded.label, /2 series/);
+  assert.equal(describeImagesStatus({ ...base, invalidated: true }).state, "invalidated");
 });

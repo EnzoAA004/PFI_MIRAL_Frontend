@@ -22,15 +22,23 @@ import {
   type ProductFlowPhase,
 } from "./productAnalysisFlow";
 import { PatientSelector } from "./PatientSelector";
-import type { Patient } from "../../patientApi";
-import { ageUnavailableReason, resolveStudyAge } from "../../studyAge";
+import { patientDisplayName, type Patient } from "../../patientApi";
+import { NewStudyStepper } from "./NewStudyStepper";
+import { NewStudySummary } from "./NewStudySummary";
+import { ageUnavailableReason, formatIsoDateDMY, resolveStudyAge } from "../../studyAge";
 import { describeSeriesUse, describeStudyWarning, seriesPlaneLabel, seriesSequenceLabel, type SeriesRole } from "../../studyWarnings";
 import {
   analyzeBlockerMessage,
   caseIdError,
+  computeSteps,
+  continueBlockerMessage,
   createRequestGate,
+  describeImagesStatus,
   hasUnsavedWork,
+  nextStep,
+  previousStep,
   uploadBlockerMessage,
+  type StepId,
 } from "./newStudyForm";
 
 /**
@@ -41,8 +49,10 @@ import {
  * Por eso no atrapa el foco: lleva el foco a su encabezado al abrirse y es la lista quien
  * lo devuelve al control de origen al volver.
  *
- * El flujo es el que describieron los médicos: se carga el estudio, se procesa, y aparece
- * en la lista para leerlo.
+ * Se recorre en tres pasos (Paciente y estudio, Imágenes, Contexto y revisión). Los datos y las
+ * cargas viven en este componente, por encima de los pasos: ir y volver no pierde nada, no
+ * reinicia cargas y nunca dispara un análisis ni crea pacientes. Solo "Analizar estudio", en el
+ * último paso, envía la corrida.
  */
 
 const allowedInputExtensions = [".npy", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".mha", ".mhd", ".dcm", ".zip"];
@@ -134,15 +144,17 @@ function productSeriesLabel(status: ProductAnalysisState["series"]["sagittal_t1"
  * foco y nombre accesible); la etiqueta es lo que se ve como botón, en lugar del input
  * nativo "Seleccionar archivo / Ningún archivo seleccionado".
  */
-function FileButton({ label, accept, disabled, describedBy, onFile }: {
+function FileButton({ label, accept, disabled, describedBy, onFile, primary = false }: {
   label: string;
   accept: string;
   disabled: boolean;
   describedBy?: string;
   onFile: (file?: File) => void;
+  /** Acción dominante del paso: solo mientras todavía no hay nada cargado. */
+  primary?: boolean;
 }) {
   return (
-    <label className={`ns-file-button${disabled ? " is-disabled" : ""}`}>
+    <label className={`ns-file-button${primary ? " is-primary" : ""}${disabled ? " is-disabled" : ""}`}>
       <input
         accept={accept}
         aria-describedby={describedBy}
@@ -155,6 +167,8 @@ function FileButton({ label, accept, disabled, describedBy, onFile }: {
     </label>
   );
 }
+
+const priorityText: Record<StudyMetadataDraft["reviewPriority"], string> = { low: "Baja", medium: "Media", high: "Alta" };
 
 export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const [caseId, setCaseId] = useState("");
@@ -174,10 +188,15 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const [withoutPatient, setWithoutPatient] = useState(false);
   const [ageOverrideOpen, setAgeOverrideOpen] = useState(false);
   const [contextHelpOpen, setContextHelpOpen] = useState(false);
+  const [step, setStep] = useState<StepId>("study");
+  /* Una modificación (el ID) descartó imágenes ya cargadas: hay que volver a cargarlas. */
+  const [imagesInvalidated, setImagesInvalidated] = useState(false);
   const runInFlightRef = useRef(false);
   const progressRef = useRef<HTMLElement | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const keepEditingRef = useRef<HTMLButtonElement | null>(null);
+  const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const firstStepRender = useRef(true);
   /* Cargas en vuelo: ver createRequestGate. */
   const [requestGate] = useState(createRequestGate);
   const interactionLocked = running || analysisStage === "opening";
@@ -192,6 +211,19 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
 
   /* Al salir, ninguna respuesta pendiente puede volver a tocar el estado. */
   useEffect(() => () => requestGate.invalidateAll(), [requestGate]);
+
+  /* Al cambiar de paso el foco va al título del paso y la vista vuelve arriba: es contenido nuevo. */
+  useEffect(() => {
+    if (firstStepRender.current) {
+      firstStepRender.current = false;
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      stepHeadingRef.current?.focus();
+      window.scrollTo({ top: 0 });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [step]);
 
   useEffect(() => {
     if (analysisStage === "idle") return;
@@ -263,9 +295,35 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     sagittalInputId,
     ageIssue: age.issue,
   });
+  const steps = computeSteps({
+    active: step,
+    studyReady: caseIdReady,
+    imagesReady: sagittalReady && !uploading,
+    imagesInvalidated,
+    uploading,
+  });
+  const imagesStatus = describeImagesStatus({
+    uploading,
+    zipStatus: studyUpload.status,
+    planeErrors: uploads.sagittal.status === "error" || uploads.axial.status === "error",
+    sagittalInputId: sagittalReady ? sagittalInputId : undefined,
+    seriesCount: studyUpload.study?.seriesFound.length,
+    invalidated: imagesInvalidated,
+  });
+  /* Qué falta para pasar al paso siguiente (en el último paso, qué falta para analizar). */
+  const stepBlocker = step === "context"
+    ? ""
+    : continueBlockerMessage(step, {
+      running: false,
+      normalizedCaseId,
+      caseIdIssue,
+      uploading,
+      zipLoaded: studyUpload.status === "uploaded",
+      sagittalInputId,
+    });
   const footerHint = interactionLocked
     ? "El análisis está en curso. Podés salir cuando termine."
-    : persistedRun ? "" : analyzeBlocker;
+    : persistedRun ? "" : step === "context" ? analyzeBlocker : stepBlocker;
   const sagittalSource = studyUpload.study?.sagittal ? "el ZIP del estudio" : uploads.sagittal.input ? "el archivo por plano" : null;
   const axialSource = studyUpload.study?.axial ? "el ZIP del estudio" : uploads.axial.input ? "el archivo por plano" : null;
   const unsavedWork = hasUnsavedWork({
@@ -298,6 +356,24 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     onClose();
   }
 
+  /* Cambiar de paso solo mueve la vista: ni analiza, ni crea pacientes, ni toca las cargas. */
+  function goToStep(target: StepId) {
+    if (interactionLocked) return;
+    if (!steps.find((entry) => entry.id === target)?.reachable) return;
+    setStep(target);
+  }
+
+  function goNext() {
+    const target = nextStep(step);
+    if (!target || stepBlocker || interactionLocked) return;
+    setStep(target);
+  }
+
+  function goBack() {
+    const target = previousStep(step);
+    if (target && !interactionLocked) setStep(target);
+  }
+
   function openCompletedStudy(caseIdToOpen: string) {
     setAnalysisStage("opening");
     setMessage("Análisis completado. Abriendo el estudio.");
@@ -325,6 +401,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
       const study = await uploadStudyArchive(file, normalizedCaseId);
       if (!requestGate.isCurrent(token)) return;
       setStudyUpload({ fileName: file.name, status: "uploaded", study });
+      setImagesInvalidated(false);
       setMessage("");
     } catch (error) {
       if (!requestGate.isCurrent(token)) return;
@@ -351,6 +428,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
       const input = await uploadAiInput(file, normalizedCaseId, plane);
       if (!requestGate.isCurrent(token)) return;
       setUploads((current) => ({ ...current, [plane]: { fileName: file.name, status: "uploaded", input } }));
+      setImagesInvalidated(false);
       setMessage("");
     } catch (error) {
       if (!requestGate.isCurrent(token)) return;
@@ -489,114 +567,158 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
             <ArrowLeft aria-hidden size={15} />Volver a estudios
           </button>
           <h1 id="new-study-title" ref={headingRef} tabIndex={-1}>Nuevo estudio</h1>
-          <p className="ns-head-desc">Cargá las imágenes del estudio, completá sus datos y, si corresponde, asociá un paciente y su contexto clínico.</p>
+          <p className="ns-head-desc">Datos del estudio, imágenes y contexto clínico, en tres pasos.</p>
           {confirmingExit && (
             <div className="ns-confirm" role="alert">
               <p><strong>¿Salir sin analizar?</strong> Se van a perder los datos y los archivos cargados en esta pantalla.</p>
               <div className="ns-confirm-actions">
-                <button ref={keepEditingRef} className="wl-drawer-run" onClick={() => setConfirmingExit(false)} type="button">Seguir editando</button>
-                <button className="wl-drawer-cancel" disabled={interactionLocked} onClick={() => { if (!interactionLocked) onClose(); }} type="button">Salir sin guardar</button>
+                <button ref={keepEditingRef} className="ns-btn is-primary" onClick={() => setConfirmingExit(false)} type="button">Seguir editando</button>
+                <button className="ns-btn" disabled={interactionLocked} onClick={() => { if (!interactionLocked) onClose(); }} type="button">Salir sin guardar</button>
               </div>
             </div>
           )}
         </header>
 
-        <div className="ns-layout">
+        <NewStudyStepper locked={interactionLocked} onSelect={goToStep} steps={steps} />
+
+        <div className="ns-body">
+          <NewStudySummary
+            caseId={caseId}
+            images={imagesStatus}
+            patient={selectedPatient}
+            studyDate={metadata.studyDate}
+            withoutPatient={withoutPatient}
+          />
+
           <div className="ns-main">
-            <section aria-labelledby="new-study-data-title" className="ns-card">
-              <div className="ns-card-head">
-                <h2 id="new-study-data-title">Datos del estudio</h2>
-                <span><b aria-hidden="true">*</b> obligatorio</span>
-              </div>
+            {step === "study" && (
+              <section aria-labelledby="ns-step-title" className="ns-step">
+                <h2 id="ns-step-title" ref={stepHeadingRef} tabIndex={-1}>Paciente y estudio</h2>
 
-              <label className="wl-field">
-                <span>ID del estudio <b aria-hidden="true" className="ns-req">*</b></span>
-                <input
-                  aria-required="true"
-                  disabled={interactionLocked}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    const hadLoadedInput = Boolean(studyUpload.fileName || Object.values(uploads).some((uploadState) => uploadState.fileName));
-                    /* Lo que está en vuelo se subió con el ID anterior: su respuesta ya no vale. */
-                    requestGate.invalidateAll();
-                    setCaseId(nextValue);
-                    setUploads(emptyUploads);
-                    setStudyUpload({ status: "idle" });
-                    setPersistedRun(null);
-                    setProductState(null);
-                    setAnalysisStage("idle");
-                    if (hadLoadedInput) setMessage("Cambiaste el ID del estudio. Volvé a cargar las imágenes para asociarlas al nuevo ID.");
-                  }}
-                  placeholder="CASE-XXXX"
-                  value={caseId}
-                />
-                {caseIdIssue
-                  ? <em className="wl-field-error">{caseIdIssue}</em>
-                  : <em>Letras, números, punto, guion, guion bajo o dos puntos.</em>}
-              </label>
-
-              <div className="wl-field-row">
-                <label className="wl-field">
-                  <span>Fecha del estudio <i>(opcional)</i></span>
-                  <input
-                    disabled={interactionLocked}
-                    onChange={(event) => setMetadata((current) => ({ ...current, studyDate: event.target.value }))}
-                    type="date"
-                    value={metadata.studyDate}
+                <div className="ns-block">
+                  <div className="ns-block-head">
+                    <h3>Paciente</h3>
+                    <span>opcional</span>
+                  </div>
+                  <PatientSelector
+                    disabled={interactionLocked || Boolean(persistedRun)}
+                    onSelect={(patient) => {
+                      setSelectedPatient(patient);
+                      setWithoutPatient(false);
+                      setMetadata((current) => ({ ...current, patientId: patient?.id ?? "" }));
+                      setMetadataError("");
+                    }}
+                    onWithoutPatient={setWithoutPatient}
+                    selected={selectedPatient}
+                    withoutPatient={withoutPatient}
                   />
-                </label>
-                <label className="wl-field">
-                  <span>Prioridad</span>
-                  <select
-                    disabled={interactionLocked}
-                    onChange={(event) => setMetadata((current) => ({ ...current, reviewPriority: event.target.value as StudyMetadataDraft["reviewPriority"] }))}
-                    value={metadata.reviewPriority}
-                  >
-                    <option value="low">Baja</option>
-                    <option value="medium">Media</option>
-                    <option value="high">Alta</option>
-                  </select>
-                </label>
-              </div>
-
-              <label className="wl-field">
-                <span>Descripción <i>(opcional)</i></span>
-                <input
-                  disabled={interactionLocked}
-                  maxLength={200}
-                  onChange={(event) => setMetadata((current) => ({ ...current, description: event.target.value }))}
-                  placeholder="RM lumbar sagital T2"
-                  value={metadata.description}
-                />
-              </label>
-
-              {metadataError && <p className="wl-drawer-error">{metadataError}</p>}
-            </section>
-
-            <section aria-labelledby="new-study-images-title" className="ns-card">
-              <div className="ns-card-head">
-                <h2 id="new-study-images-title">Imágenes</h2>
-                <span><b aria-hidden="true">*</b> sagital obligatorio</span>
-              </div>
-
-              <div className="wl-upload ns-zip">
-                <div className="wl-upload-head">
-                  <strong>Estudio completo (.zip)</strong>
-                  <span>las series se separan solas</span>
                 </div>
-                <div className="ns-file-row">
-                  <FileButton
-                    accept=".zip"
-                    describedBy={uploadBlocker ? "ns-upload-blocker" : undefined}
-                    disabled={uploadLocked}
-                    label={studyUpload.fileName ? "Cambiar ZIP" : "Seleccionar ZIP"}
-                    onFile={(file) => { void uploadStudy(file); }}
-                  />
-                  <span className="ns-file-name">{studyUpload.fileName ?? "Ningún archivo seleccionado"}</span>
+
+                <div className="ns-block">
+                  <div className="ns-block-head">
+                    <h3>Datos del estudio</h3>
+                    <span><b aria-hidden="true">*</b> obligatorio</span>
+                  </div>
+
+                  <label className="wl-field">
+                    <span>ID del estudio <b aria-hidden="true" className="ns-req">*</b></span>
+                    <input
+                      aria-required="true"
+                      disabled={interactionLocked}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        const hadLoadedInput = Boolean(studyUpload.fileName || Object.values(uploads).some((uploadState) => uploadState.fileName));
+                        /* Lo que está en vuelo se subió con el ID anterior: su respuesta ya no vale. */
+                        requestGate.invalidateAll();
+                        setCaseId(nextValue);
+                        setUploads(emptyUploads);
+                        setStudyUpload({ status: "idle" });
+                        setPersistedRun(null);
+                        setProductState(null);
+                        setAnalysisStage("idle");
+                        if (hadLoadedInput) {
+                          setImagesInvalidated(true);
+                          setMessage("Cambiaste el ID del estudio. Volvé a cargar las imágenes para asociarlas al nuevo ID.");
+                        }
+                      }}
+                      placeholder="CASE-XXXX"
+                      value={caseId}
+                    />
+                    {caseIdIssue
+                      ? <em className="wl-field-error">{caseIdIssue}</em>
+                      : <em>Letras, números, punto, guion, guion bajo o dos puntos.</em>}
+                  </label>
+
+                  <div className="ns-field-pair">
+                    <label className="wl-field">
+                      <span>Fecha del estudio <i>(opcional)</i></span>
+                      <input
+                        disabled={interactionLocked}
+                        onChange={(event) => setMetadata((current) => ({ ...current, studyDate: event.target.value }))}
+                        type="date"
+                        value={metadata.studyDate}
+                      />
+                    </label>
+                    <label className="wl-field">
+                      <span>Prioridad</span>
+                      <select
+                        disabled={interactionLocked}
+                        onChange={(event) => setMetadata((current) => ({ ...current, reviewPriority: event.target.value as StudyMetadataDraft["reviewPriority"] }))}
+                        value={metadata.reviewPriority}
+                      >
+                        <option value="low">Baja</option>
+                        <option value="medium">Media</option>
+                        <option value="high">Alta</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label className="wl-field">
+                    <span>Descripción <i>(opcional)</i></span>
+                    <input
+                      disabled={interactionLocked}
+                      maxLength={200}
+                      onChange={(event) => setMetadata((current) => ({ ...current, description: event.target.value }))}
+                      placeholder="RM lumbar sagital T2"
+                      value={metadata.description}
+                    />
+                  </label>
+
+                  {metadataError && <p className="wl-drawer-error">{metadataError}</p>}
                 </div>
-                {uploadBlocker && <p className="ns-blocker" id="ns-upload-blocker">{uploadBlocker}</p>}
-                {studyUpload.status === "uploading" && <p className="wl-upload-state" role="status">Leyendo {studyUpload.fileName}…</p>}
-                {studyUpload.status === "error" && <p className="wl-drawer-error">{studyUpload.error}</p>}
+              </section>
+            )}
+
+            {step === "images" && (
+              <section aria-labelledby="ns-step-title" className="ns-step">
+                <h2 id="ns-step-title" ref={stepHeadingRef} tabIndex={-1}>Imágenes</h2>
+                <p className="ns-step-lead">Cargá el ZIP con el estudio completo: las series se separan solas. <b aria-hidden="true" className="ns-req">*</b> Hace falta una serie sagital.</p>
+
+                {imagesStatus.state === "invalidated" && (
+                  <p className="ns-notice" role="status">Cambiaste el ID del estudio: volvé a cargar las imágenes para asociarlas al nuevo ID.</p>
+                )}
+
+                <div className="ns-zip">
+                  <div className="ns-zip-row">
+                    <FileButton
+                      accept=".zip"
+                      describedBy={uploadBlocker ? "ns-upload-blocker" : undefined}
+                      disabled={uploadLocked}
+                      label={studyUpload.fileName ? "Cambiar ZIP" : "Seleccionar ZIP"}
+                      onFile={(file) => { void uploadStudy(file); }}
+                      primary={studyUpload.status !== "uploaded"}
+                    />
+                    <div className="ns-file-status">
+                      <span className="ns-file-name">{studyUpload.fileName ?? "Ningún archivo seleccionado"}</span>
+                      {studyUpload.status === "uploading" && <span className="ns-chip is-uploading" role="status"><LoaderCircle aria-hidden className="wl-button-spinner" size={13} />Cargando…</span>}
+                      {studyUpload.status === "uploaded" && <span className="ns-chip is-loaded">Cargado</span>}
+                      {studyUpload.status === "error" && <span className="ns-chip is-error">No se cargó</span>}
+                    </div>
+                  </div>
+                  {uploadBlocker && <p className="ns-blocker" id="ns-upload-blocker">{uploadBlocker}</p>}
+                  {studyUpload.status === "error" && <p className="wl-drawer-error" role="alert">{studyUpload.error}</p>}
+                </div>
+
                 {studyUpload.status === "uploaded" && studyUpload.study && (
                   <div className="ns-study-result">
                     {/*
@@ -670,245 +792,283 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                     </details>
                   </div>
                 )}
-              </div>
 
-              {/*
-                Camino secundario y plegado: acepta lo que el de estudio completo no puede
-                recibir —un .mha o un .npy sueltos de un dataset—, donde el plano no viene
-                en la metadata y lo tiene que declarar el médico.
-              */}
-              <div className="wl-upload">
-                <button
-                  aria-controls="ns-by-plane"
-                  aria-expanded={byPlaneOpen}
-                  className="ns-disclosure"
-                  onClick={() => setByPlaneOpen((value) => !value)}
-                  type="button"
-                >
-                  {byPlaneOpen ? <ChevronDown aria-hidden size={16} /> : <ChevronRight aria-hidden size={16} />}
-                  Cargar archivos por plano
-                </button>
-                {byPlaneOpen && (
-                  <div id="ns-by-plane">
-                    {(["sagittal", "axial"] as Plane[]).map((plane) => (
-                      <div className="wl-upload-plane" key={plane}>
-                        <div className="wl-upload-head">
-                          <strong>{planeLabel(plane)}</strong>
-                          <span>{plane === "sagittal" ? "obligatorio si no hay ZIP" : "opcional · experimental"}</span>
+                {/*
+                  Camino secundario y plegado: acepta lo que el de estudio completo no puede
+                  recibir —un .mha o un .npy sueltos de un dataset—, donde el plano no viene
+                  en la metadata y lo tiene que declarar el médico.
+                */}
+                <div className="ns-alt">
+                  <button
+                    aria-controls="ns-by-plane"
+                    aria-expanded={byPlaneOpen}
+                    className="ns-disclosure"
+                    onClick={() => setByPlaneOpen((value) => !value)}
+                    type="button"
+                  >
+                    {byPlaneOpen ? <ChevronDown aria-hidden size={16} /> : <ChevronRight aria-hidden size={16} />}
+                    Cargar archivos por plano
+                  </button>
+                  {byPlaneOpen && (
+                    <div className="ns-alt-body" id="ns-by-plane">
+                      {(["sagittal", "axial"] as Plane[]).map((plane) => (
+                        <div className="ns-plane" key={plane}>
+                          <div className="ns-plane-head">
+                            <strong>{planeLabel(plane)}</strong>
+                            <span>{plane === "sagittal" ? "obligatorio si no hay ZIP" : "opcional · experimental"}</span>
+                          </div>
+                          <div className="ns-zip-row">
+                            <FileButton
+                              accept={uploadAccept}
+                              describedBy={uploadBlocker ? "ns-upload-blocker" : undefined}
+                              disabled={uploadLocked}
+                              label={uploads[plane].fileName ? "Cambiar archivo" : "Seleccionar archivo"}
+                              onFile={(file) => { void upload(plane, file); }}
+                            />
+                            <div className="ns-file-status">
+                              <span className="ns-file-name">{uploads[plane].fileName ?? "Ningún archivo seleccionado"}</span>
+                              {uploads[plane].status === "uploading" && <span className="ns-chip is-uploading" role="status"><LoaderCircle aria-hidden className="wl-button-spinner" size={13} />Cargando…</span>}
+                              {uploads[plane].status === "uploaded" && <span className="ns-chip is-loaded">Cargado</span>}
+                              {uploads[plane].status === "error" && <span className="ns-chip is-error">No se cargó</span>}
+                            </div>
+                          </div>
+                          {uploads[plane].status === "uploaded" && <p className="ns-muted">{uploads[plane].fileName} cargado.</p>}
+                          {uploads[plane].status === "error" && <p className="wl-drawer-error" role="alert">{uploads[plane].error}</p>}
                         </div>
-                        <div className="ns-file-row">
-                          <FileButton
-                            accept={uploadAccept}
-                            describedBy={uploadBlocker ? "ns-upload-blocker" : undefined}
-                            disabled={uploadLocked}
-                            label={uploads[plane].fileName ? "Cambiar archivo" : "Seleccionar archivo"}
-                            onFile={(file) => { void upload(plane, file); }}
-                          />
-                          <span className="ns-file-name">{uploads[plane].fileName ?? "Ningún archivo seleccionado"}</span>
-                        </div>
-                        {uploads[plane].status === "uploading" && <p className="wl-upload-state" role="status">Cargando {uploads[plane].fileName}…</p>}
-                        {uploads[plane].status === "uploaded" && <p className="wl-upload-state is-ok">{uploads[plane].fileName} cargado.</p>}
-                        {uploads[plane].status === "error" && <p className="wl-drawer-error">{uploads[plane].error}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {sagittalInputId && (
-                <p className="ns-source">
-                  Se analizará: sagital desde {sagittalSource}; axial {axialSource ? `desde ${axialSource}` : "no cargado (opcional)"}.
-                </p>
-              )}
-            </section>
-
-            {analysisStage !== "idle" && (
-              <section ref={progressRef} className="wl-analysis-progress" aria-live="polite" aria-label="Progreso del análisis" role="status">
-                <div className="wl-analysis-progress-head">
-                  <LoaderCircle aria-hidden className="wl-analysis-spinner" size={20} />
-                  <div>
-                    <strong>{analysisSteps[activeAnalysisStep]?.label}</strong>
-                    <p>{analysisStageCopy[analysisStage]}</p>
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <ol>
-                  {analysisSteps.map((step, index) => (
-                    <li
-                      className={index < activeAnalysisStep ? "is-complete" : index === activeAnalysisStep ? "is-active" : ""}
-                      key={step.id}
-                    >
-                      <span aria-hidden="true">{index < activeAnalysisStep ? "✓" : index + 1}</span>
-                      {step.label}
-                    </li>
-                  ))}
-                </ol>
-                <small>El sistema no informa porcentajes; los estados cambian sólo cuando cada etapa termina.</small>
+
+                {sagittalInputId && (
+                  <p className="ns-source">
+                    Se analizará: sagital desde {sagittalSource}; axial {axialSource ? `desde ${axialSource}` : "no cargado (opcional)"}.
+                  </p>
+                )}
               </section>
             )}
 
-            {productState && (
-              <section className={`wl-product-progress is-${productState.phase}`} aria-live="polite">
-                <strong>{productPhaseLabel[productState.phase]}</strong>
-                <ul>
-                  {(["sagittal_t1", "sagittal_t2"] as const).map((role) => {
-                    const item = productState.series[role];
-                    return (
-                      <li key={role}>
-                        <span>{role === "sagittal_t1" ? "Sagittal T1" : "Sagittal T2"}</span>
-                        <em>{productSeriesLabel(item.status)}</em>
-                        {item.segmentationRunId && <small>run {item.segmentationRunId}</small>}
-                        {item.status === "completed" && <small>{item.discLocalizations.length} localizaciones discales</small>}
-                        {item.error && <small className="wl-field-error">{item.error}</small>}
-                      </li>
-                    );
-                  })}
-                </ul>
-                {productState.failureStage === "disc_findings" && (
-                  <p className="wl-upload-state">
-                    <strong>Clasificación discal</strong> · No se pudo completar
+            {step === "context" && (
+              <section aria-labelledby="ns-step-title" className="ns-step">
+                <h2 id="ns-step-title" ref={stepHeadingRef} tabIndex={-1}>Contexto y revisión</h2>
+
+                <div className="ns-block ns-age" aria-label="Edad al estudio" role="group">
+                  <div className="ns-block-head">
+                    <h3>Edad al estudio</h3>
+                    {age.value !== null && (
+                      <span className="ns-badge">{age.provenance === "calculated" ? "Calculada" : "Declarada"}</span>
+                    )}
+                  </div>
+                  {!showAgeInput && age.calculated !== null && (
+                    <div className="ns-age-line">
+                      <p className="ns-age-value"><strong>{age.calculated} años</strong></p>
+                      <button className="ns-link-button" disabled={interactionLocked} onClick={() => setAgeOverrideOpen(true)} type="button">Declarar otra edad</button>
+                    </div>
+                  )}
+                  {!showAgeInput && age.calculated !== null && (
+                    <p className="ns-muted">Según la fecha de nacimiento del paciente y la fecha del estudio.</p>
+                  )}
+                  {showAgeInput && (
+                    <>
+                      <div className="ns-age-line">
+                        <label className="wl-field ns-age-field">
+                          <span className="ns-sr-only">Edad declarada en años</span>
+                          <input
+                            aria-describedby="ns-age-help"
+                            disabled={interactionLocked}
+                            inputMode="numeric"
+                            maxLength={3}
+                            onChange={(event) => setMetadata((current) => ({ ...current, ageDeclared: event.target.value }))}
+                            placeholder="Años"
+                            value={metadata.ageDeclared}
+                          />
+                        </label>
+                        {age.calculated !== null && (
+                          <button
+                            className="ns-link-button"
+                            disabled={interactionLocked}
+                            onClick={() => { setAgeOverrideOpen(false); setMetadata((current) => ({ ...current, ageDeclared: "" })); }}
+                            type="button"
+                          >
+                            Usar la edad calculada
+                          </button>
+                        )}
+                      </div>
+                      <p className="ns-muted" id="ns-age-help">{ageHelp}</p>
+                    </>
+                  )}
+                  {age.issue && <p className="wl-field-error" role="alert">{age.issue}</p>}
+                  {age.discrepancy && (
+                    <p className="ns-warning" role="alert">
+                      La edad declarada ({age.value}) difiere de la calculada ({age.calculated}). Se guardará la declarada, marcada como declarada.
+                    </p>
+                  )}
+                </div>
+
+                <div className="ns-block">
+                  <div className="ns-block-head">
+                    <h3>Contexto clínico</h3>
+                    <span>opcional</span>
+                  </div>
+                  <p className="ns-muted">
+                    Información clínica registrada para este estudio.{" "}
+                    <button
+                      aria-controls="ns-context-help"
+                      aria-expanded={contextHelpOpen}
+                      className="ns-link-button"
+                      onClick={() => setContextHelpOpen((open) => !open)}
+                      type="button"
+                    >
+                      Cómo se conserva
+                    </button>
                   </p>
+                  {contextHelpOpen && (
+                    <p className="ns-muted ns-help-text" id="ns-context-help">
+                      Se guarda con este estudio como contexto, nunca como hallazgo. Si después se edita el paciente, lo registrado acá no cambia.
+                    </p>
+                  )}
+                  <div className="ns-clinical-grid">
+                    <label className="wl-field is-wide">
+                      <span>Motivo del estudio</span>
+                      <textarea disabled={interactionLocked} maxLength={1000} onChange={(event) => setMetadata((current) => ({ ...current, clinicalReason: event.target.value }))} placeholder="Opcional" value={metadata.clinicalReason} />
+                    </label>
+                    <label className="wl-field">
+                      <span>Síntomas</span>
+                      <textarea disabled={interactionLocked} maxLength={1000} onChange={(event) => setMetadata((current) => ({ ...current, symptoms: event.target.value }))} placeholder="Opcional" value={metadata.symptoms} />
+                    </label>
+                    <label className="wl-field">
+                      <span>Antecedentes relevantes</span>
+                      <textarea disabled={interactionLocked} maxLength={2000} onChange={(event) => setMetadata((current) => ({ ...current, relevantHistory: event.target.value }))} placeholder="Opcional" value={metadata.relevantHistory} />
+                    </label>
+                    <label className="wl-field">
+                      <span>Tiempo de evolución</span>
+                      <input disabled={interactionLocked} maxLength={120} onChange={(event) => setMetadata((current) => ({ ...current, symptomDuration: event.target.value }))} placeholder="Opcional" value={metadata.symptomDuration} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="ns-block">
+                  <div className="ns-block-head">
+                    <h3>Revisión antes de analizar</h3>
+                  </div>
+                  <dl className="ns-review">
+                    <div>
+                      <dt>Paciente</dt>
+                      <dd>{selectedPatient ? `${patientDisplayName(selectedPatient) || "Sin nombre"} · ${selectedPatient.patientReference}` : withoutPatient ? "Sin asociación" : "Sin elegir (se guarda sin paciente)"}</dd>
+                      <button className="ns-link-button" disabled={interactionLocked} onClick={() => goToStep("study")} type="button">Editar paciente</button>
+                    </div>
+                    <div>
+                      <dt>Estudio</dt>
+                      <dd>
+                        {normalizedCaseId}
+                        {metadata.studyDate ? ` · ${formatIsoDateDMY(metadata.studyDate)}` : ""}
+                        {` · Prioridad ${priorityText[metadata.reviewPriority]}`}
+                        {metadata.description.trim() ? ` · ${metadata.description.trim()}` : ""}
+                      </dd>
+                      <button className="ns-link-button" disabled={interactionLocked} onClick={() => goToStep("study")} type="button">Editar estudio</button>
+                    </div>
+                    <div>
+                      <dt>Imágenes</dt>
+                      <dd>
+                        {studyUpload.status === "uploaded" && studyUpload.study
+                          ? `${studyUpload.fileName} · ${studyUpload.study.seriesFound.length} series detectadas`
+                          : [uploads.sagittal.input ? `Sagital: ${uploads.sagittal.fileName}` : null, uploads.axial.input ? `Axial: ${uploads.axial.fileName}` : null].filter(Boolean).join(" · ") || "Sin cargar"}
+                        {studyUpload.study?.warnings.length ? ` · ${studyUpload.study.warnings.length} ${studyUpload.study.warnings.length === 1 ? "limitación" : "limitaciones"}` : ""}
+                      </dd>
+                      <button className="ns-link-button" disabled={interactionLocked} onClick={() => goToStep("images")} type="button">Editar imágenes</button>
+                    </div>
+                  </dl>
+                </div>
+
+                {analysisStage !== "idle" && (
+                  <section ref={progressRef} className="wl-analysis-progress" aria-live="polite" aria-label="Progreso del análisis" role="status">
+                    <div className="wl-analysis-progress-head">
+                      <LoaderCircle aria-hidden className="wl-analysis-spinner" size={20} />
+                      <div>
+                        <strong>{analysisSteps[activeAnalysisStep]?.label}</strong>
+                        <p>{analysisStageCopy[analysisStage]}</p>
+                      </div>
+                    </div>
+                    <ol>
+                      {analysisSteps.map((analysisStep, index) => (
+                        <li
+                          className={index < activeAnalysisStep ? "is-complete" : index === activeAnalysisStep ? "is-active" : ""}
+                          key={analysisStep.id}
+                        >
+                          <span aria-hidden="true">{index < activeAnalysisStep ? "✓" : index + 1}</span>
+                          {analysisStep.label}
+                        </li>
+                      ))}
+                    </ol>
+                    <small>El sistema no informa porcentajes; los estados cambian sólo cuando cada etapa termina.</small>
+                  </section>
+                )}
+
+                {productState && (
+                  <section className={`wl-product-progress is-${productState.phase}`} aria-live="polite">
+                    <strong>{productPhaseLabel[productState.phase]}</strong>
+                    <ul>
+                      {(["sagittal_t1", "sagittal_t2"] as const).map((role) => {
+                        const item = productState.series[role];
+                        return (
+                          <li key={role}>
+                            <span>{role === "sagittal_t1" ? "Sagittal T1" : "Sagittal T2"}</span>
+                            <em>{productSeriesLabel(item.status)}</em>
+                            {item.segmentationRunId && <small>run {item.segmentationRunId}</small>}
+                            {item.status === "completed" && <small>{item.discLocalizations.length} localizaciones discales</small>}
+                            {item.error && <small className="wl-field-error">{item.error}</small>}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {productState.failureStage === "disc_findings" && (
+                      <p className="wl-upload-state">
+                        <strong>Clasificación discal</strong> · No se pudo completar
+                      </p>
+                    )}
+                  </section>
                 )}
               </section>
             )}
 
             {message && <p className="wl-drawer-message" role="status">{message}</p>}
           </div>
-
-          <div className="ns-side">
-            <PatientSelector
-              disabled={interactionLocked || Boolean(persistedRun)}
-              onSelect={(patient) => {
-                setSelectedPatient(patient);
-                setWithoutPatient(false);
-                setMetadata((current) => ({ ...current, patientId: patient?.id ?? "" }));
-                setMetadataError("");
-              }}
-              onWithoutPatient={setWithoutPatient}
-              selected={selectedPatient}
-              withoutPatient={withoutPatient}
-            />
-
-            <section aria-labelledby="new-study-context-title" className="ns-card ns-clinical">
-              <div className="ns-card-head">
-                <h2 id="new-study-context-title">Contexto clínico</h2>
-                <span>opcional</span>
-              </div>
-              <p className="ns-muted">Información clínica registrada para este estudio</p>
-              <button
-                aria-controls="ns-context-help"
-                aria-expanded={contextHelpOpen}
-                className="ns-link-button"
-                onClick={() => setContextHelpOpen((open) => !open)}
-                type="button"
-              >
-                Cómo se conserva
-              </button>
-              {contextHelpOpen && (
-                <p className="ns-muted ns-help-text" id="ns-context-help">
-                  Se guarda con este estudio como contexto, nunca como hallazgo. Si después se edita el paciente, lo registrado acá no cambia.
-                </p>
-              )}
-
-              <div className="ns-age">
-                <div className="ns-age-head">
-                  <span className="ns-field-label">Edad al estudio</span>
-                  {age.value !== null && (
-                    <span className="ns-badge">{age.provenance === "calculated" ? "Calculada" : "Declarada"}</span>
-                  )}
-                </div>
-                {!showAgeInput && age.calculated !== null && (
-                  <>
-                    <p className="ns-age-value"><strong>{age.calculated} años</strong></p>
-                    <p className="ns-muted">Según la fecha de nacimiento del paciente y la fecha del estudio.</p>
-                    <button className="ns-link-button" disabled={interactionLocked} onClick={() => setAgeOverrideOpen(true)} type="button">Declarar otra edad</button>
-                  </>
-                )}
-                {showAgeInput && (
-                  <>
-                    <label className="wl-field">
-                      <span className="ns-sr-only">Edad declarada en años</span>
-                      <input
-                        aria-describedby="ns-age-help"
-                        disabled={interactionLocked}
-                        inputMode="numeric"
-                        maxLength={3}
-                        onChange={(event) => setMetadata((current) => ({ ...current, ageDeclared: event.target.value }))}
-                        placeholder="Años"
-                        value={metadata.ageDeclared}
-                      />
-                    </label>
-                    <p className="ns-muted" id="ns-age-help">
-                      {ageHelp}
-                    </p>
-                    {age.calculated !== null && (
-                      <button
-                        className="ns-link-button"
-                        disabled={interactionLocked}
-                        onClick={() => { setAgeOverrideOpen(false); setMetadata((current) => ({ ...current, ageDeclared: "" })); }}
-                        type="button"
-                      >
-                        Usar la edad calculada
-                      </button>
-                    )}
-                  </>
-                )}
-                {age.issue && <p className="wl-field-error" role="alert">{age.issue}</p>}
-                {age.discrepancy && (
-                  <p className="ns-warning" role="alert">
-                    La edad declarada ({age.value}) difiere de la calculada ({age.calculated}). Se guardará la declarada, marcada como declarada.
-                  </p>
-                )}
-              </div>
-
-              <details className="ns-clinical-details">
-                <summary>
-                  <span>Detalles clínicos</span>
-                  <em className={clinicalTextFilled ? "is-filled" : ""}>{clinicalTextFilled ? "Con información" : "Sin completar"}</em>
-                </summary>
-                <div className="ns-clinical-fields">
-                  <label className="wl-field">
-                    <span>Motivo del estudio</span>
-                    <textarea disabled={interactionLocked} maxLength={1000} onChange={(event) => setMetadata((current) => ({ ...current, clinicalReason: event.target.value }))} placeholder="Opcional" value={metadata.clinicalReason} />
-                  </label>
-                  <label className="wl-field">
-                    <span>Síntomas</span>
-                    <textarea disabled={interactionLocked} maxLength={1000} onChange={(event) => setMetadata((current) => ({ ...current, symptoms: event.target.value }))} placeholder="Opcional" value={metadata.symptoms} />
-                  </label>
-                  <label className="wl-field">
-                    <span>Tiempo de evolución</span>
-                    <input disabled={interactionLocked} maxLength={120} onChange={(event) => setMetadata((current) => ({ ...current, symptomDuration: event.target.value }))} placeholder="Opcional" value={metadata.symptomDuration} />
-                  </label>
-                  <label className="wl-field">
-                    <span>Antecedentes relevantes</span>
-                    <textarea disabled={interactionLocked} maxLength={2000} onChange={(event) => setMetadata((current) => ({ ...current, relevantHistory: event.target.value }))} placeholder="Opcional" value={metadata.relevantHistory} />
-                  </label>
-                </div>
-              </details>
-            </section>
-          </div>
         </div>
 
         <footer className="ns-foot">
+          <button className="ns-btn is-quiet" disabled={interactionLocked} onClick={requestExit} type="button">Cancelar</button>
           <p className="ns-foot-hint" id="ns-run-hint" role="status">{footerHint}</p>
           <div className="ns-foot-actions">
-            <button className="wl-drawer-cancel" disabled={interactionLocked} onClick={requestExit} type="button">Cancelar</button>
-            {persistedRun && productState?.phase === "error" ? (
+            {previousStep(step) && (
+              <button className="ns-btn" disabled={interactionLocked} onClick={goBack} type="button">Atrás</button>
+            )}
+            {step !== "context" ? (
+              <button
+                aria-describedby="ns-run-hint"
+                className="ns-btn is-primary"
+                disabled={Boolean(stepBlocker)}
+                onClick={goNext}
+                type="button"
+              >
+                Continuar
+              </button>
+            ) : persistedRun && productState?.phase === "error" ? (
               <>
-                <button className="wl-drawer-cancel" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
+                <button className="ns-btn" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
                   Abrir sin hallazgos discales
                 </button>
-                <button className="wl-drawer-run" disabled={running || !productState.retryable} onClick={() => void retryProductExtensions()} type="button">
+                <button className="ns-btn is-primary" disabled={running || !productState.retryable} onClick={() => void retryProductExtensions()} type="button">
                   {running ? "Reintentando…" : productState.retryable ? "Reintentar hallazgos discales" : "Hallazgos discales no disponibles"}
                 </button>
               </>
             ) : persistedRun && productState && ["completed", "degraded"].includes(productState.phase) ? (
-              <button className="wl-drawer-run" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
+              <button className="ns-btn is-primary" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
                 Abrir sala de lectura
               </button>
             ) : (
               <button
                 aria-describedby="ns-run-hint"
-                className="wl-drawer-run"
+                className="ns-btn is-primary"
                 disabled={!sagittalReady || uploading || running}
                 onClick={() => void run()}
                 type="button"

@@ -123,3 +123,117 @@ export function hasUnsavedWork(input: UnsavedWorkInput): boolean {
     || input.hasLoadedFiles,
   );
 }
+
+/* ------------------------------------------------------------------------------------------
+ * Pasos de "Nuevo estudio": 1 Paciente y estudio, 2 Imágenes, 3 Contexto y revisión.
+ *
+ * Lógica pura: qué paso está completo, cuál se puede visitar y qué falta para continuar.
+ * Cambiar de paso nunca analiza ni crea nada: solo mueve la vista, y los datos y las cargas
+ * viven por encima de los pasos.
+ * ---------------------------------------------------------------------------------------- */
+
+export type StepId = "study" | "images" | "context";
+
+export const STEP_ORDER: StepId[] = ["study", "images", "context"];
+
+export const STEP_LABEL: Record<StepId, string> = {
+  study: "Paciente y estudio",
+  images: "Imágenes",
+  context: "Contexto y revisión",
+};
+
+export type StepState = "current" | "complete" | "pending";
+
+export type StepStatus = {
+  id: StepId;
+  label: string;
+  state: StepState;
+  /** Se puede ir a este paso desde la navegación. */
+  reachable: boolean;
+  /** Qué hay que rehacer o qué está pasando, en una línea. Vacío si nada. */
+  note: string;
+};
+
+export type StepsInput = {
+  active: StepId;
+  /** ID del estudio válido. */
+  studyReady: boolean;
+  /** Hay una serie sagital cargada y no hay cargas en curso. */
+  imagesReady: boolean;
+  /** Una modificación (el ID) descartó imágenes ya cargadas. */
+  imagesInvalidated: boolean;
+  uploading: boolean;
+};
+
+export function computeSteps(input: StepsInput): StepStatus[] {
+  const studyComplete = input.studyReady;
+  const imagesComplete = input.studyReady && input.imagesReady;
+  const complete: Record<StepId, boolean> = { study: studyComplete, images: imagesComplete, context: false };
+  const reachable: Record<StepId, boolean> = {
+    study: true,
+    images: input.studyReady,
+    context: input.studyReady && input.imagesReady,
+  };
+  return STEP_ORDER.map((id) => {
+    const state: StepState = id === input.active ? "current" : complete[id] ? "complete" : "pending";
+    let note = "";
+    if (id === "images") {
+      if (input.uploading) note = "Cargando…";
+      else if (input.imagesInvalidated && !imagesComplete) note = "Hay que volver a cargarlas";
+    }
+    return { id, label: STEP_LABEL[id], state, reachable: reachable[id], note };
+  });
+}
+
+export function nextStep(id: StepId): StepId | null {
+  const index = STEP_ORDER.indexOf(id);
+  return index >= 0 && index < STEP_ORDER.length - 1 ? STEP_ORDER[index + 1] : null;
+}
+
+export function previousStep(id: StepId): StepId | null {
+  const index = STEP_ORDER.indexOf(id);
+  return index > 0 ? STEP_ORDER[index - 1] : null;
+}
+
+export type ContinueInput = Omit<AnalyzeBlockerInput, "ageIssue">;
+
+/** Qué falta para avanzar desde un paso. Vacío = se puede continuar. */
+export function continueBlockerMessage(step: StepId, input: ContinueInput): string {
+  if (step === "study") {
+    if (!input.normalizedCaseId) return "Falta el ID del estudio.";
+    if (input.caseIdIssue) return "El ID del estudio no es válido.";
+    return "";
+  }
+  if (step === "images") return analyzeBlockerMessage({ ...input, running: false });
+  return "";
+}
+
+export type ImagesStatus = {
+  state: "none" | "uploading" | "loaded" | "error" | "invalidated";
+  /** Texto corto para el resumen. */
+  label: string;
+};
+
+/**
+ * Estado de las imágenes para mostrar: una selección local no es una carga completada. Solo
+ * "loaded" significa que el servidor respondió y hay una serie sagital utilizable.
+ */
+export function describeImagesStatus(input: {
+  uploading: boolean;
+  zipStatus: "idle" | "uploading" | "uploaded" | "error";
+  planeErrors: boolean;
+  sagittalInputId?: string;
+  seriesCount?: number;
+  invalidated: boolean;
+}): ImagesStatus {
+  if (input.uploading) return { state: "uploading", label: "Cargando…" };
+  if (input.sagittalInputId) {
+    return {
+      state: "loaded",
+      label: input.seriesCount ? `Cargadas · ${input.seriesCount} ${input.seriesCount === 1 ? "serie" : "series"}` : "Cargadas",
+    };
+  }
+  if (input.invalidated) return { state: "invalidated", label: "Hay que volver a cargarlas" };
+  if (input.zipStatus === "error" || input.planeErrors) return { state: "error", label: "No se cargaron" };
+  return { state: "none", label: "Sin cargar" };
+}

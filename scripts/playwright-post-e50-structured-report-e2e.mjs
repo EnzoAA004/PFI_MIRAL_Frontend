@@ -85,13 +85,17 @@ async function main() {
 
   await page.getByRole("button", { name: /Nuevo estudio/ }).click();
   await page.locator('.wl-new-study').waitFor({ state: "visible", timeout: 10000 });
-  await page.getByLabel("Crear paciente").check();
-  await page.locator("#new-patient-reference").fill(subjectRef);
-  await page.getByRole("button", { name: "Crear y seleccionar" }).click();
+  await page.getByRole("button", { name: "Crear paciente" }).click();
+  const createDialog = page.getByRole("dialog", { name: "Crear paciente" });
+  await createDialog.waitFor({ timeout: 10000 });
+  await createDialog.locator("#new-patient-reference").fill(subjectRef);
+  await createDialog.getByRole("button", { name: "Crear paciente" }).click();
   await page.locator('[aria-label="Paciente seleccionado"]').waitFor({ timeout: 10000 });
   console.log("ok 2 - paciente nuevo (código de-identificado) creado y seleccionado");
 
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Imágenes", level: 2 }).waitFor({ timeout: 10000 });
   await page.locator("button", { hasText: "Cargar archivos por plano" }).click();
   await page.locator('input[type="file"]').nth(1).setInputFiles({
     name: "stage-88-report-sagittal.dcm",
@@ -99,6 +103,8 @@ async function main() {
     buffer: Buffer.from("stage-88-structured-report-fixture-no-patient-data"),
   });
   await page.waitForSelector("text=stage-88-report-sagittal.dcm cargado", { timeout: 10000 });
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Contexto y revisión", level: 2 }).waitFor({ timeout: 10000 });
   console.log("ok 3 - input sagital cargado por flujo real");
 
   await page.getByRole("button", { name: "Analizar estudio", exact: true }).click();

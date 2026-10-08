@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * "Nuevo estudio": paciente, edad y contexto clínico.
+ * "Nuevo estudio": flujo de tres pasos con paciente, edad y contexto clínico.
  *
  * Reemplaza a los chequeos de Stage 86, que fijaban un diseño sin entidad Patient (el
  * paciente era sólo un `subjectRef`). Ahora el paciente es una entidad con código, nombre,
@@ -12,14 +12,21 @@ import { join } from "node:path";
  * estudios históricos siguen funcionando.
  *
  * Los componentes son hooks de React sin DOM disponible acá, así que su comportamiento
- * observable se verifica contra su propio código fuente; la lógica pura (edad, bloqueos,
- * confirmación) se prueba ejecutándola en new-study-form-tests.mjs y study-age-tests.mjs.
+ * observable se verifica contra su propio código fuente; la lógica pura (pasos, edad, bloqueos,
+ * confirmación) se prueba ejecutándola en new-study-form-tests.mjs y study-age-tests.mjs, y el
+ * recorrido real en los playwright-new-study-*.mjs y playwright-post-e50-*.mjs.
  */
 const root = process.cwd();
-const drawerSource = readFileSync(join(root, "src/features/worklist/NewAnalysisDrawer.tsx"), "utf8");
-const selectorSource = readFileSync(join(root, "src/features/worklist/PatientSelector.tsx"), "utf8");
-const patientApiSource = readFileSync(join(root, "src/patientApi.ts"), "utf8");
-const studyMetadataSource = readFileSync(join(root, "src/studyMetadata.ts"), "utf8");
+const read = (path) => readFileSync(join(root, path), "utf8");
+const drawerSource = read("src/features/worklist/NewAnalysisDrawer.tsx");
+const selectorSource = read("src/features/worklist/PatientSelector.tsx");
+const dialogSource = read("src/features/worklist/CreatePatientDialog.tsx");
+const stepperSource = read("src/features/worklist/NewStudyStepper.tsx");
+const summarySource = read("src/features/worklist/NewStudySummary.tsx");
+const patientApiSource = read("src/patientApi.ts");
+const studyMetadataSource = read("src/studyMetadata.ts");
+const css = read("src/features/worklist/worklist.css");
+const stepsCss = css.slice(css.indexOf("Nuevo estudio — flujo en tres pasos"));
 
 let count = 0;
 function test(name, fn) {
@@ -28,6 +35,8 @@ function test(name, fn) {
   console.log(`ok ${count} - ${name}`);
 }
 
+/* ---------------------------------------------------------------- paciente */
+
 test("1 la vista usa PatientSelector y ya no el selector de subjectRef", () => {
   assert.match(drawerSource, /<PatientSelector/);
   assert.doesNotMatch(drawerSource, /<SubjectSelector/);
@@ -35,8 +44,8 @@ test("1 la vista usa PatientSelector y ya no el selector de subjectRef", () => {
 });
 
 test("2 el paciente se busca por código o nombre y muestra su estado de búsqueda", () => {
-  assert.match(selectorSource, /Buscar por código o nombre/);
-  assert.match(selectorSource, /searchPatients\(trimmed\)/);
+  assert.match(selectorSource, /Buscar paciente por código o nombre/);
+  assert.match(selectorSource, /searchPatients\(trimmed, RESULT_LIMIT\)/);
   assert.match(selectorSource, /Buscando pacientes…/);
   assert.match(selectorSource, /No se encontraron pacientes/);
   assert.match(patientApiSource, /\/api\/patients\?query=/);
@@ -53,56 +62,131 @@ test("4 el error de búsqueda ofrece reintentar", () => {
   assert.match(selectorSource, /setRetryToken\(\(token\) => token \+ 1\)/);
 });
 
-test("5 se puede crear un paciente con código, nombre, apellido y fecha de nacimiento opcional", () => {
-  assert.match(selectorSource, /Código visible/);
-  assert.match(selectorSource, /Nombre <i>\(opcional\)<\/i>/);
-  assert.match(selectorSource, /Apellido <i>\(opcional\)<\/i>/);
-  assert.match(selectorSource, /Fecha de nacimiento <i>\(opcional\)<\/i>/);
+test("5 crear un paciente es una acción aparte que abre un diálogo, no un formulario embebido", () => {
+  assert.match(selectorSource, /<CreatePatientDialog/);
+  assert.match(selectorSource, /Crear paciente/);
+  assert.match(selectorSource, /setDialogOpen\(true\)/);
+  for (const text of ["Código visible", "Nombre <i>(opcional)</i>", "Apellido <i>(opcional)</i>", "Fecha de nacimiento <i>(opcional)</i>", "No ingreses DNI, domicilio"]) {
+    assert.ok(dialogSource.includes(text), `el diálogo debe tener «${text}»`);
+  }
+  assert.match(dialogSource, /createPatient\(draft\)/);
   assert.match(patientApiSource, /method: "POST", body/);
-  assert.match(selectorSource, /No ingreses DNI, domicilio/);
 });
 
-test("6 el paciente elegido se resume y se puede cambiar", () => {
+test("6 el diálogo es accesible y distingue crear el paciente de continuar el estudio", () => {
+  assert.match(dialogSource, /<dialog/);
+  assert.match(dialogSource, /dialog\.showModal\(\)/);
+  assert.match(dialogSource, /aria-labelledby="ns-patient-dialog-title"/);
+  assert.match(dialogSource, /aria-describedby="ns-patient-dialog-help"/);
+  assert.match(dialogSource, /No crea ni continúa el estudio/);
+  assert.match(dialogSource, /"Crear paciente"/);
+  assert.match(dialogSource, /onCancel=\{\(event\) => \{/);
+  assert.doesNotMatch(dialogSource, /onContinue|goNext|setStep/, "el diálogo no avanza el flujo");
+});
+
+test("7 al crearlo el paciente se selecciona y se muestra su resumen, sin avanzar de paso", () => {
+  assert.match(selectorSource, /onCreated=\{\(patient\) => \{[\s\S]*?onSelect\(patient\);[\s\S]*?\}\}/);
   assert.match(selectorSource, /aria-label="Paciente seleccionado"/);
-  assert.match(selectorSource, /onClick=\{\(\) => onSelect\(null\)\}[^>]*>Cambiar</);
+  assert.match(selectorSource, /Paciente creado y seleccionado\. Falta continuar con el estudio/);
 });
 
-test("7 se puede continuar explícitamente sin asociar paciente, y volver atrás", () => {
+test("8 el paciente elegido se puede cambiar", () => {
+  assert.match(selectorSource, /onSelect\(null\); \}\} type="button">Cambiar</);
+});
+
+test("9 se puede continuar explícitamente sin asociar paciente, y volver atrás", () => {
   assert.match(selectorSource, /Continuar sin asociar paciente/);
   assert.match(selectorSource, /Asociar paciente/);
   assert.match(drawerSource, /onWithoutPatient=\{setWithoutPatient\}/);
 });
 
-test("8 el modo de asociación tiene semántica de radiogroup accesible", () => {
-  assert.match(selectorSource, /role="radiogroup"/);
-  assert.match(selectorSource, /type="radio"/);
-});
-
-test("9 el estudio se envía con patientId, sin subjectRef armado en el cliente", () => {
+test("10 el estudio se envía con patientId, sin subjectRef armado en el cliente", () => {
   assert.match(drawerSource, /studyMetadata: normalizedStudyMetadata/);
   assert.match(drawerSource, /normalizeStudyMetadataInput\(metadata, age\)/);
   assert.match(drawerSource, /patientId: patient\?\.id \?\? ""/);
   assert.match(studyMetadataSource, /patientId: textOrNull\(draft\.patientId\)/);
 });
 
-test("10 el contexto clínico y la edad viajan solo si hay algo (payload histórico intacto)", () => {
+test("11 el contexto clínico y la edad viajan solo si hay algo (payload histórico intacto)", () => {
   assert.match(studyMetadataSource, /if \(value !== null && value !== undefined\)/);
   for (const key of ["ageAtStudy", "ageProvenance", "clinicalReason", "symptoms", "symptomDuration", "relevantHistory"]) {
     assert.match(studyMetadataSource, new RegExp(`${key}:`));
   }
 });
 
-test("11 no existe ningún paso de asociación posterior a la corrida", () => {
+test("12 no existe ningún paso de asociación posterior a la corrida", () => {
   assert.doesNotMatch(drawerSource, /associationState|attemptPatientAssociation|retryPatientAssociation|patientStudyAssociation|Asociando al paciente/);
   assert.doesNotMatch(drawerSource, /\/patient["'`]|associateStudyPatient/);
 });
 
-test("12 un estudio puede crearse sin paciente ni contexto", () => {
+test("13 un estudio puede crearse sin paciente ni contexto", () => {
   assert.match(drawerSource, /const studyIdentityReady = caseIdReady;/);
   assert.doesNotMatch(drawerSource, /disabled=\{[^}]*selectedPatient/);
 });
 
-test("13 la edad se resuelve en un módulo puro, con procedencia explícita", () => {
+/* ---------------------------------------------------------------- pasos */
+
+test("14 son tres pasos con navegación, y los datos viven por encima de ellos", () => {
+  assert.match(drawerSource, /<NewStudyStepper locked=\{interactionLocked\} onSelect=\{goToStep\} steps=\{steps\} \/>/);
+  assert.match(drawerSource, /useState<StepId>\("study"\)/);
+  const firstStep = drawerSource.indexOf('step === "study" && (');
+  for (const state of ["metadata", "uploads", "studyUpload", "selectedPatient", "withoutPatient"]) {
+    const declaration = drawerSource.indexOf(`const [${state},`);
+    assert.ok(declaration > 0 && declaration < firstStep, `${state} se declara en el componente, no dentro de un paso`);
+  }
+  assert.match(drawerSource, /step === "images" && \(/);
+  assert.match(drawerSource, /step === "context" && \(/);
+});
+
+test("15 la navegación de pasos tiene estados actual / completado / pendiente", () => {
+  assert.match(stepperSource, /aria-current=\{step\.state === "current" \? "step" : undefined\}/);
+  assert.match(stepperSource, /current: "Paso actual"/);
+  assert.match(stepperSource, /complete: "Completado"/);
+  assert.match(stepperSource, /pending: "Pendiente"/);
+  assert.match(stepperSource, /disabled=\{locked \|\| !step\.reachable\}/);
+});
+
+test("16 cambiar de paso solo mueve la vista: no analiza, no crea pacientes, no toca las cargas", () => {
+  const start = drawerSource.indexOf("function goToStep(");
+  const end = drawerSource.indexOf("function openCompletedStudy(");
+  const navigation = drawerSource.slice(start, end);
+  assert.match(navigation, /setStep\(/);
+  assert.doesNotMatch(navigation, /run\(|createPatient|upload\(|uploadStudy|setUploads|setStudyUpload|requestGate|runMultiplanarAnalysis/);
+});
+
+test("17 Atrás y Continuar fuera del último paso, y Analizar estudio solo en el último", () => {
+  assert.match(drawerSource, /onClick=\{goBack\} type="button">Atrás</);
+  assert.match(drawerSource, /onClick=\{goNext\}/);
+  assert.match(drawerSource, /\{step !== "context" \? \(/);
+  const analyzeButton = /Procesando…<\/> : "Analizar estudio"/g;
+  assert.equal((drawerSource.match(analyzeButton) ?? []).length, 1, "un solo botón Analizar estudio");
+  assert.ok(drawerSource.search(analyzeButton) > drawerSource.indexOf('step !== "context" ?'), "Analizar estudio vive en la rama del último paso");
+});
+
+test("18 una modificación que invalida las imágenes lo refleja y explica qué rehacer", () => {
+  assert.match(drawerSource, /setImagesInvalidated\(true\)/);
+  assert.match(drawerSource, /setImagesInvalidated\(false\)/);
+  assert.match(drawerSource, /Cambiaste el ID del estudio: volvé a cargar las imágenes para asociarlas al nuevo ID/);
+  assert.match(drawerSource, /requestGate\.invalidateAll\(\);\s+setCaseId\(nextValue\)/);
+});
+
+test("19 el resumen lateral es de solo lectura y muestra únicamente datos disponibles", () => {
+  assert.doesNotMatch(summarySource, /<input|<button|<select|<textarea|onClick/);
+  assert.match(summarySource, /Sin asociación/);
+  assert.match(summarySource, /\{patientName && /);
+  assert.match(summarySource, /\{caseId\.trim\(\) && /);
+  assert.match(summarySource, /\{studyDate && /);
+});
+
+test("20 la selección local no se presenta como carga completada", () => {
+  assert.match(drawerSource, /studyUpload\.status === "uploading" && /);
+  assert.match(drawerSource, /studyUpload\.status === "uploaded" && <span className="ns-chip is-loaded">Cargado<\/span>/);
+  assert.match(drawerSource, /<span className="ns-chip is-error">No se cargó<\/span>/);
+});
+
+/* ---------------------------------------------------------------- edad y contexto */
+
+test("21 la edad se resuelve en un módulo puro, con procedencia explícita", () => {
   assert.match(drawerSource, /resolveStudyAge\(/);
   assert.match(drawerSource, /Calculada/);
   assert.match(drawerSource, /Declarada/);
@@ -110,92 +194,54 @@ test("13 la edad se resuelve en un módulo puro, con procedencia explícita", ()
   assert.match(drawerSource, /Usar la edad calculada/);
 });
 
-test("14 una discrepancia entre edad declarada y calculada se muestra, no se resuelve en silencio", () => {
+test("22 una discrepancia entre edad declarada y calculada se muestra, no se resuelve en silencio", () => {
   assert.match(drawerSource, /difiere de la calculada/);
   assert.match(drawerSource, /age\.discrepancy/);
 });
 
-test("15 lo declarado nunca se descarta al cambiar de paciente", () => {
+test("23 lo declarado nunca se descarta al cambiar de paciente", () => {
   assert.match(drawerSource, /metadata\.ageDeclared\.trim\(\) !== ""/);
 });
 
-test("16 los detalles clínicos extensos van en una sección plegable con indicación de contenido", () => {
-  assert.match(drawerSource, /<details className="ns-clinical-details">/);
-  assert.match(drawerSource, /Con información/);
-  assert.match(drawerSource, /Sin completar/);
+test("24 los textos clínicos tienen su espacio en el área principal, no en una columna estrecha", () => {
+  const context = drawerSource.slice(drawerSource.indexOf('step === "context" && ('));
   for (const label of ["Motivo del estudio", "Síntomas", "Tiempo de evolución", "Antecedentes relevantes"]) {
-    assert.match(drawerSource, new RegExp(label));
+    assert.ok(context.includes(label), `falta «${label}» en el último paso`);
   }
+  assert.match(drawerSource, /className="ns-clinical-grid"/);
+  assert.doesNotMatch(drawerSource, /ns-clinical-details|<details className="ns-clinical/);
+  assert.match(stepsCss, /\.ns-clinical-grid \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
 
-test("17 la edad queda visible, fuera de la sección plegable", () => {
-  const detailsStart = drawerSource.indexOf('<details className="ns-clinical-details">');
-  assert.ok(drawerSource.indexOf("Edad al estudio") < detailsStart);
+test("25 el contexto es opcional: ningún texto es obligatorio para analizar", () => {
+  assert.doesNotMatch(drawerSource, /clinicalReason\.trim\(\) *===|!metadata\.clinicalReason|!metadata\.symptoms/);
+  assert.match(drawerSource, /<span>opcional<\/span>/);
 });
 
-test("18 el botón de analizar se deshabilita mientras corre", () => {
-  assert.match(drawerSource, /disabled=\{!sagittalReady \|\| uploading \|\| running\}/);
-});
-
-test("19 doble submit queda bloqueado por una referencia sincrónica", () => {
-  assert.match(drawerSource, /runInFlightRef\.current/);
-  assert.match(drawerSource, /if \(!sagittalReady \|\| uploading \|\| running \|\| runInFlightRef\.current\) return/);
-});
-
-test("20 un error de creación muestra mensaje y no rompe el flujo", () => {
-  assert.match(drawerSource, /setMessage\(apiErrorMessage\(error, "ejecutar el análisis"\)\)/);
-});
-
-test("21 la carga de imágenes sigue igual, no fue reescrita", () => {
-  assert.match(drawerSource, /uploadAiInput\(file, normalizedCaseId, plane\)/);
-  assert.match(drawerSource, /uploadStudyArchive\(file, normalizedCaseId\)/);
-});
-
-test("22 éxito completo navega al Study creado", () => {
-  assert.match(drawerSource, /function openCompletedStudy\(caseIdToOpen: string\)/);
-  assert.match(drawerSource, /onAnalysisReady\(caseIdToOpen\)/);
-});
-
-test("23 un error de análisis conserva paciente y contexto (no se resetea metadata)", () => {
-  const runStart = drawerSource.indexOf("async function run()");
-  const catchStart = drawerSource.indexOf("catch (error)", runStart);
-  const errorBlock = drawerSource.slice(catchStart, drawerSource.indexOf("finally", catchStart));
-  assert.doesNotMatch(errorBlock, /setMetadata\(|setSelectedPatient\(/);
-});
-
-test("24 salir de la vista pasa por una sola puerta que se bloquea al analizar y confirma si hay datos", () => {
-  assert.match(drawerSource, /function requestExit\(\) \{\s+if \(interactionLocked\) return;/);
-  assert.match(drawerSource, /className="ns-back" disabled=\{interactionLocked\} onClick=\{requestExit\}/);
-  assert.match(drawerSource, /<button className="wl-drawer-cancel" disabled=\{interactionLocked\} onClick=\{requestExit\}/);
-  assert.doesNotMatch(drawerSource, /key === "Escape"/, "es una pantalla, no un diálogo");
-});
-
-test("25 el chat y el LLM no se tocan: nada de esta vista los importa", () => {
-  assert.doesNotMatch(drawerSource, /chatApi|chatTypes|llm/i);
-  assert.doesNotMatch(selectorSource, /chatApi|chatTypes|llm/i);
-});
-
-test("26 los textos de datos personales no se imprimen en logs ni en el payload de auditoría del cliente", () => {
-  assert.doesNotMatch(drawerSource, /console\.(log|info|warn|error)\([^)]*(patient|firstName|lastName|clinical)/i);
-  assert.doesNotMatch(selectorSource, /console\.(log|info|warn|error)/);
-});
-
-test("27 el contexto clínico dice una sola línea y deja la explicación en una ayuda accesible", () => {
+test("26 el contexto dice una sola línea y deja la explicación en una ayuda accesible", () => {
   assert.match(drawerSource, /Información clínica registrada para este estudio/);
   assert.match(drawerSource, /aria-controls="ns-context-help"/);
   assert.match(drawerSource, /aria-expanded=\{contextHelpOpen\}/);
 });
 
-test("28 el motivo por el que no se calcula la edad sale de lo que falta, y con edad declarada no se repite la instrucción", () => {
+test("27 el motivo por el que no se calcula la edad sale de lo que falta, y con edad declarada no se repite la instrucción", () => {
   assert.match(drawerSource, /ageUnavailableReason\(age\.missing, Boolean\(selectedPatient\)\)/);
   assert.match(drawerSource, /Se guardará como edad declarada\. No se calculó:/);
 });
 
-test("29 Calculada y Declarada usan el mismo estilo neutro; solo la discrepancia advierte", () => {
+test("28 Calculada y Declarada usan el mismo estilo neutro; solo la discrepancia advierte", () => {
   assert.match(drawerSource, /className="ns-badge"/);
   assert.doesNotMatch(drawerSource, /ns-badge is-/);
   assert.match(drawerSource, /className="ns-warning"/);
 });
+
+test("29 la revisión antes de analizar resume paciente, estudio e imágenes y permite editar cada uno", () => {
+  assert.match(drawerSource, /Revisión antes de analizar/);
+  for (const text of ["Editar paciente", "Editar estudio", "Editar imágenes"]) assert.ok(drawerSource.includes(text), text);
+  assert.match(drawerSource, /goToStep\("images"\)/);
+});
+
+/* ---------------------------------------------------------------- imágenes */
 
 test("30 el resultado del ZIP ordena archivo, series, uso, limitaciones y detalles técnicos", () => {
   assert.match(drawerSource, /"Cambiar ZIP"/);
@@ -210,9 +256,11 @@ test("30 el resultado del ZIP ordena archivo, series, uso, limitaciones y detall
   assert.doesNotMatch(visible, /\{series\.description \|\||\{series\.inputId\}|P10\.7/, "identificadores y jerga técnica solo en los detalles");
 });
 
-test("31 la confirmación de salida se cierra al iniciar el análisis y su botón queda protegido", () => {
-  assert.match(drawerSource, /if \(interactionLocked\) setConfirmingExit\(false\);/);
-  assert.match(drawerSource, /disabled=\{interactionLocked\} onClick=\{\(\) => \{ if \(!interactionLocked\) onClose\(\); \}\}[^>]*>Salir sin guardar</);
+test("31 la alternativa por plano sigue plegada y accesible", () => {
+  assert.match(drawerSource, /aria-expanded=\{byPlaneOpen\}/);
+  assert.match(drawerSource, /Cargar archivos por plano/);
+  assert.match(drawerSource, /uploadAiInput\(file, normalizedCaseId, plane\)/);
+  assert.match(drawerSource, /uploadStudyArchive\(file, normalizedCaseId\)/);
 });
 
 test("32 una advertencia desconocida del ZIP se muestra tal cual en Limitaciones", () => {
@@ -221,4 +269,82 @@ test("32 una advertencia desconocida del ZIP se muestra tal cual en Limitaciones
   assert.doesNotMatch(limitations, /\.filter\(|known/i, "no se filtran advertencias");
 });
 
-console.log(`Post-E50 new study (patient + context) tests passed: ${count}`);
+/* ---------------------------------------------------------------- análisis y salida */
+
+test("33 el botón de analizar se deshabilita mientras corre", () => {
+  assert.match(drawerSource, /disabled=\{!sagittalReady \|\| uploading \|\| running\}/);
+});
+
+test("34 doble submit queda bloqueado por una referencia sincrónica", () => {
+  assert.match(drawerSource, /runInFlightRef\.current/);
+  assert.match(drawerSource, /if \(!sagittalReady \|\| uploading \|\| running \|\| runInFlightRef\.current\) return/);
+});
+
+test("35 un error de creación muestra mensaje y no rompe el flujo", () => {
+  assert.match(drawerSource, /setMessage\(apiErrorMessage\(error, "ejecutar el análisis"\)\)/);
+});
+
+test("36 éxito completo navega al Study creado", () => {
+  assert.match(drawerSource, /function openCompletedStudy\(caseIdToOpen: string\)/);
+  assert.match(drawerSource, /onAnalysisReady\(caseIdToOpen\)/);
+});
+
+test("37 un error de análisis conserva paciente y contexto (no se resetea metadata)", () => {
+  const runStart = drawerSource.indexOf("async function run()");
+  const catchStart = drawerSource.indexOf("catch (error)", runStart);
+  const errorBlock = drawerSource.slice(catchStart, drawerSource.indexOf("finally", catchStart));
+  assert.doesNotMatch(errorBlock, /setMetadata\(|setSelectedPatient\(/);
+});
+
+test("38 salir de la vista pasa por una sola puerta que se bloquea al analizar y confirma si hay datos", () => {
+  assert.match(drawerSource, /function requestExit\(\) \{\s+if \(interactionLocked\) return;/);
+  assert.match(drawerSource, /className="ns-back" disabled=\{interactionLocked\} onClick=\{requestExit\}/);
+  assert.match(drawerSource, /<button className="ns-btn is-quiet" disabled=\{interactionLocked\} onClick=\{requestExit\}/);
+  assert.doesNotMatch(drawerSource, /key === "Escape"/, "es una pantalla, no un diálogo");
+});
+
+test("39 la confirmación de salida se cierra al iniciar el análisis y su botón queda protegido", () => {
+  assert.match(drawerSource, /if \(interactionLocked\) setConfirmingExit\(false\);/);
+  assert.match(drawerSource, /disabled=\{interactionLocked\} onClick=\{\(\) => \{ if \(!interactionLocked\) onClose\(\); \}\} type="button">Salir sin guardar</);
+});
+
+test("40 durante el análisis no se cambia de paso", () => {
+  assert.match(drawerSource, /function goToStep\(target: StepId\) \{\s+if \(interactionLocked\) return;/);
+  assert.match(drawerSource, /function goBack\(\) \{[\s\S]*?!interactionLocked/);
+});
+
+test("41 el chat y el LLM no se tocan: nada de esta vista los importa", () => {
+  for (const source of [drawerSource, selectorSource, dialogSource, stepperSource, summarySource]) {
+    assert.doesNotMatch(source, /chatApi|chatTypes|llm/i);
+  }
+});
+
+test("42 los datos personales no se imprimen en logs del cliente", () => {
+  for (const source of [drawerSource, selectorSource, dialogSource]) {
+    assert.doesNotMatch(source, /console\.(log|info|warn|error)/);
+  }
+});
+
+/* ---------------------------------------------------------------- estilo */
+
+test("43 una única tipografía sans en la vista, en controles y en el diálogo", () => {
+  assert.match(stepsCss, /\.wl-new-study :is\(input, select, textarea, button, summary, dialog\) \{ font-family: var\(--font-sans\); \}/);
+  assert.match(stepsCss, /\.ns-dialog \{[^}]*font-family: var\(--font-sans\)/);
+  assert.doesNotMatch(stepsCss, /--font-mono/);
+});
+
+test("44 los controles nativos (calendario) siguen el tema claro y oscuro", () => {
+  assert.match(stepsCss, /\.wl-new-study \{[^}]*color-scheme: light;/);
+  assert.match(stepsCss, /:root\[data-theme="clinical"\] \.wl-new-study \{ color-scheme: dark; \}/);
+});
+
+test("45 la vista no usa scrolls internos ni alturas máximas en sus secciones", () => {
+  assert.doesNotMatch(stepsCss, /overflow-y|overflow: *(auto|scroll)|max-height/);
+  assert.match(stepsCss, /\.ns-foot \{ position: sticky; bottom: 0;/);
+});
+
+test("46 sin animaciones decorativas ni gradientes en la vista", () => {
+  assert.doesNotMatch(stepsCss, /@keyframes|animation:|linear-gradient|radial-gradient|transition:/);
+});
+
+console.log(`Post-E50 new study (3 steps, patient + context) tests passed: ${count}`);

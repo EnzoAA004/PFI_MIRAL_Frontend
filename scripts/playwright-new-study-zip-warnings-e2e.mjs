@@ -15,7 +15,8 @@ import { chromium } from "playwright";
  *   «Detalles técnicos»;
  * - una advertencia DESCONOCIDA se ve tal cual en «Limitaciones» (sin abrir nada), no solo en
  *   «Detalles técnicos»;
- * - el bloqueo del contrato se conserva: sin serie sagital no se puede analizar, y el pie dice por qué.
+ * - el bloqueo del contrato se conserva: sin serie sagital no se puede continuar a la revisión ni
+ *   analizar, y el pie dice por qué.
  */
 
 const frontendUrl = process.env.POST_E50_FRONTEND_URL ?? "http://localhost:8188";
@@ -75,6 +76,8 @@ async function loadZip(browser, body) {
   await page.getByRole("button", { name: "Nuevo estudio" }).click();
   await page.getByRole("heading", { name: "Nuevo estudio" }).waitFor();
   await page.getByPlaceholder("CASE-XXXX").fill("CASE-WARN");
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Imágenes", level: 2 }).waitFor();
   await page.locator('.ns-zip input[type="file"]').setInputFiles({ name: "sintetico.zip", mimeType: "application/zip", buffer: Buffer.from("PK-synthetic") });
   await page.getByText(/series? detectadas?/).waitFor({ timeout: 10000 });
   return page;
@@ -109,14 +112,18 @@ async function main() {
   page = await loadZip(browser, ingestion({ warnings: [NO_SAGITTAL], withSagittal: false }));
   const blocked = await page.locator(".ns-limitations").innerText();
   assertTruthy(/no incluye una serie sagital/.test(blocked), "debe decir que falta la serie sagital");
-  assertTruthy(await page.getByRole("button", { name: "Analizar estudio", exact: true }).isDisabled(), "sin sagital «Analizar estudio» debe estar deshabilitado");
+  assertTruthy(await page.getByRole("button", { name: "Continuar", exact: true }).isDisabled(), "sin sagital no se puede continuar a la revisión");
   assertTruthy((await page.locator(".ns-foot-hint").innerText()).includes("no incluye una serie sagital"), "el pie debe explicar el bloqueo");
+  assertTruthy((await page.getByRole("button", { name: "Analizar estudio", exact: true }).count()) === 0, "«Analizar estudio» no existe fuera del último paso");
   console.log("ok 5 - sin serie sagital se conserva el bloqueo y el pie explica por qué");
   await page.close();
 
   // 4. Sin advertencias: no aparece el bloque.
   page = await loadZip(browser, ingestion({ warnings: [], withSagittal: true }));
   assertTruthy((await page.locator(".ns-limitations").count()) === 0, "sin advertencias no debe haber bloque de limitaciones");
+  assertTruthy(await page.getByRole("button", { name: "Continuar", exact: true }).isEnabled(), "con sagital y sin advertencias se puede continuar");
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Contexto y revisión", level: 2 }).waitFor();
   assertTruthy(await page.getByRole("button", { name: "Analizar estudio", exact: true }).isEnabled(), "con sagital y sin advertencias se puede analizar");
   console.log("ok 6 - sin advertencias no hay bloque y se puede analizar");
   await page.close();

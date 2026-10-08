@@ -213,12 +213,18 @@ async function installBackendMocks(page, { failRun = false } = {}) {
   return calls;
 }
 
-async function openPreparedDrawer(page) {
+/** Abre la vista y llena el ID: paso 1 (el paciente es opcional: este flujo va "sin asociar"). */
+async function openStudyForm(page) {
   await page.getByRole("heading", { name: "Lista de estudios" }).waitFor({ timeout: 10_000 });
   await page.getByRole("button", { name: /Nuevo estudio/ }).click();
-  // Stage 86: el paciente/subjectRef es opcional -- este flujo prueba el caso "sin
-  // asociar" a propósito, para confirmar que ya no depende de una selección previa.
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
+}
+
+/** Recorre los tres pasos hasta el de revisión, con un archivo sagital por plano. */
+async function openPreparedDrawer(page) {
+  await openStudyForm(page);
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Imágenes", level: 2 }).waitFor();
   await page.getByRole("button", { name: /Cargar archivos por plano/ }).click();
   await page.locator('input[type="file"]').nth(1).setInputFiles({
     name: "sagittal.dcm",
@@ -226,6 +232,8 @@ async function openPreparedDrawer(page) {
     buffer: Buffer.from("deidentified-ui-pr2"),
   });
   await page.getByText("sagittal.dcm cargado.").waitFor();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Contexto y revisión", level: 2 }).waitFor();
 }
 
 async function capture(page, name, width, height) {
@@ -249,14 +257,25 @@ async function runSuccess(browser) {
   const calls = await installBackendMocks(page);
   await seedSession(page);
   assertTruthy(await page.getByRole("columnheader", { name: "Modelo" }).count() === 0, "Worklist no debe mostrar Modelo");
-  await openPreparedDrawer(page);
-  await page.getByLabel("Crear paciente").check();
-  assertTruthy(await page.getByText("Código visible").count() === 1, "debe mostrar el copy operativo");
-  assertTruthy(await page.getByPlaceholder("PAC-001").count() === 1, "debe mostrar el placeholder operativo");
-  await page.getByLabel("Buscar existente").check();
+  await openStudyForm(page);
+  await page.getByRole("button", { name: "Crear paciente" }).click();
+  const dialog = page.getByRole("dialog", { name: "Crear paciente" });
+  await dialog.waitFor();
+  assertTruthy(await dialog.getByText("Código visible").count() === 1, "el diálogo debe mostrar el copy operativo");
+  assertTruthy(await dialog.getByPlaceholder("PAC-001").count() === 1, "el diálogo debe mostrar el placeholder operativo");
+  assertTruthy(await dialog.getByText("No crea ni continúa el estudio").count() === 1, "el diálogo debe distinguir crear paciente de continuar");
+  await dialog.getByRole("button", { name: "Cancelar" }).click();
+  await dialog.waitFor({ state: "detached" });
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Imágenes", level: 2 }).waitFor();
+  await page.getByRole("button", { name: /Cargar archivos por plano/ }).click();
+  await page.locator('input[type="file"]').nth(1).setInputFiles({ name: "sagittal.dcm", mimeType: "application/dicom", buffer: Buffer.from("deidentified-ui-pr2") });
+  await page.getByText("sagittal.dcm cargado.").waitFor();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("heading", { name: "Contexto y revisión", level: 2 }).waitFor();
   for (const [width, height] of [[1920, 1080], [1366, 768], [390, 844]]) await capture(page, "new-analysis", width, height);
 
-  const analyze = page.getByRole("button", { name: "Analizar" });
+  const analyze = page.getByRole("button", { name: "Analizar estudio", exact: true });
   await analyze.click();
   await page.getByRole("status", { name: "Progreso del análisis" }).waitFor();
   assertTruthy(await page.getByText("Procesando imágenes").first().isVisible(), "debe mostrar progreso visible");
@@ -275,11 +294,11 @@ async function runError(browser) {
   const calls = await installBackendMocks(page, { failRun: true });
   await seedSession(page);
   await openPreparedDrawer(page);
-  await page.getByRole("button", { name: "Analizar" }).click();
+  await page.getByRole("button", { name: "Analizar estudio", exact: true }).click();
   await page.getByText(/No se pudo ejecutar el análisis/).waitFor({ timeout: 10_000 });
   assertTruthy(!new URL(page.url()).pathname.startsWith("/estudio/"), "un error no debe navegar a Study Review");
   assertTruthy(await page.locator(".wl-new-study").isVisible(), "un error debe mantener abierto el flujo de creación");
-  assertTruthy(await page.getByRole("button", { name: "Analizar" }).isEnabled(), "el análisis debe poder reintentarse");
+  assertTruthy(await page.getByRole("button", { name: "Analizar estudio", exact: true }).isEnabled(), "el análisis debe poder reintentarse");
   assertTruthy(calls.run === 1, "un fallo no debe navegar");
   assertTruthy(calls.legacyPatient === 0, "un fallo no debe haber tocado el endpoint legacy de patients");
   await page.close();

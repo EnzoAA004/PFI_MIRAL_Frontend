@@ -83,17 +83,17 @@ async function main() {
 
   // 3. El selector busca pacientes reales por codigo (GET /api/patients) y los muestra con su
   //    codigo visible: ahora el codigo del paciente es un dato de la pantalla, no se oculta.
-  await page.getByLabel("Buscar por código o nombre").fill("PAT-86");
+  await page.getByLabel("Buscar paciente por código o nombre").fill("PAT-86");
   await page.getByRole("list", { name: "Resultados de pacientes" }).waitFor({ timeout: 10000 });
   const results = await page.getByRole("list", { name: "Resultados de pacientes" }).innerText();
   assertTruthy(results.includes("PAT-86-A") && results.includes("PAT-86-B") && results.includes("PAT-86-C"), "la búsqueda no mostró los tres pacientes PAT-86-*");
-  await page.getByLabel("Buscar por código o nombre").fill("Bruno");
+  await page.getByLabel("Buscar paciente por código o nombre").fill("Bruno");
   await page.waitForTimeout(700);
   assertTruthy((await page.getByRole("list", { name: "Resultados de pacientes" }).innerText()).includes("PAT-86-B"), "la búsqueda por nombre no encontró a PAT-86-B");
   console.log("ok 3 - el selector busca pacientes reales por código y por nombre");
 
   // 4. Seleccionar un paciente existente (PAT-86-A, el de 3 estudios).
-  await page.getByLabel("Buscar por código o nombre").fill("PAT-86-A");
+  await page.getByLabel("Buscar paciente por código o nombre").fill("PAT-86-A");
   await page.getByRole("list", { name: "Resultados de pacientes" }).getByRole("button").first().click();
   await page.locator('[aria-label="Paciente seleccionado"]').waitFor({ timeout: 10000 });
   assertTruthy((await page.locator('[aria-label="Paciente seleccionado"]').innerText()).includes("PAT-86-A"), "el resumen no muestra PAT-86-A");
@@ -101,14 +101,17 @@ async function main() {
 
   // 5. Cambiar de paciente vuelve al selector (sin llamar a ningun endpoint de asociacion).
   await page.getByRole("button", { name: "Cambiar", exact: true }).click();
-  await page.waitForSelector('div[role="radiogroup"]', { timeout: 10000 });
+  await page.getByLabel("Buscar paciente por código o nombre").waitFor({ timeout: 10000 });
   console.log("ok 5 - 'Cambiar' vuelve al selector");
 
-  // 6. El modo "Crear paciente" esta disponible (reemplaza al subjectRef manual).
-  await page.getByLabel("Crear paciente").check();
-  await page.waitForSelector("text=Código visible", { timeout: 10000 });
-  console.log("ok 6 - el modo 'Crear paciente' está disponible");
-  await page.getByLabel("Buscar existente").check();
+  // 6. "Crear paciente" abre un dialogo (reemplaza al subjectRef manual); cancelarlo no crea nada.
+  await page.getByRole("button", { name: "Crear paciente" }).click();
+  const createDialog = page.getByRole("dialog", { name: "Crear paciente" });
+  await createDialog.waitFor({ timeout: 10000 });
+  assertTruthy((await createDialog.innerText()).includes("Código visible"), "el diálogo no muestra el código visible");
+  await createDialog.getByRole("button", { name: "Cancelar" }).click();
+  await createDialog.waitFor({ state: "detached", timeout: 10000 });
+  console.log("ok 6 - 'Crear paciente' abre un diálogo y cancelarlo no crea nada");
 
   // 7. Un caseId nuevo se puede escribir sin paciente: continuar sin asociar es explicito y no bloquea (86-N).
   await page.getByRole("button", { name: "Continuar sin asociar paciente" }).click();
