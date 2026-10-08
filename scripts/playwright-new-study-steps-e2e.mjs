@@ -12,6 +12,9 @@ import { chromium } from "playwright";
  * B. con paciente nuevo (diálogo), volviendo entre pasos y cambiando el ID después de cargar
  *    imágenes (hay que volver a cargarlas);
  * C. sin asociación, con edad declarada.
+ * Y dos comprobaciones de contexto por estudio y de edad:
+ * D. el mismo paciente en otro estudio: nacimiento conocido sin fecha del estudio (se pide la fecha,
+ *    no se asume la actual), y el contexto del estudio anterior NO se copia.
  *
  * En todos: cambiar de paso no analiza ni crea pacientes, y lo guardado se recupera del backend.
  */
@@ -216,6 +219,8 @@ async function main() {
   await heading(page, "Contexto y revisión").waitFor();
   const unknownAge = await page.locator(".ns-age").innerText();
   assertTruthy(/No hay paciente con fecha de nacimiento y falta la fecha del estudio/.test(unknownAge), `motivo real de la edad: ${unknownAge}`);
+  assertTruthy((await page.getByPlaceholder("Años").count()) === 0, "el campo de edad no aparece de entrada: es una alternativa explícita");
+  await page.getByRole("button", { name: "Declarar edad manualmente" }).click();
   await page.getByPlaceholder("Años").fill("62");
   assertTruthy(/Declarada/.test(await page.locator(".ns-age").innerText()), "edad declarada");
   assertTruthy(/Sin asociación/.test(await page.locator(".ns-review").innerText()), "la revisión dice Sin asociación");
@@ -226,6 +231,53 @@ async function main() {
   context = await (await api(`/api/studies/${caseC}/context`)).json();
   assertTruthy(context.patient === null && context.clinicalContext?.ageAtStudy === 62 && context.clinicalContext?.ageProvenance === "reported", `contexto C persistido: ${JSON.stringify(context)}`);
   console.log("ok 3 - recorrido sin asociación: edad declarada, un análisis, ningún paciente creado");
+  await page.close();
+
+  /* ============================== D. mismo paciente, otro estudio ============================== */
+  const caseD = `CASE-STEPS-D-${stamp}`;
+  page = await newPage();
+  await page.getByLabel("Buscar paciente por código o nombre").fill("PAT-87");
+  await page.getByRole("list", { name: "Resultados de pacientes" }).getByRole("button").first().click();
+  await page.locator('[aria-label="Paciente seleccionado"]').waitFor();
+  await page.getByPlaceholder("CASE-XXXX").fill(caseD);
+  await next(page).click();
+  await heading(page, "Imágenes").waitFor();
+  await loadPlaneFile(page, "steps-d-sagittal.dcm");
+  await next(page).click();
+  await heading(page, "Contexto y revisión").waitFor();
+  const noDate = await page.locator(".ns-age").innerText();
+  assertTruthy(/Completá la fecha del estudio para calcular la edad\./.test(noDate), `se pide la fecha del estudio: ${noDate}`);
+  assertTruthy(!/\d+ años/.test(noDate), "no se asume ninguna fecha ni edad");
+  assertTruthy((await page.getByPlaceholder("Años").count()) === 0, "no se ofrece de entrada un campo para un dato ya conocido");
+  assertTruthy(await page.getByRole("button", { name: "Declarar edad manualmente" }).isVisible(), "la alternativa manual es explícita");
+  // el contexto del estudio A (mismo paciente) no se copió
+  assertTruthy((await page.getByLabel("Motivo del estudio").inputValue()) === "", "el motivo del estudio anterior no se copia");
+  assertTruthy((await page.getByLabel("Síntomas").inputValue()) === "", "los síntomas del estudio anterior no se copian");
+  assertTruthy((await page.getByLabel("Antecedentes relevantes").inputValue()) === "", "los antecedentes del estudio anterior no se copian");
+  assertTruthy((await page.getByLabel("Tiempo de evolución").inputValue()) === "", "la evolución del estudio anterior no se copia");
+  // la acción lleva al campo de la fecha y conserva el resto del formulario
+  await page.getByRole("button", { name: "Completar la fecha del estudio" }).click();
+  await heading(page, "Paciente y estudio").waitFor();
+  assertTruthy(await page.evaluate(() => document.activeElement?.id === "ns-study-date"), "el foco debe quedar en la fecha del estudio");
+  assertTruthy((await page.getByPlaceholder("CASE-XXXX").inputValue()) === caseD, "el ID se conserva");
+  assertTruthy((await page.locator('[aria-label="Paciente seleccionado"]').innerText()).includes("PAT-87-A"), "el paciente se conserva");
+  await page.getByLabel(/Fecha del estudio/).fill("2026-10-06");
+  await next(page).click();
+  await heading(page, "Imágenes").waitFor();
+  assertTruthy((await page.locator("text=steps-d-sagittal.dcm").count()) >= 1, "las imágenes ya cargadas se conservan");
+  await next(page).click();
+  await heading(page, "Contexto y revisión").waitFor();
+  const withDate = await page.locator(".ns-age").innerText();
+  assertTruthy(/51 años/.test(withDate) && /Calculada/.test(withDate), `con nacimiento y fecha se calcula directo: ${withDate}`);
+  const runsBeforeD = counts.run;
+  await page.getByRole("button", { name: "Analizar estudio", exact: true }).click();
+  await page.waitForURL(`${frontendUrl.replace(/\/$/, "")}/estudio/${caseD}`, { timeout: 30000 });
+  assertTruthy(counts.run === runsBeforeD + 1, "un solo análisis");
+  context = await (await api(`/api/studies/${caseD}/context`)).json();
+  assertTruthy(context.patient?.patientReference === "PAT-87-A" && context.clinicalContext?.ageAtStudy === 51 && context.clinicalContext?.clinicalReason === null && context.clinicalContext?.symptoms === null && context.clinicalContext?.relevantHistory === null, `el estudio D no heredó contexto: ${JSON.stringify(context)}`);
+  const contextA = await (await api(`/api/studies/${caseA}/context`)).json();
+  assertTruthy(contextA.clinicalContext?.clinicalReason === "Lumbalgia sintética A", "el estudio A conserva su propio contexto");
+  console.log("ok 4 - mismo paciente en otro estudio: se pide la fecha (sin asumir), se calcula al completarla y no se copia el contexto del anterior");
   await page.close();
 
   await browser.close();

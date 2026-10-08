@@ -135,7 +135,8 @@ test("14 son tres pasos con navegación, y los datos viven por encima de ellos",
     assert.ok(declaration > 0 && declaration < firstStep, `${state} se declara en el componente, no dentro de un paso`);
   }
   assert.match(drawerSource, /step === "images" && \(/);
-  assert.match(drawerSource, /step === "context" && \(/);
+  assert.match(drawerSource, /step === "context" && !showProcessing && \(/);
+  assert.match(drawerSource, /step === "context" && showProcessing && \(/);
 });
 
 test("15 la navegación de pasos tiene estados actual / completado / pendiente", () => {
@@ -204,7 +205,7 @@ test("23 lo declarado nunca se descarta al cambiar de paciente", () => {
 });
 
 test("24 los textos clínicos tienen su espacio en el área principal, no en una columna estrecha", () => {
-  const context = drawerSource.slice(drawerSource.indexOf('step === "context" && ('));
+  const context = drawerSource.slice(drawerSource.indexOf('step === "context" && !showProcessing && ('));
   for (const label of ["Motivo del estudio", "Síntomas", "Tiempo de evolución", "Antecedentes relevantes"]) {
     assert.ok(context.includes(label), `falta «${label}» en el último paso`);
   }
@@ -219,7 +220,7 @@ test("25 el contexto es opcional: ningún texto es obligatorio para analizar", (
 });
 
 test("26 el contexto dice una sola línea y deja la explicación en una ayuda accesible", () => {
-  assert.match(drawerSource, /Información clínica registrada para este estudio/);
+  assert.match(drawerSource, /Describe la situación del paciente al momento de este estudio/);
   assert.match(drawerSource, /aria-controls="ns-context-help"/);
   assert.match(drawerSource, /aria-expanded=\{contextHelpOpen\}/);
 });
@@ -281,7 +282,7 @@ test("34 doble submit queda bloqueado por una referencia sincrónica", () => {
 });
 
 test("35 un error de creación muestra mensaje y no rompe el flujo", () => {
-  assert.match(drawerSource, /setMessage\(apiErrorMessage\(error, "ejecutar el análisis"\)\)/);
+  assert.match(drawerSource, /setRunError\(apiErrorMessage\(error, "ejecutar el análisis"\)\)/);
 });
 
 test("36 éxito completo navega al Study creado", () => {
@@ -338,13 +339,91 @@ test("44 los controles nativos (calendario) siguen el tema claro y oscuro", () =
   assert.match(stepsCss, /:root\[data-theme="clinical"\] \.wl-new-study \{ color-scheme: dark; \}/);
 });
 
-test("45 la vista no usa scrolls internos ni alturas máximas en sus secciones", () => {
-  assert.doesNotMatch(stepsCss, /overflow-y|overflow: *(auto|scroll)|max-height/);
-  assert.match(stepsCss, /\.ns-foot \{ position: sticky; bottom: 0;/);
+test("45 un único contenedor de scroll y ninguna sección con scroll ni altura máxima propios", () => {
+  const scrollers = stepsCss.match(/[^\n]*(overflow-y|overflow: *(auto|scroll))[^\n]*/g) ?? [];
+  assert.equal(scrollers.length, 1, `solo .ns-scroll debe scrollear: ${scrollers.join(" / ")}`);
+  assert.match(scrollers[0], /\.ns-scroll/);
+  assert.doesNotMatch(stepsCss, /max-height/);
 });
 
 test("46 sin animaciones decorativas ni gradientes en la vista", () => {
   assert.doesNotMatch(stepsCss, /@keyframes|animation:|linear-gradient|radial-gradient|transition:/);
+});
+
+/* ---------------------------------------------------------------- pie, edad sin fecha y procesamiento */
+
+test("47 el pie está fuera del scroll, ocupa todo el ancho del área de trabajo y no se superpone", () => {
+  const footerRule = stepsCss.match(/\.ns-foot \{[^}]*\}/)?.[0] ?? "";
+  assert.doesNotMatch(footerRule, /position: *(sticky|fixed|absolute)/, "el pie ya no flota sobre el contenido");
+  assert.match(footerRule, /flex: none/);
+  assert.match(footerRule, /border-top/);
+  assert.match(stepsCss, /\.wl-new-study-page \{ display: flex; flex: 1; flex-direction: column; min-height: 0; \}/);
+  assert.match(stepsCss, /\.app-layout:has\(\.wl-new-study-page\) \{ height: 100vh; height: 100dvh;/);
+  assert.match(stepsCss, /\.ns-scroll \{ flex: 1; min-height: 0; overflow-y: auto;/);
+  const jsxFooter = drawerSource.indexOf('<footer className="ns-foot">');
+  const jsxScrollEnd = drawerSource.indexOf("</div>\n      </section>\n      </div>") >= 0 ? drawerSource.indexOf("</div>\n      </section>\n      </div>") : drawerSource.search(/<\/section>\s*<\/div>\s*<footer className="ns-foot">/);
+  assert.ok(jsxFooter > 0 && jsxScrollEnd > 0 && jsxScrollEnd < jsxFooter, "el pie va después de cerrar el contenedor de scroll");
+});
+
+test("48 el contenido del pie se alinea con el formulario (mismo ancho máximo y compensación de la barra)", () => {
+  assert.match(stepsCss, /\.ns-foot-inner \{[^}]*width: min\(1120px, 100%\); margin: 0 auto;/);
+  assert.match(stepsCss, /var\(--ns-scrollbar, 0px\)/);
+  assert.match(drawerSource, /setProperty\("--ns-scrollbar"/);
+});
+
+test("49 con nacimiento conocido y sin fecha del estudio se pide la fecha, sin asumir la actual", () => {
+  assert.match(drawerSource, /const ageNeedsStudyDate = age\.calculated === null && !age\.missing\.birthDate && age\.missing\.studyDate;/);
+  assert.match(drawerSource, /Completá la fecha del estudio para calcular la edad\./);
+  assert.match(drawerSource, /Completar la fecha del estudio/);
+  assert.match(drawerSource, /pendingFocusRef\.current = "ns-study-date"/);
+  assert.match(drawerSource, /id="ns-study-date"/);
+  assert.doesNotMatch(drawerSource, /new Date\(\)|Date\.now\(\)|toISOString/, "no se usa la fecha actual para calcular edades");
+});
+
+test("50 la edad manual es una alternativa explícita: el campo no aparece de entrada", () => {
+  assert.match(drawerSource, /Declarar edad manualmente/);
+  assert.match(drawerSource, /const showAgeInput = ageOverrideOpen \|\| metadata\.ageDeclared\.trim\(\) !== "";/);
+  assert.match(drawerSource, /Quitar la edad declarada/);
+});
+
+test("51 al analizar, el formulario es reemplazado por la vista de procesamiento dentro de la misma estructura", () => {
+  assert.match(drawerSource, /const showProcessing = analysisStage !== "idle" \|\| Boolean\(persistedRun && productState\);/);
+  assert.match(drawerSource, /\{message && !showProcessing &&/);
+  assert.match(drawerSource, /<summary>Detalles del procesamiento<\/summary>/);
+  const form = drawerSource.slice(drawerSource.indexOf('step === "context" && !showProcessing && ('));
+  assert.doesNotMatch(form, /ns-stages|Etapas del procesamiento|wl-analysis-progress|wl-product-progress/, "el cargador no se agrega debajo del formulario");
+});
+
+test("52 un único estado principal: una sola lista de etapas, sin segundo indicador por el subpaso", () => {
+  assert.equal((drawerSource.match(/aria-label="Etapas del procesamiento"/g) ?? []).length, 1);
+  assert.doesNotMatch(drawerSource, /wl-analysis-progress|wl-product-progress/);
+  assert.match(drawerSource, /stage\.id === "completing" && productState\?\.message/);
+});
+
+test("53 la vista de procesamiento no usa mensajes de implementación ni progreso inventado", () => {
+  const processing = drawerSource.slice(drawerSource.indexOf('step === "context" && showProcessing && ('), drawerSource.indexOf('step === "context" && !showProcessing && ('));
+  assert.doesNotMatch(processing, /porcentaje|restante|minutos|segundos|%|El sistema no informa/i);
+  assert.doesNotMatch(drawerSource, /analysisStageCopy/);
+});
+
+test("54 una falla antes de guardar conserva el formulario y muestra la recuperación real", () => {
+  assert.match(drawerSource, /setRunError\(apiErrorMessage\(error, "ejecutar el análisis"\)\)/);
+  assert.match(drawerSource, /Tus datos y las imágenes siguen cargados\. Podés reintentar con «Analizar estudio» o volver a un paso anterior\./);
+  const runStart = drawerSource.indexOf("async function run()");
+  const catchBlock = drawerSource.slice(drawerSource.indexOf("catch (error)", runStart), drawerSource.indexOf("finally", runStart));
+  assert.doesNotMatch(catchBlock, /setMetadata\(|setSelectedPatient\(|setUploads\(|setStudyUpload\(/);
+});
+
+test("55 la falla de hallazgos discales ofrece solo las acciones que existen", () => {
+  assert.match(drawerSource, /El análisis principal quedó guardado\./);
+  assert.match(drawerSource, /productState\.retryable[\s\S]*?Podés abrir el estudio sin hallazgos discales o reintentar solo esa parte\./);
+  assert.match(drawerSource, /Abrir sin hallazgos discales/);
+  assert.match(drawerSource, /Reintentar hallazgos discales/);
+});
+
+test("56 el contexto de un estudio no se copia de otro: el formulario nace vacío y no lee estudios previos", () => {
+  assert.match(studyMetadataSource, /clinicalReason: "", symptoms: "", symptomDuration: "", relevantHistory: ""/);
+  assert.doesNotMatch(drawerSource, /fetchStudyContext|studyContextApi|findStudiesByPatient/);
 });
 
 console.log(`Post-E50 new study (3 steps, patient + context) tests passed: ${count}`);

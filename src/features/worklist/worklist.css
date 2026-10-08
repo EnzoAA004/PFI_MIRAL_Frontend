@@ -1194,13 +1194,18 @@
   .wl-new-study,
   .wl-new-study :is(input, select, textarea, button, summary, dialog) { font-family: var(--font-sans); }
 
-  .wl-new-study-page { min-height: 100%; padding: var(--sp-6) clamp(var(--sp-4), 3vw, var(--sp-8)) 0; }
+  /* Esta vista usa toda la altura disponible del área de trabajo (la navegación lateral queda):
+     un único contenedor de scroll (.ns-scroll) y el pie fuera de él, sin superponerse a los campos.
+     Se mide con dvh —la altura real de la ventana del navegador— y no con la del monitor. */
+  .main-panel:has(> .wl-new-study-page) { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+  .app-layout:has(.wl-new-study-page) { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+  .wl-new-study-page { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+  .ns-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-4) clamp(var(--sp-4), 3vw, var(--sp-8)) var(--sp-6); }
 
   .wl-new-study {
     display: flex;
     flex-direction: column;
     width: min(1120px, 100%);
-    min-height: calc(100vh - 56px);
     margin: 0 auto;
     color: var(--text);
     font-size: var(--fs-small);
@@ -1222,8 +1227,8 @@
   .ns-confirm-actions { display: flex; gap: var(--sp-2); }
 
   /* ---- navegación de pasos ---- */
-  .ns-stepper ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: var(--sp-5, 20px) 0 var(--sp-6); padding: 0; list-style: none; border-bottom: 1px solid var(--border); }
-  .ns-stepper button { display: flex; align-items: center; gap: var(--sp-3); width: 100%; margin-bottom: -1px; padding: var(--sp-3) var(--sp-3) var(--sp-3) 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
+  .ns-stepper ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: var(--sp-3) 0 var(--sp-4); padding: 0; list-style: none; border-bottom: 1px solid var(--border); }
+  .ns-stepper button { display: flex; align-items: center; gap: var(--sp-3); width: 100%; margin-bottom: -1px; padding: var(--sp-2) var(--sp-3) var(--sp-2) 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); text-align: left; cursor: pointer; }
   .ns-stepper button:disabled { cursor: not-allowed; opacity: .6; }
   .ns-stepper button:hover:not(:disabled) { color: var(--text); }
   .ns-stepper button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 4px; }
@@ -1236,8 +1241,8 @@
   .ns-step-state { font-size: var(--fs-micro); color: var(--text-muted); }
 
   /* ---- cuerpo: paso activo + resumen ---- */
-  .ns-body { display: grid; grid-template-columns: minmax(0, 1fr) 264px; grid-template-areas: "main summary"; gap: var(--sp-8); align-items: start; flex: 1; padding-bottom: var(--sp-6); }
-  .ns-main { grid-area: main; display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; padding: var(--sp-6); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+  .ns-body { display: grid; grid-template-columns: minmax(0, 1fr) 264px; grid-template-areas: "main summary"; gap: var(--sp-8); align-items: start; }
+  .ns-main { grid-area: main; display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; padding: var(--sp-5, 20px) var(--sp-6); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
   .ns-summary { grid-area: summary; position: sticky; top: var(--sp-4); padding-left: var(--sp-6); border-left: 1px solid var(--border); }
   .ns-summary h2 { margin: 0 0 var(--sp-3); color: var(--text-muted); font-size: var(--fs-micro); font-weight: var(--fw-semibold); letter-spacing: .06em; text-transform: uppercase; }
   .ns-summary dl { display: grid; gap: var(--sp-3); margin: 0; }
@@ -1248,13 +1253,13 @@
   .ns-summary dd.is-error { color: var(--danger); }
   .ns-summary dd.is-invalidated { color: var(--text); font-weight: var(--fw-semibold); }
 
-  .ns-step { display: flex; flex-direction: column; gap: var(--sp-6); }
+  .ns-step { display: flex; flex-direction: column; gap: var(--sp-5, 20px); }
   .ns-step > h2 { margin: 0; font-size: 18px; font-weight: var(--fw-semibold); }
   .ns-step > h2:focus { outline: none; }
   .ns-step > h2:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 4px; }
   .ns-step-lead { margin: calc(-1 * var(--sp-3)) 0 0; color: var(--text-muted); }
   .ns-block { display: flex; flex-direction: column; gap: var(--sp-3); }
-  .ns-block + .ns-block { padding-top: var(--sp-6); border-top: 1px solid var(--border-subtle); }
+  .ns-block + .ns-block { padding-top: var(--sp-5, 20px); border-top: 1px solid var(--border-subtle); }
   .ns-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
   .ns-block-head h3 { margin: 0; font-size: var(--fs-small); font-weight: var(--fw-semibold); }
   .ns-block-head span { color: var(--text-muted); font-size: var(--fs-micro); }
@@ -1295,7 +1300,7 @@
   .wl-new-study .wl-field :is(input, select, textarea):focus-visible, .ns-dialog .wl-field :is(input, select, textarea):focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
   .wl-new-study .wl-field ::placeholder, .ns-dialog .wl-field ::placeholder { color: var(--text-muted); opacity: .8; }
   .ns-field-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: var(--sp-4); align-items: start; }
-  .wl-new-study :is(input, select, textarea, button, summary) { scroll-margin-bottom: 104px; }
+  .wl-new-study :is(input, select, textarea, button, summary) { scroll-margin-block: var(--sp-4); }
 
   /* ---- botones ---- */
   .ns-btn, .ns-file-button {
@@ -1411,7 +1416,8 @@
   .ns-review dd { margin: 0; overflow-wrap: anywhere; }
 
   /* ---- pie de acciones ---- */
-  .ns-foot { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: var(--sp-4); margin: 0 calc(-1 * clamp(var(--sp-4), 3vw, var(--sp-8))); padding: var(--sp-3) clamp(var(--sp-4), 3vw, var(--sp-8)); border-top: 1px solid var(--border); background: var(--surface); }
+  .ns-foot { flex: none; padding: var(--sp-3) calc(clamp(var(--sp-4), 3vw, var(--sp-8)) + var(--ns-scrollbar, 0px)) var(--sp-3) clamp(var(--sp-4), 3vw, var(--sp-8)); border-top: 1px solid var(--border); background: var(--surface); }
+  .ns-foot-inner { display: flex; align-items: center; gap: var(--sp-4); width: min(1120px, 100%); margin: 0 auto; }
   .ns-foot-hint { flex: 1; margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
   .ns-foot-actions { display: flex; align-items: center; gap: var(--sp-2); }
 
@@ -1430,8 +1436,35 @@
     .ns-stepper li.is-current .ns-step-label { display: block; }
     .ns-step-state { display: none; }
     .ns-stepper li.is-current .ns-step-state { display: block; }
-    .ns-foot { flex-wrap: wrap; margin: 0 calc(-1 * var(--sp-4)); padding: var(--sp-3) var(--sp-4); }
+    .ns-foot-inner { flex-wrap: wrap; }
     .ns-foot-hint { order: -1; flex-basis: 100%; }
     .ns-foot-actions { margin-left: auto; }
   }
+}
+
+/* ==========================================================================
+ * Nuevo estudio — edad sin fecha de estudio y vista de procesamiento.
+ * ======================================================================= */
+@layer components {
+  .ns-age-missing { margin: 0; }
+  .ns-age-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); }
+
+  /* Falla recuperable: el formulario sigue intacto debajo. */
+  .ns-failure { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--danger); border-radius: var(--radius-input); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+  .ns-failure p { margin: 0; }
+
+  /* Vista de procesamiento: reemplaza al formulario dentro de la misma estructura. */
+  .ns-processing { gap: var(--sp-4); }
+  .ns-processing-id { margin: calc(-1 * var(--sp-2)) 0 0; color: var(--text-muted); overflow-wrap: anywhere; }
+  .ns-stages { display: flex; flex-direction: column; gap: var(--sp-4); margin: var(--sp-2) 0; padding: 0; list-style: none; }
+  .ns-stages li { display: flex; align-items: flex-start; gap: var(--sp-3); color: var(--text-muted); }
+  .ns-stage-mark { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 50%; font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
+  .ns-stage-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-top: 3px; }
+  .ns-stage-text small { color: var(--text-muted); font-size: var(--fs-micro); overflow-wrap: anywhere; }
+  .ns-stages li.is-active { color: var(--text); }
+  .ns-stages li.is-active .ns-stage-mark { border-color: var(--primary); color: var(--primary); }
+  .ns-stages li.is-active strong { font-weight: var(--fw-semibold); }
+  .ns-stages li.is-done .ns-stage-mark { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 72%, #0b1220); color: #fff; }
+  .ns-stages li.is-done { color: var(--text); }
+  .ns-stages li:not(.is-active) strong { font-weight: 400; }
 }

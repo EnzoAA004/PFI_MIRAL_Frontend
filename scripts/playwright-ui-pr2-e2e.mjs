@@ -277,8 +277,9 @@ async function runSuccess(browser) {
 
   const analyze = page.getByRole("button", { name: "Analizar estudio", exact: true });
   await analyze.click();
-  await page.getByRole("status", { name: "Progreso del análisis" }).waitFor();
+  await page.getByRole("list", { name: "Etapas del procesamiento" }).waitFor();
   assertTruthy(await page.getByText("Procesando imágenes").first().isVisible(), "debe mostrar progreso visible");
+  assertTruthy((await page.getByLabel("Motivo del estudio").count()) === 0, "la vista de procesamiento reemplaza al formulario");
   assertTruthy(await page.getByRole("button", { name: /Procesando/ }).isDisabled(), "Analizar debe quedar bloqueado durante el proceso");
   for (const [width, height] of [[1920, 1080], [1366, 768], [390, 844]]) await capture(page, "analysis-progress", width, height);
   await page.waitForTimeout(100);

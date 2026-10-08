@@ -53,12 +53,13 @@ test("el flujo explica paciente, estudio, imágenes y análisis", () => {
   assert.doesNotMatch(drawer, /aria-hidden="true">0\d<\/span>/);
 });
 
-test("el análisis muestra progreso honesto sin porcentaje inventado", () => {
-  assert.match(drawer, /aria-label="Progreso del análisis"/);
+test("el análisis muestra etapas reales sin porcentaje ni tiempo inventado", () => {
+  assert.match(drawer, /aria-label="Etapas del procesamiento"/);
   assert.match(drawer, /Procesando imágenes/);
   assert.match(drawer, /Completando resultados/);
-  assert.match(drawer, /El sistema no informa porcentajes/);
-  assert.doesNotMatch(drawer, /progressPercent|setInterval/);
+  assert.match(drawer, /Abriendo estudio/);
+  // Las etapas salen de analysisStage (real); nada de explicaciones de implementación ni progreso falso.
+  assert.doesNotMatch(drawer, /no informa porcentajes|progressPercent|setInterval|restante|ETA|%</);
 });
 
 test("doble submit queda bloqueado de forma síncrona", () => {
@@ -78,7 +79,7 @@ test("un error de análisis no navega y mantiene el contexto", () => {
   const runStart = drawer.indexOf("async function run()");
   const catchStart = drawer.indexOf("catch (error)", runStart);
   const errorBlock = drawer.slice(catchStart, drawer.indexOf("finally", catchStart));
-  assert.match(errorBlock, /setMessage\(apiErrorMessage/);
+  assert.match(errorBlock, /setRunError\(apiErrorMessage/);
   assert.match(errorBlock, /setAnalysisStage\("idle"\)/);
   assert.doesNotMatch(errorBlock, /onAnalysisReady|openCompletedStudy/);
 });

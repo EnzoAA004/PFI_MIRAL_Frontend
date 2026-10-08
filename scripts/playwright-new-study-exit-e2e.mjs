@@ -195,7 +195,13 @@ async function main() {
   for (let index = 0; index < (await stepButtons.count()); index += 1) {
     assertTruthy(await stepButtons.nth(index).isDisabled(), "la navegación de pasos debe estar bloqueada durante el análisis");
   }
-  assertTruthy(await page.getByLabel("Motivo del estudio").isDisabled(), "el contexto debe estar bloqueado");
+  // el contenido editable se reemplazó por la vista de procesamiento, dentro de la misma estructura
+  assertTruthy((await page.getByLabel("Motivo del estudio").count()) === 0, "el formulario editable no debe seguir a la vista");
+  assertTruthy((await page.getByRole("heading", { name: "Analizando el estudio", level: 2 }).count()) === 1, "debe verse la vista de procesamiento");
+  assertTruthy((await page.getByRole("list", { name: "Etapas del procesamiento" }).count()) === 1, "un único indicador principal de etapas");
+  assertTruthy((await page.locator(".ns-processing-id").innerText()).includes(caseId), "el ID sigue visible en la vista");
+  assertTruthy((await page.locator(".ns-summary").innerText()).includes(caseId), "el resumen lateral sigue visible");
+  assertTruthy(!/porcentaje|restante/i.test(await page.locator(".ns-main").innerText()), "sin porcentajes ni tiempos inventados");
   assertTruthy((await page.locator(".ns-foot-hint").innerText()).includes("El análisis está en curso"), "el pie debe explicar el bloqueo");
   const processing = page.getByRole("button", { name: /Procesando/ });
   assertTruthy(await processing.isDisabled(), "el botón principal debe estar deshabilitado");
@@ -208,7 +214,7 @@ async function main() {
   await page.keyboard.press("Escape");
   await page.waitForTimeout(500);
   assertTruthy((await page.locator(".wl-new-study").count()) === 1, "forzar Volver/Cancelar/Atrás/Escape no debe salir de la vista");
-  assertTruthy((await page.getByRole("heading", { name: "Contexto y revisión", level: 2 }).count()) === 1, "no debe cambiar de paso durante el análisis");
+  assertTruthy((await page.getByRole("heading", { name: "Analizando el estudio", level: 2 }).count()) === 1 && (await page.getByRole("heading", { name: "Paciente y estudio", level: 2 }).count()) === 0, "no debe cambiar de paso durante el análisis");
   assertTruthy((await page.locator(".ns-confirm").count()) === 0, "no debe abrirse una confirmación durante el análisis");
   assertTruthy(runRequests === 1, `un solo POST de corrida, se observaron ${runRequests}`);
   console.log("ok 6 - durante el análisis Volver/Cancelar/Atrás/pasos/Escape no actúan ni forzados, y no hay segundo envío");

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, ChevronRight, LoaderCircle } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, LoaderCircle } from "lucide-react";
 import { BackendApiError, runMultiplanarAnalysis, uploadAiInput, uploadStudyArchive } from "../../multiplanarApi";
 import type { Plane } from "../../appTypes";
 import type { InputResponse, StudyIngestionResponse } from "../../contracts/inputApiTypes";
@@ -93,12 +93,6 @@ const analysisSteps: { id: Exclude<AnalysisStage, "idle">; label: string }[] = [
   { id: "opening", label: "Abriendo estudio" },
 ];
 
-const analysisStageCopy: Record<Exclude<AnalysisStage, "idle">, string> = {
-  processing: "El estudio está siendo analizado. El tiempo depende del tamaño y la cantidad de imágenes.",
-  completing: "La corrida principal está lista. Se están guardando los resultados complementarios disponibles.",
-  opening: "Todo quedó guardado correctamente. Abriendo la sala de lectura.",
-};
-
 type Props = {
   onClose: () => void;
   /** Se invoca con el caseId cuando la corrida terminó y el estudio ya es legible. */
@@ -188,6 +182,8 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const [withoutPatient, setWithoutPatient] = useState(false);
   const [ageOverrideOpen, setAgeOverrideOpen] = useState(false);
   const [contextHelpOpen, setContextHelpOpen] = useState(false);
+  /* Falla de la corrida antes de guardarse: el formulario sigue intacto y se explica aca. */
+  const [runError, setRunError] = useState("");
   const [step, setStep] = useState<StepId>("study");
   /* Una modificación (el ID) descartó imágenes ya cargadas: hay que volver a cargarlas. */
   const [imagesInvalidated, setImagesInvalidated] = useState(false);
@@ -196,6 +192,10 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const keepEditingRef = useRef<HTMLButtonElement | null>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const processingHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  /* Id del campo al que llevar el foco al cambiar de paso (ej. la fecha del estudio). */
+  const pendingFocusRef = useRef<string | null>(null);
   const firstStepRender = useRef(true);
   /* Cargas en vuelo: ver createRequestGate. */
   const [requestGate] = useState(createRequestGate);
@@ -209,6 +209,19 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  /* El pie queda fuera del scroll: se le descuenta el ancho real de la barra de desplazamiento
+     para que su contenido quede alineado con el formulario (con barras superpuestas vale 0). */
+  useEffect(() => {
+    const scroll = scrollRef.current;
+    if (!scroll) return undefined;
+    const sync = () => scroll.parentElement?.style.setProperty("--ns-scrollbar", `${scroll.offsetWidth - scroll.clientWidth}px`);
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(scroll);
+    if (scroll.firstElementChild) observer.observe(scroll.firstElementChild);
+    return () => observer.disconnect();
+  }, []);
+
   /* Al salir, ninguna respuesta pendiente puede volver a tocar el estado. */
   useEffect(() => () => requestGate.invalidateAll(), [requestGate]);
 
@@ -219,17 +232,19 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
       return;
     }
     const frame = window.requestAnimationFrame(() => {
+      const targetId = pendingFocusRef.current;
+      pendingFocusRef.current = null;
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (target) {
+        target.focus();
+        target.scrollIntoView({ block: "center" });
+        return;
+      }
       stepHeadingRef.current?.focus();
-      window.scrollTo({ top: 0 });
+      scrollRef.current?.scrollTo({ top: 0 });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [step]);
-
-  useEffect(() => {
-    if (analysisStage === "idle") return;
-    const frame = window.requestAnimationFrame(() => progressRef.current?.scrollIntoView({ block: "nearest" }));
-    return () => window.cancelAnimationFrame(frame);
-  }, [analysisStage]);
 
   useEffect(() => {
     if (confirmingExit) keepEditingRef.current?.focus();
@@ -270,8 +285,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const uploadBlocker = uploadBlockerMessage(normalizedCaseId, caseIdIssue);
   /* Edad al estudio: se calcula con la fecha de nacimiento del paciente y la fecha del estudio;
      si no se puede, o el usuario sabe otra, la declara. Lo declarado nunca se descarta en silencio. */
-  const calculatedAge = resolveStudyAge({ dateOfBirth: selectedPatient?.dateOfBirth, studyDate: metadata.studyDate, declared: "" }).calculated;
-  const showAgeInput = calculatedAge === null || ageOverrideOpen || metadata.ageDeclared.trim() !== "";
+  const showAgeInput = ageOverrideOpen || metadata.ageDeclared.trim() !== "";
   const age = resolveStudyAge({
     dateOfBirth: selectedPatient?.dateOfBirth,
     studyDate: metadata.studyDate,
@@ -283,7 +297,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     ? `Calculada con las fechas: ${age.calculated} años. Lo que declares acá se guarda como declarado.`
     : age.provenance === "reported"
       ? `Se guardará como edad declarada. No se calculó: ${unavailableReason.charAt(0).toLowerCase()}${unavailableReason.slice(1)}`
-      : `${unavailableReason} Si la conocés, podés declarar la edad.`;
+      : `${unavailableReason} Declarala solo si la conocés.`;
   const clinicalTextFilled = [metadata.clinicalReason, metadata.symptoms, metadata.symptomDuration, metadata.relevantHistory]
     .some((value) => value.trim() !== "");
   const analyzeBlocker = analyzeBlockerMessage({
@@ -295,6 +309,23 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     sagittalInputId,
     ageIssue: age.issue,
   });
+  /* Edad: con nacimiento conocido pero sin fecha de estudio no se asume la fecha de hoy: se pide. */
+  const ageNeedsStudyDate = age.calculated === null && !age.missing.birthDate && age.missing.studyDate;
+  /* Mientras corre (o ya quedó guardada la corrida), la vista de procesamiento reemplaza al
+     contenido editable dentro de la misma estructura; si la corrida falla antes de guardarse, vuelve
+     el formulario con todo lo cargado. */
+  const showProcessing = analysisStage !== "idle" || Boolean(persistedRun && productState);
+  const productFailed = Boolean(persistedRun && productState?.phase === "error" && !running);
+
+  /* La vista de procesamiento reemplaza al formulario: el foco va a su título. */
+  useEffect(() => {
+    if (!showProcessing) return;
+    const frame = window.requestAnimationFrame(() => {
+      processingHeadingRef.current?.focus();
+      scrollRef.current?.scrollTo({ top: 0 });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [showProcessing]);
   const steps = computeSteps({
     active: step,
     studyReady: caseIdReady,
@@ -363,6 +394,13 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     setStep(target);
   }
 
+  /* Lleva al campo de la fecha del estudio sin tocar el resto del formulario. */
+  function goToStudyDate() {
+    if (interactionLocked) return;
+    pendingFocusRef.current = "ns-study-date";
+    setStep("study");
+  }
+
   function goNext() {
     const target = nextStep(step);
     if (!target || stepBlocker || interactionLocked) return;
@@ -376,7 +414,6 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
 
   function openCompletedStudy(caseIdToOpen: string) {
     setAnalysisStage("opening");
-    setMessage("Análisis completado. Abriendo el estudio.");
     onAnalysisReady(caseIdToOpen);
   }
 
@@ -445,10 +482,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
       caseId: context.caseId,
       multiplanarRunId: context.runId,
       study: context.study,
-      onState: (state) => {
-        setProductState(state);
-        setMessage(state.message);
-      },
+      onState: (state) => setProductState(state),
     });
   }
 
@@ -464,10 +498,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
             multiplanarRunId: persistedRun.runId,
             study: persistedRun.study,
             state: productState,
-            onState: (state) => {
-              setProductState(state);
-              setMessage(state.message);
-            },
+            onState: (state) => setProductState(state),
           });
           setAnalysisStage("idle");
         } else {
@@ -487,20 +518,20 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   async function run() {
     if (!sagittalReady || uploading || running || runInFlightRef.current) return;
     if (age.issue) {
-      setMessage(age.issue);
+      setRunError(age.issue);
       return;
     }
     const subjectError = validateSubjectRef(metadata.subjectRef);
     if (subjectError) {
       setMetadataError(subjectError);
-      setMessage(subjectRefErrorMessage);
+      setRunError(subjectRefErrorMessage);
       return;
     }
     setMetadataError("");
+    setRunError("");
     runInFlightRef.current = true;
     setRunning(true);
     setAnalysisStage("processing");
-    setMessage("Procesando el estudio. Podés seguir el estado en esta pantalla.");
     try {
       const normalizedStudyMetadata = normalizeStudyMetadataInput(metadata, age);
       const payload: MultiplanarRunPayload = {
@@ -548,10 +579,10 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
       }
       // La corrida existe pero no dejó un sagital evaluable: se queda acá con el
       // motivo, en vez de abrir una sala de lectura sin nada que leer.
-      setMessage(`La corrida terminó sin sagital evaluable. ${readiness.reasons.join(" ")}`);
+      setRunError(`La corrida terminó sin sagital evaluable. ${readiness.reasons.join(" ")}`);
       setAnalysisStage("idle");
     } catch (error) {
-      setMessage(apiErrorMessage(error, "ejecutar el análisis"));
+      setRunError(apiErrorMessage(error, "ejecutar el análisis"));
       setAnalysisStage("idle");
     } finally {
       runInFlightRef.current = false;
@@ -561,6 +592,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
 
   return (
     <div className="wl-new-study-page">
+      <div className="ns-scroll" ref={scrollRef}>
       <section aria-labelledby="new-study-title" className="wl-new-study">
         <header className="ns-head">
           <button className="ns-back" disabled={interactionLocked} onClick={requestExit} type="button">
@@ -654,6 +686,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                       <span>Fecha del estudio <i>(opcional)</i></span>
                       <input
                         disabled={interactionLocked}
+                        id="ns-study-date"
                         onChange={(event) => setMetadata((current) => ({ ...current, studyDate: event.target.value }))}
                         type="date"
                         value={metadata.studyDate}
@@ -848,9 +881,95 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
               </section>
             )}
 
-            {step === "context" && (
+            {step === "context" && showProcessing && (
+              <section aria-labelledby="ns-processing-title" className="ns-step ns-processing" ref={progressRef}>
+                <h2 id="ns-processing-title" ref={processingHeadingRef} tabIndex={-1}>
+                  {productFailed ? "No se pudieron completar los hallazgos discales" : "Analizando el estudio"}
+                </h2>
+                <p className="ns-processing-id">
+                  {normalizedCaseId}
+                  {selectedPatient ? ` · ${patientDisplayName(selectedPatient) || "Sin nombre"} · ${selectedPatient.patientReference}` : withoutPatient ? " · Sin asociación" : ""}
+                </p>
+
+                {productFailed && productState ? (
+                  <div className="ns-failure" role="alert">
+                    <p><strong>El análisis principal quedó guardado.</strong> {productState.message}</p>
+                    <p>
+                      {productState.retryable
+                        ? "Podés abrir el estudio sin hallazgos discales o reintentar solo esa parte."
+                        : "Podés abrir el estudio sin hallazgos discales."}
+                    </p>
+                  </div>
+                ) : (
+                  <div aria-live="polite" role="status">
+                    <ol aria-label="Etapas del procesamiento" className="ns-stages">
+                      {analysisSteps.map((stage, index) => {
+                        const state = index < activeAnalysisStep ? "done" : index === activeAnalysisStep ? "active" : "pending";
+                        return (
+                          <li className={`is-${state}`} key={stage.id}>
+                            <span aria-hidden="true" className="ns-stage-mark">
+                              {state === "done" ? <Check size={14} strokeWidth={3} /> : state === "active" ? <LoaderCircle className="wl-button-spinner" size={16} /> : index + 1}
+                            </span>
+                            <span className="ns-stage-text">
+                              <strong>{stage.label}</strong>
+                              {state === "active" && stage.id === "completing" && productState?.message && <small>{productState.message}</small>}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </div>
+                )}
+
+                {productState?.phase === "degraded" && (
+                  <p className="ns-warning" role="status">{productState.message}</p>
+                )}
+                {studyUpload.study && studyUpload.study.warnings.length > 0 && (
+                  <div className="ns-limitations">
+                    <strong>Limitaciones</strong>
+                    <ul>
+                      {studyUpload.study.warnings.map((warning) => (
+                        <li key={warning}>{describeStudyWarning(warning).text}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {productState && (
+                  <details className="ns-tech">
+                    <summary>Detalles del procesamiento</summary>
+                    <div className="ns-tech-body">
+                      <p>{productPhaseLabel[productState.phase]}</p>
+                      <ul>
+                        {(["sagittal_t1", "sagittal_t2"] as const).map((role) => {
+                          const item = productState.series[role];
+                          return (
+                            <li key={role}>
+                              {role === "sagittal_t1" ? "Sagital T1" : "Sagital T2"}: {productSeriesLabel(item.status)}
+                              {item.status === "completed" ? ` · ${item.discLocalizations.length} localizaciones discales` : ""}
+                              {item.segmentationRunId ? ` · run ${item.segmentationRunId}` : ""}
+                              {item.error ? ` · ${item.error}` : ""}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {productState.failureStage === "disc_findings" && <p>Clasificación discal · No se pudo completar</p>}
+                    </div>
+                  </details>
+                )}
+              </section>
+            )}
+
+            {step === "context" && !showProcessing && (
               <section aria-labelledby="ns-step-title" className="ns-step">
                 <h2 id="ns-step-title" ref={stepHeadingRef} tabIndex={-1}>Contexto y revisión</h2>
+
+                {runError && (
+                  <div className="ns-failure" role="alert">
+                    <p><strong>No se pudo completar el análisis.</strong> {runError}</p>
+                    <p>Tus datos y las imágenes siguen cargados. Podés reintentar con «Analizar estudio» o volver a un paso anterior.</p>
+                  </div>
+                )}
 
                 <div className="ns-block ns-age" aria-label="Edad al estudio" role="group">
                   <div className="ns-block-head">
@@ -860,13 +979,24 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                     )}
                   </div>
                   {!showAgeInput && age.calculated !== null && (
-                    <div className="ns-age-line">
-                      <p className="ns-age-value"><strong>{age.calculated} años</strong></p>
-                      <button className="ns-link-button" disabled={interactionLocked} onClick={() => setAgeOverrideOpen(true)} type="button">Declarar otra edad</button>
-                    </div>
+                    <>
+                      <div className="ns-age-line">
+                        <p className="ns-age-value"><strong>{age.calculated} años</strong></p>
+                        <button className="ns-link-button" disabled={interactionLocked} onClick={() => setAgeOverrideOpen(true)} type="button">Declarar otra edad</button>
+                      </div>
+                      <p className="ns-muted">Según la fecha de nacimiento del paciente y la fecha del estudio.</p>
+                    </>
                   )}
-                  {!showAgeInput && age.calculated !== null && (
-                    <p className="ns-muted">Según la fecha de nacimiento del paciente y la fecha del estudio.</p>
+                  {!showAgeInput && age.calculated === null && (
+                    <>
+                      <p className="ns-age-missing">{ageNeedsStudyDate ? "Completá la fecha del estudio para calcular la edad." : unavailableReason}</p>
+                      <div className="ns-age-actions">
+                        {ageNeedsStudyDate && (
+                          <button className="ns-btn" disabled={interactionLocked} onClick={goToStudyDate} type="button">Completar la fecha del estudio</button>
+                        )}
+                        <button className="ns-link-button" disabled={interactionLocked} onClick={() => setAgeOverrideOpen(true)} type="button">Declarar edad manualmente</button>
+                      </div>
+                    </>
                   )}
                   {showAgeInput && (
                     <>
@@ -883,16 +1013,14 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                             value={metadata.ageDeclared}
                           />
                         </label>
-                        {age.calculated !== null && (
-                          <button
-                            className="ns-link-button"
-                            disabled={interactionLocked}
-                            onClick={() => { setAgeOverrideOpen(false); setMetadata((current) => ({ ...current, ageDeclared: "" })); }}
-                            type="button"
-                          >
-                            Usar la edad calculada
-                          </button>
-                        )}
+                        <button
+                          className="ns-link-button"
+                          disabled={interactionLocked}
+                          onClick={() => { setAgeOverrideOpen(false); setMetadata((current) => ({ ...current, ageDeclared: "" })); }}
+                          type="button"
+                        >
+                          {age.calculated !== null ? "Usar la edad calculada" : "Quitar la edad declarada"}
+                        </button>
                       </div>
                       <p className="ns-muted" id="ns-age-help">{ageHelp}</p>
                     </>
@@ -911,7 +1039,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                     <span>opcional</span>
                   </div>
                   <p className="ns-muted">
-                    Información clínica registrada para este estudio.{" "}
+                    Describe la situación del paciente al momento de este estudio.{" "}
                     <button
                       aria-controls="ns-context-help"
                       aria-expanded={contextHelpOpen}
@@ -924,7 +1052,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                   </p>
                   {contextHelpOpen && (
                     <p className="ns-muted ns-help-text" id="ns-context-help">
-                      Se guarda con este estudio como contexto, nunca como hallazgo. Si después se edita el paciente, lo registrado acá no cambia.
+                      Se guarda con este estudio como contexto, nunca como hallazgo; no se copia a otros estudios del mismo paciente. Si después se edita el paciente, lo registrado acá no cambia.
                     </p>
                   )}
                   <div className="ns-clinical-grid">
@@ -979,63 +1107,17 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                     </div>
                   </dl>
                 </div>
-
-                {analysisStage !== "idle" && (
-                  <section ref={progressRef} className="wl-analysis-progress" aria-live="polite" aria-label="Progreso del análisis" role="status">
-                    <div className="wl-analysis-progress-head">
-                      <LoaderCircle aria-hidden className="wl-analysis-spinner" size={20} />
-                      <div>
-                        <strong>{analysisSteps[activeAnalysisStep]?.label}</strong>
-                        <p>{analysisStageCopy[analysisStage]}</p>
-                      </div>
-                    </div>
-                    <ol>
-                      {analysisSteps.map((analysisStep, index) => (
-                        <li
-                          className={index < activeAnalysisStep ? "is-complete" : index === activeAnalysisStep ? "is-active" : ""}
-                          key={analysisStep.id}
-                        >
-                          <span aria-hidden="true">{index < activeAnalysisStep ? "✓" : index + 1}</span>
-                          {analysisStep.label}
-                        </li>
-                      ))}
-                    </ol>
-                    <small>El sistema no informa porcentajes; los estados cambian sólo cuando cada etapa termina.</small>
-                  </section>
-                )}
-
-                {productState && (
-                  <section className={`wl-product-progress is-${productState.phase}`} aria-live="polite">
-                    <strong>{productPhaseLabel[productState.phase]}</strong>
-                    <ul>
-                      {(["sagittal_t1", "sagittal_t2"] as const).map((role) => {
-                        const item = productState.series[role];
-                        return (
-                          <li key={role}>
-                            <span>{role === "sagittal_t1" ? "Sagittal T1" : "Sagittal T2"}</span>
-                            <em>{productSeriesLabel(item.status)}</em>
-                            {item.segmentationRunId && <small>run {item.segmentationRunId}</small>}
-                            {item.status === "completed" && <small>{item.discLocalizations.length} localizaciones discales</small>}
-                            {item.error && <small className="wl-field-error">{item.error}</small>}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {productState.failureStage === "disc_findings" && (
-                      <p className="wl-upload-state">
-                        <strong>Clasificación discal</strong> · No se pudo completar
-                      </p>
-                    )}
-                  </section>
-                )}
               </section>
             )}
 
-            {message && <p className="wl-drawer-message" role="status">{message}</p>}
+            {message && !showProcessing && <p className="wl-drawer-message" role="status">{message}</p>}
           </div>
         </div>
+      </section>
+      </div>
 
-        <footer className="ns-foot">
+      <footer className="ns-foot">
+        <div className="ns-foot-inner">
           <button className="ns-btn is-quiet" disabled={interactionLocked} onClick={requestExit} type="button">Cancelar</button>
           <p className="ns-foot-hint" id="ns-run-hint" role="status">{footerHint}</p>
           <div className="ns-foot-actions">
@@ -1077,8 +1159,8 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
               </button>
             )}
           </div>
-        </footer>
-      </section>
+        </div>
+      </footer>
     </div>
   );
 }
