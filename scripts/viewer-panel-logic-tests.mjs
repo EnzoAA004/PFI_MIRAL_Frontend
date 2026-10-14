@@ -313,10 +313,12 @@ check("las herramientas se agrupan por propósito y el análisis de demostració
 });
 
 check("los consumidores del circuito de producto declaran su procedencia ya en el índice", () => {
-  for (const id of ["comparison", "report", "assistant"]) {
+  for (const id of ["report", "assistant"]) {
     assert.match(tools.inspectorToolById(id).provenance ?? "", /análisis de demostración/, id);
   }
   assert.match(tools.inspectorToolById("assistant").provenance, /no recibe contexto clínico/);
+  // La comparación ya lee el análisis inicial real: no debe seguir advirtiendo que usa la demostración.
+  assert.equal(tools.inspectorToolById("comparison").provenance, undefined);
 });
 
 check("ninguna herramienta ofrece iniciar un análisis nuevo", () => {

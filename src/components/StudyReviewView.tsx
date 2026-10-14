@@ -19,7 +19,6 @@ import { StudyContextPanel } from "../features/reading/StudyContextPanel";
 import { useInspectorWidth } from "../features/reading/useInspectorWidth";
 import {
   ASSISTANT_SOURCE_NOTE,
-  COMPARISON_SOURCE_NOTE,
   REPORT_SOURCE_NOTE,
   REVIEW_ONE_LINER,
   REVIEW_SCOPE_COVERS,
@@ -49,7 +48,7 @@ import { ActivationMapPanel } from "../features/reading/ActivationMapPanel";
 import { parseDegenerativeFindings, viewerPointToImagePixels, type DegenerativeFinding, type FindingSide } from "../features/reading/degenerativeFindings";
 import { DiscDegenerativeFindingsPanel } from "../features/reading/DiscDegenerativeFindingsPanel";
 import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Panel";
-import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
+import { InitialComparisonPanel } from "../features/reading/InitialComparisonPanel";
 import { ChatPanel } from "../features/reading/ChatPanel";
 import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, displayReportStatus, formatReportDelta, formatReportPercent, formatReportValue, reportContractLabel, reportCorrectedMarker, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
 import { EvidenceRegionEditor } from "../features/reading/EvidenceRegionEditor";
@@ -2703,14 +2702,10 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                     );
                   }
                   case "comparison":
+                    // Compara las mediciones REALES del análisis inicial (las que muestra este visor), no el
+                    // análisis de demostración. `run.runId` es la corrida que se está viendo.
                     return caseId ? (
-                      <>
-                        <p className="rr-note" data-testid="comparison-source-note">{COMPARISON_SOURCE_NOTE}</p>
-                        <LongitudinalComparisonPanel
-                          caseId={caseId}
-                          subjectRef={selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null}
-                        />
-                      </>
+                      <InitialComparisonPanel caseId={caseId} currentRunId={run.runId ?? null} />
                     ) : <p className="rr-note">No disponible: el estudio no tiene identificador.</p>;
                   case "report":
                     return (

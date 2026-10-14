@@ -251,12 +251,11 @@ export function hasAnyClinicalContext(rows: readonly ContextRow[]): boolean {
 /* ------------------------------------------------------------- fuente de cada consumidor */
 
 /*
- * Informe, comparación y asistente leen el circuito de producto (el "análisis de demostración"),
- * no las mediciones que muestra el visor: todavía no están conectados. Se dice donde se usan
- * para que un resultado vacío no se lea como "el estudio no tiene mediciones".
+ * Informe y asistente leen el circuito de producto (el "análisis de demostración"), no las mediciones que
+ * muestra el visor: todavía no están conectados. Se dice donde se usan para que un resultado vacío no se lea
+ * como "el estudio no tiene mediciones". La comparación entre estudios ya lee el análisis inicial real y
+ * declara su propia fuente (ver initialComparisonDisplay.ts).
  */
-export const COMPARISON_SOURCE_NOTE =
-  "Fuente: el análisis de demostración de cada estudio, no las mediciones que ves en el visor (todavía no están conectadas a esta comparación). Si ese análisis no tiene valores comparables, la tabla queda vacía.";
 export const REPORT_SOURCE_NOTE =
   "Fuente: el análisis de demostración registrado para el estudio, no las mediciones del visor. Sus niveles y mediciones pueden estar vacíos aunque el visor muestre valores.";
 export const ASSISTANT_SOURCE_NOTE =

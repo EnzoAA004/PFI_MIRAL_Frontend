@@ -3139,4 +3139,68 @@
   .rr-review-buttons { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-2); }
   .rr-review-buttons > button { width: 100%; min-height: 32px; }
   .rr-review-footer .rr-note { margin: 0; }
+
+  /* ====================================================================================
+     Comparación entre estudios sobre el análisis inicial real
+     ==================================================================================== */
+  .rr-cmp { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+  .rr-cmp-sides { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .rr-cmp-side {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    min-width: 0;
+  }
+  .rr-cmp-side strong { font-size: var(--fs-body); overflow-wrap: anywhere; }
+  .rr-cmp-side-label { font-size: var(--fs-small); color: var(--text-muted); font-weight: var(--fw-medium); }
+  .rr-cmp-summary { margin: 0; font-size: var(--fs-body); color: var(--text); line-height: 1.4; }
+
+  .rr-cmp-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: var(--fs-small);
+    color: var(--text);
+  }
+  .rr-cmp-table caption {
+    text-align: left;
+    padding: 4px 0;
+    font-size: var(--fs-body);
+    font-weight: var(--fw-semibold);
+    color: var(--text);
+  }
+  .rr-cmp-table th,
+  .rr-cmp-table td {
+    padding: 6px 4px;
+    border-top: 1px solid var(--border);
+    vertical-align: top;
+    text-transform: none;
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+  }
+  .rr-cmp-table thead th {
+    color: var(--text-muted);
+    font-weight: var(--fw-medium);
+    text-align: right;
+    border-top: 0;
+    border-bottom: 1px solid var(--border-strong);
+  }
+  .rr-cmp-table thead th:first-child,
+  .rr-cmp-table tbody th { text-align: left; }
+  .rr-cmp-table thead th:first-child { width: 27%; }
+  .rr-cmp-table thead th { overflow-wrap: normal; white-space: nowrap; }
+  .rr-cmp-table tbody th { font-weight: var(--fw-medium); color: var(--text); }
+  .rr-cmp-table small { display: block; font-size: var(--fs-micro); font-weight: var(--fw-regular); color: var(--text-muted); font-family: var(--font-sans, inherit); }
+  .rr-cmp-table .rr-cmp-unit { display: inline; }
+  .rr-cmp-num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .rr-cmp-table small.rr-cmp-corrected { color: var(--text-warning-strong); }
+  .rr-cmp-table small.rr-cmp-flag { color: var(--text-warning-strong); }
+  .rr-cmp-table small.rr-cmp-trend { color: var(--text-muted); }
+  .rr-cmp-num[data-status="not_computable_reference_zero"] { font-family: inherit; color: var(--text-muted); font-style: italic; }
+  .rr-help-body ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+  .rr-help-body section { display: flex; flex-direction: column; gap: 4px; }
 }

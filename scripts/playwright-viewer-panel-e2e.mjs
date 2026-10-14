@@ -279,7 +279,8 @@ assertTruthy(JSON.stringify(groupTitles) === JSON.stringify(["Seguimiento del pa
 const itemTitles = await page.locator(".rr-tool-item-title").allInnerTexts();
 assertTruthy(itemTitles.length === 10, `diez herramientas: ${itemTitles.length}`);
 assertTruthy((await page.locator(".rr-tool-view").count()) === 0, "ninguna herramienta está montada al abrir el índice");
-assertTruthy(await page.locator('[data-tool-id="comparison"] .rr-tool-item-provenance').isVisible(), "la procedencia se ve en el índice");
+assertTruthy(await page.locator('[data-tool-id="report"] .rr-tool-item-provenance').isVisible(), "la procedencia se ve en el índice");
+assertTruthy((await page.locator('[data-tool-id="comparison"] .rr-tool-item-provenance').count()) === 0, "la comparación ya no advierte que usa el análisis de demostración");
 assertTruthy((await page.getByRole("tab", { selected: true }).count()) === 0, "con las herramientas abiertas ninguna pestaña figura activa");
 await checkLayout("índice de herramientas");
 await shot("09-herramientas-indice");
@@ -300,7 +301,7 @@ assertTruthy(/análisis de demostración registrado/.test(await page.getByTestId
 await shot("10-herramienta-informe");
 await page.locator('.rr-tool-view[data-tool="report"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
 await page.locator('[data-tool-id="comparison"]').click();
-assertTruthy(/no las mediciones que ves en el visor/.test(await page.getByTestId("comparison-source-note").innerText()), "la comparación declara su fuente");
+assertTruthy(/análisis inicial real/.test(await page.getByTestId("comparison-source-note").innerText()) && /No usa el análisis de demostración/.test(await page.getByTestId("comparison-source-note").innerText()), "la comparación declara que usa el análisis inicial real");
 await page.locator('.rr-tool-view[data-tool="comparison"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
 await page.locator('[data-tool-id="assistant"]').click();
 assertTruthy(/No recibe las mediciones del visor ni el contexto clínico/.test(await page.getByTestId("assistant-source-note").innerText()), "el asistente declara su fuente");

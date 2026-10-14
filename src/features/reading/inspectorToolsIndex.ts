@@ -46,8 +46,7 @@ export const INSPECTOR_TOOLS: readonly InspectorTool[] = [
     id: "comparison",
     group: "follow-up",
     title: "Comparación entre estudios",
-    hint: "Compara con otro estudio del paciente",
-    provenance: "Usa el análisis de demostración",
+    hint: "Mediciones del análisis inicial frente a otro estudio del paciente",
   },
   {
     id: "report",
