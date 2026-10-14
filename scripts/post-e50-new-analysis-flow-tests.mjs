@@ -260,7 +260,7 @@ test("30 el resultado del ZIP ordena archivo, series, uso, limitaciones y detall
 test("31 la alternativa por plano sigue plegada y accesible", () => {
   assert.match(drawerSource, /aria-expanded=\{byPlaneOpen\}/);
   assert.match(drawerSource, /Cargar archivos por plano/);
-  assert.match(drawerSource, /uploadAiInput\(file, normalizedCaseId, plane\)/);
+  assert.match(drawerSource, /uploadAiInput\(file, normalizedCaseId, plane, declaration\)/);
   assert.match(drawerSource, /uploadStudyArchive\(file, normalizedCaseId\)/);
 });
 

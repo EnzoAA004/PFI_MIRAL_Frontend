@@ -1,3 +1,4 @@
+import { sequenceComparisonNote, sequenceFromComparisonSide } from "./sequenceInfo";
 import { useInitialComparison } from "./useInitialComparison";
 import { emptyKindOf } from "./initialComparisonState";
 import {
@@ -170,6 +171,9 @@ export function InitialComparisonPanel({ caseId, currentRunId, onOpenVisual }: P
           </p>
           <p className="rr-note" data-testid="difference-note">{DIFFERENCE_NOTE}</p>
           <p className="rr-note">{patientLinkText(comparison.current.patientLink)}</p>
+          <p className="rr-note" data-testid="comparison-sequence-note">
+            {sequenceComparisonNote(sequenceFromComparisonSide(comparison.reference), sequenceFromComparisonSide(comparison.current))}
+          </p>
 
           {comparison.comparisons.length === 0 ? (
             <div className="panel-hidden-placeholder honest-empty-state" data-empty="no_comparable_matches" data-testid="comparison-empty">

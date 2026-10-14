@@ -2,7 +2,8 @@
 import { exportReviewReport, getRunAnnotations, saveRunAnnotations } from "../api";
 import { resolvePersistedPlaneWorkspace, type PersistedPlaneWorkspace } from "../appDataGuards";
 import type { AiModelArtifact, AiRunResponse, AgentQuality, AuditEvent, Measurement, ReviewStatus, ReviewStatusResponse, StudyDetailResponse, StudyLandmark, StudyMask, StudyMetadataInput, StudySeries, StudyArchiveSeries } from "../appTypes";
-import { planeRunRecord, seriesFromPlaneRun, type PersistedStudySeries } from "../features/reading/planeSeries";
+import { planeRunRecord, sequenceOfAnalyzedPlane, seriesFromPlaneRun, type PersistedStudySeries } from "../features/reading/planeSeries";
+import { UNKNOWN_SEQUENCE, type SequenceInfo } from "../features/reading/sequenceInfo";
 import { parseThreeD } from "../adapters/multiplanarRunAdapter";
 import { parseThreeDProxyMeshAsset, ThreeDProxyAssetError } from "../adapters/threeDProxyAssetParser";
 import { canonicalThreeDToProxyViewModel, type ThreeDProxyAssetFetchState } from "../viewModels/threeDProxyViewModel";
@@ -2200,6 +2201,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   caseLabel={caseLabel}
                   seriesName={data.series.name}
                   seriesRoleLabel={viewed || binding.role === "reference" ? "Referencia" : "Analizada IA"}
+                  sequence={viewed ? (viewed as { sequence?: SequenceInfo }).sequence ?? UNKNOWN_SEQUENCE : sequenceOfAnalyzedPlane(run, planeName, studySeries)}
                   seriesChoices={seriesChoicesFor(planeName)}
                   viewedSeriesId={viewedSeriesId}
                   analyzedSeriesName={seriesList.find((item: any) => item.plane === planeName)?.name ?? null}

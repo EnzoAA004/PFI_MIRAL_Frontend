@@ -10,6 +10,7 @@ import type { RunReviewRequest, RunReviewResponse } from "./contracts/reviewApiT
 import type { AssetName, DiagnosticEndpointResponse, MultiplanarRunPayload } from "./contracts/multiplanarHttpTypes";
 import type { MultiplanarContract } from "./multiplanarTypes";
 import type { Plane } from "./appTypes";
+import { DEFAULT_SEQUENCE_CHOICE, declarationFields, type SequenceChoice } from "./features/reading/sequenceInfo";
 
 export type ModelSyncResponse = Record<string, unknown> & {
   status?: string;
@@ -76,11 +77,18 @@ export async function multiplanarRequest<T>(path: string, init?: RequestInit): P
   return await response.json() as T;
 }
 
-export async function uploadAiInput(file: File, caseId: string, plane: Plane): Promise<InputResponse> {
+/**
+ * Carga un archivo por plano. `declaration` es la secuencia que declara quien carga (opcional): sin ella, o
+ * como «Desconocida», no viaja ningún campo y el archivo se registra con secuencia desconocida.
+ */
+export async function uploadAiInput(file: File, caseId: string, plane: Plane, declaration: SequenceChoice = DEFAULT_SEQUENCE_CHOICE): Promise<InputResponse> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("caseId", caseId);
   formData.append("plane", plane);
+  const fields = declarationFields(declaration);
+  if (fields.sequence) formData.append("sequence", fields.sequence);
+  if (fields.sequenceDescription) formData.append("sequenceDescription", fields.sequenceDescription);
   return multiplanarRequest<InputResponse>("/api/ai/inputs", {
     method: "POST",
     headers: authHeaders(),

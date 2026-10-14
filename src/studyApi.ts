@@ -5,6 +5,7 @@ import { toSafeFrontendError } from "./security/safeError";
 import { generateTraceId } from "./security/traceId";
 import type { DataOrigin, Measurement, PersistedArtifact, PersistedReviewCorrection, Plane, Priority, ReviewStatus, ReviewStatusResponse, StudyDetailResponse, StudyMetadataInput, StudyRow, StudyRun, StudyArchiveSeries } from "./appTypes";
 import { priorityFromBackend } from "./studyMetadata";
+import { sequenceFromStored } from "./features/reading/sequenceInfo";
 
 const VIEWABLE_PLANES = new Set(["sagittal", "axial", "coronal", "unknown"]);
 
@@ -27,6 +28,7 @@ function normalizeArchiveSeries(value: unknown): StudyArchiveSeries[] {
       plane: (VIEWABLE_PLANES.has(plane) ? plane : "unknown") as StudyArchiveSeries["plane"],
       description: optionalString(row, "description") ?? "",
       weighting: optionalString(row, "weighting") ?? "unknown",
+      sequence: sequenceFromStored(row.weighting, row.sequenceSource, row.sequenceDescription),
       sliceCount: typeof row.sliceCount === "number" ? row.sliceCount : 0,
       multiplanar: row.multiplanar === true,
       derived: row.derived === true,

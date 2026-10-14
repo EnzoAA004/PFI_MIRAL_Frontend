@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { API_BASE_URL } from "../../api";
 import type { StudyArchiveSeries } from "../../appTypes";
+import { sequenceOfAnalyzedPlane } from "./planeSeries";
+import { UNKNOWN_SEQUENCE, sequenceFromComparisonSide, sequenceProvenanceHint, sequenceText } from "./sequenceInfo";
 import { studyRunToMriViewerModel } from "../../viewModels/mriViewerViewModel";
 import type { SliceNavigation } from "../../components/MriSliceViewer";
 import type { ComparisonStudySide } from "../../contracts/initialAnalysisComparisonTypes";
@@ -139,6 +141,12 @@ export function ComparisonPane({ side, summary, sideState, state, onChange, over
     ? (["sagittal", "axial"] as const).filter((plane) => ready.analyzed[plane] || ready.archiveSeries.some((item) => item.plane === plane))
     : [];
   const spacing = analyzed?.inPlaneSpacingMm;
+  /* La secuencia de la serie que se mira. Si se mira otra del estudio, la de esa serie; si no, la que publicó la corrida. */
+  const viewedSequence = ready
+    ? (archive ? archive.sequence ?? UNKNOWN_SEQUENCE : sequenceOfAnalyzedPlane(ready.run, state.plane, ready.archiveSeries))
+    : UNKNOWN_SEQUENCE;
+  /* La de la comparación (lo que usó el comparador): la del plano sagital de la corrida comparada. */
+  const comparedSequence = sequenceFromComparisonSide(summary);
 
   return (
     <section
@@ -153,6 +161,13 @@ export function ComparisonPane({ side, summary, sideState, state, onChange, over
         <strong data-testid={`dual-id-${side}`}>{summary.caseId}</strong>
         <span className="rr-dual-sub">{formatStudyDate(summary.studyDate)}</span>
         <span className="rr-dual-sub" data-testid={`dual-run-${side}`}>{describeAnalysis(summary)}</span>
+        <span
+          className={`rr-dual-sub rr-dual-seq${comparedSequence.value === "unknown" ? " is-unknown" : ""}`}
+          data-testid={`dual-sequence-${side}`}
+          title={sequenceProvenanceHint(comparedSequence)}
+        >
+          Secuencia sagital: {sequenceText(comparedSequence)}
+        </span>
         {planesAvailable.length > 1 && (
           <span aria-label={`Plano del lado ${SIDE_TITLE[side].toLowerCase()}`} className="rr-dual-planes" role="group">
             {planesAvailable.map((plane) => (
@@ -220,6 +235,7 @@ export function ComparisonPane({ side, summary, sideState, state, onChange, over
             selectedLandmarkId=""
             selectedMeasurementId={overlay.state === "draw" ? "selected-difference" : null}
             seriesChoices={choices}
+            sequence={viewedSequence}
             seriesName={archive ? seriesLabel(archive) : analyzed?.name ?? planeLabel(state.plane)}
             seriesRoleLabel={archive ? "Referencia" : "Analizada IA"}
             slice={nav}

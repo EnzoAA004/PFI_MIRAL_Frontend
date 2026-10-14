@@ -24,6 +24,17 @@ import {
 import { PatientSelector } from "./PatientSelector";
 import { patientDisplayName, type Patient } from "../../patientApi";
 import { NewStudyStepper } from "./NewStudyStepper";
+import {
+  DEFAULT_SEQUENCE_CHOICE,
+  MAX_SEQUENCE_DESCRIPTION,
+  declarationIssue,
+  declarationKey,
+  parseSequenceInfo,
+  sequenceProvenanceHint,
+  sequenceText,
+  type SequenceChoice,
+  type SequenceValue,
+} from "../reading/sequenceInfo";
 import { NewStudySummary } from "./NewStudySummary";
 import { ageUnavailableReason, formatIsoDateDMY, resolveStudyAge } from "../../studyAge";
 import { describeSeriesUse, describeStudyWarning, seriesPlaneLabel, seriesSequenceLabel, type SeriesRole } from "../../studyWarnings";
@@ -63,7 +74,16 @@ type UploadState = {
   status: "idle" | "uploading" | "uploaded" | "error";
   input?: InputResponse;
   error?: string;
+  /** Declaración de secuencia con la que se envió este archivo (ver `declarationKey`). */
+  declaredKey?: string;
 };
+
+const SEQUENCE_OPTIONS: { value: SequenceValue; label: string }[] = [
+  { value: "unknown", label: "Desconocida" },
+  { value: "t1", label: "T1" },
+  { value: "t2", label: "T2" },
+  { value: "other", label: "Otra…" },
+];
 
 const emptyUploads: Record<Plane, UploadState> = {
   sagittal: { status: "idle" },
@@ -169,6 +189,10 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const [metadata, setMetadata] = useState<NewStudyDraft>(() => emptyNewStudyDraft());
   const [metadataError, setMetadataError] = useState("");
   const [uploads, setUploads] = useState<Record<Plane, UploadState>>(emptyUploads);
+  /* Secuencia que declara quien carga cada archivo. Opcional: «Desconocida» no bloquea nada. */
+  const [declared, setDeclared] = useState<Record<Plane, SequenceChoice>>({ sagittal: DEFAULT_SEQUENCE_CHOICE, axial: DEFAULT_SEQUENCE_CHOICE });
+  /* El archivo elegido, para volver a cargarlo si cambia la declaración sin pedirlo de nuevo. */
+  const pickedFiles = useRef<Partial<Record<Plane, File>>>({});
   const [studyUpload, setStudyUpload] = useState<StudyUploadState>({ status: "idle" });
   /* La carga por plano queda plegada: es la salida para un archivo suelto de dataset. */
   const [byPlaneOpen, setByPlaneOpen] = useState(false);
@@ -272,8 +296,12 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
    * tiene prioridad porque el plano lo decidió la metadata; la de plano suelto es lo
    * que el médico declaró a mano.
    */
-  const sagittalInputId = studyUpload.study?.sagittal?.inputId ?? uploads.sagittal.input?.inputId;
-  const axialInputId = studyUpload.study?.axial?.inputId ?? uploads.axial.input?.inputId;
+  /* Un archivo cargado con otra declaración de secuencia que la que muestra hoy el selector no se analiza: lo que se
+     envía tiene que ser lo que se ve. Se vuelve a cargar con la declaración actual. */
+  const declarationStale = (plane: Plane) =>
+    uploads[plane].status === "uploaded" && uploads[plane].declaredKey !== declarationKey(declared[plane]);
+  const sagittalInputId = studyUpload.study?.sagittal?.inputId ?? (declarationStale("sagittal") ? undefined : uploads.sagittal.input?.inputId);
+  const axialInputId = studyUpload.study?.axial?.inputId ?? (declarationStale("axial") ? undefined : uploads.axial.input?.inputId);
   /* Un ID inválido invalida lo cargado aunque el archivo siga ahí: no se analiza. */
   const sagittalReady = Boolean(caseIdReady && sagittalInputId);
   const axialReady = Boolean(axialInputId);
@@ -448,7 +476,14 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
 
   async function upload(plane: Plane, file?: File) {
     if (!file) return;
+    pickedFiles.current[plane] = file;
     const token = requestGate.begin(plane);
+    const declaration = declared[plane];
+    const declarationProblem = declarationIssue(declaration);
+    if (declarationProblem) {
+      setUploads((current) => ({ ...current, [plane]: { fileName: file.name, status: "error", error: declarationProblem } }));
+      return;
+    }
     if (!studyIdentityReady) {
       setMessage(caseIdIssue || "Ingresá un ID de estudio válido antes de cargar archivos.");
       return;
@@ -462,9 +497,9 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     }
     setUploads((current) => ({ ...current, [plane]: { fileName: file.name, status: "uploading" } }));
     try {
-      const input = await uploadAiInput(file, normalizedCaseId, plane);
+      const input = await uploadAiInput(file, normalizedCaseId, plane, declaration);
       if (!requestGate.isCurrent(token)) return;
-      setUploads((current) => ({ ...current, [plane]: { fileName: file.name, status: "uploaded", input } }));
+      setUploads((current) => ({ ...current, [plane]: { fileName: file.name, status: "uploaded", input, declaredKey: declarationKey(declaration) } }));
       setImagesInvalidated(false);
       setMessage("");
     } catch (error) {
@@ -867,6 +902,60 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
                           </div>
                           {uploads[plane].status === "uploaded" && <p className="ns-muted">{uploads[plane].fileName} cargado.</p>}
                           {uploads[plane].status === "error" && <p className="wl-drawer-error" role="alert">{uploads[plane].error}</p>}
+                          <div className="ns-sequence" data-testid={`ns-sequence-${plane}`}>
+                            <label>
+                              <span>Secuencia del archivo <small>(opcional)</small></span>
+                              <select
+                                data-testid={`ns-sequence-select-${plane}`}
+                                disabled={uploadLocked || uploads[plane].status === "uploading"}
+                                onChange={(event) => setDeclared((current) => ({
+                                  ...current,
+                                  [plane]: { value: event.target.value as SequenceValue, description: event.target.value === "other" ? current[plane].description : "" },
+                                }))}
+                                value={declared[plane].value}
+                              >
+                                {SEQUENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                              </select>
+                            </label>
+                            {declared[plane].value === "other" && (
+                              <label>
+                                <span>Descripción de la secuencia</span>
+                                <input
+                                  data-testid={`ns-sequence-description-${plane}`}
+                                  disabled={uploadLocked || uploads[plane].status === "uploading"}
+                                  maxLength={MAX_SEQUENCE_DESCRIPTION}
+                                  onChange={(event) => setDeclared((current) => ({ ...current, [plane]: { ...current[plane], description: event.target.value } }))}
+                                  placeholder="Por ejemplo, STIR sagital"
+                                  value={declared[plane].description}
+                                />
+                              </label>
+                            )}
+                            <p className="ns-muted">
+                              {declared[plane].value === "unknown"
+                                ? "Sin secuencia el análisis se hace igual, pero este estudio no se podrá comparar con otro."
+                                : "Queda guardada como declarada por vos: la aplicación no la verifica ni la detecta, y el modelo no se evalúa por secuencia."}
+                              {plane === "axial" && declared[plane].value !== "unknown" && declared[plane].value !== "t2" && " El modelo axial se entrenó con T2."}
+                            </p>
+                            {declarationStale(plane) && (
+                              <p className="ns-muted" data-testid={`ns-sequence-stale-${plane}`} role="status">
+                                Cambió la secuencia: el archivo cargado conserva la anterior y no se analiza así.{" "}
+                                <button
+                                  className="ns-link-button"
+                                  disabled={uploadLocked || !pickedFiles.current[plane] || Boolean(declarationIssue(declared[plane]))}
+                                  onClick={() => { void upload(plane, pickedFiles.current[plane]); }}
+                                  type="button"
+                                >
+                                  Volver a cargar con esta secuencia
+                                </button>
+                                {declarationIssue(declared[plane]) && ` ${declarationIssue(declared[plane])}`}
+                              </p>
+                            )}
+                            {uploads[plane].status === "uploaded" && !declarationStale(plane) && uploads[plane].input && (
+                              <p className="ns-muted" data-testid={`ns-sequence-registered-${plane}`} title={sequenceProvenanceHint(parseSequenceInfo(uploads[plane].input?.sequence))}>
+                                Secuencia registrada: {sequenceText(parseSequenceInfo(uploads[plane].input?.sequence))}.
+                              </p>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>

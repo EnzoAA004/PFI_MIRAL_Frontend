@@ -239,7 +239,7 @@ test("D3 priority clínica local se mapea al contrato backend", () => {
 test("E NewAnalysisDrawer envía studyMetadata solo en run y no en upload", () => {
   const source = readFileSync(join(root, "src/features/worklist/NewAnalysisDrawer.tsx"), "utf8");
   assert.match(source, /studyMetadata:\s*normalizedStudyMetadata/);
-  assert.match(source, /uploadAiInput\(file,\s*normalizedCaseId,\s*plane\)/);
+  assert.match(source, /uploadAiInput\(file,\s*normalizedCaseId,\s*plane,\s*declaration\)/);
   assert.doesNotMatch(source, /uploadAiInput\(file,\s*normalizedCaseId,\s*plane,\s*studyMetadata/);
   assert.match(source, /maxLength=\{200\}/);
 });

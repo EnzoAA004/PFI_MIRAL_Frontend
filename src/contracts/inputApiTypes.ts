@@ -10,6 +10,11 @@ export type InputResponse = {
   plane: Plane;
   format: string;
   size: number;
+  /**
+   * Secuencia registrada del archivo y su procedencia (`user_declared`, `auto_detected` o desconocida).
+   * Ausente en respuestas anteriores: se lee como desconocida, nunca como T2.
+   */
+  sequence?: { value?: string | null; source?: string | null; description?: string | null } | null;
 };
 
 /**

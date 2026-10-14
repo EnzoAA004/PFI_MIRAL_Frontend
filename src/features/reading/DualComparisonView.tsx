@@ -17,6 +17,7 @@ import {
   type PaneState,
   type Side,
 } from "./dualComparisonLogic";
+import { sequenceComparisonNote, sequenceFromComparisonSide } from "./sequenceInfo";
 import { COMPARISON_SOURCE_LINE, displayUnit, formatDelta, formatStudyDate, formatValue, patientLinkText } from "./initialComparisonDisplay";
 import { emptyKindOf } from "./initialComparisonState";
 import { EMPTY_TEXT } from "./initialComparisonDisplay";
@@ -205,6 +206,11 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
         </div>
       )}
       {comparison && <p className="rr-note rr-dual-link">{patientLinkText(comparison.current.patientLink)}</p>}
+      {comparison && (
+        <p className="rr-note rr-dual-seq-note" data-testid="dual-sequence-note">
+          {sequenceComparisonNote(sequenceFromComparisonSide(comparison.reference), sequenceFromComparisonSide(comparison.current))}
+        </p>
+      )}
 
       <div className="rr-dual-main">
         <div className="rr-dual-panes">

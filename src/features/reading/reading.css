@@ -3495,3 +3495,12 @@
   /* La segmentación pasa a segundo plano: lo que se lee es la medición elegida. */
   .rr-dual-pane.has-selection .mri-segmentation-canvas { filter: opacity(.4); }
 }
+
+/* Secuencia de la serie y su procedencia (declarada o detectada). */
+@layer components {
+  .rr-viewport-sequence { color: var(--text-muted); font-size: 9px; font-weight: var(--fw-semibold); letter-spacing: .02em; }
+  .rr-viewport-sequence.is-unknown { font-style: italic; font-weight: normal; }
+  .rr-dual-seq { font-weight: var(--fw-semibold); }
+  .rr-dual-seq.is-unknown { font-style: italic; font-weight: normal; }
+  .rr-dual-seq-note { margin: 0; padding: 4px 12px; }
+}

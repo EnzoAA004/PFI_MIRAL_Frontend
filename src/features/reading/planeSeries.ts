@@ -1,4 +1,5 @@
-import type { AiRunResponse, StudySeries } from "../../appTypes";
+import type { AiRunResponse, StudyArchiveSeries, StudySeries } from "../../appTypes";
+import { UNKNOWN_SEQUENCE, parseSequenceInfo, type SequenceInfo } from "./sequenceInfo";
 import type { PersistedPlaneWorkspace } from "../../appDataGuards";
 
 /*
@@ -17,6 +18,20 @@ export function planeRunRecord(run: AiRunResponse, plane: "sagittal" | "axial") 
 }
 
 export type PersistedStudySeries = StudySeries & { sourceInputId?: string };
+
+/**
+ * Secuencia (y su procedencia) del plano que analizó la corrida: la que la corrida publicó en `input.sequence`.
+ * Una corrida anterior, que no la publicó, cae al catálogo del estudio si lo conoce (ponderación detectada de un
+ * zip DICOM) y si no queda desconocida. Nunca se completa con T2 ni sale del nombre del archivo.
+ */
+export function sequenceOfAnalyzedPlane(run: AiRunResponse, plane: "sagittal" | "axial", archiveSeries: StudyArchiveSeries[]): SequenceInfo {
+  const planeRun = planeRunRecord(run, plane);
+  const canonical = asRecord(asRecord(run.canonicalRun?.planes)?.[plane]);
+  const input = { ...asRecord(canonical?.input), ...asRecord(planeRun?.input) };
+  if (input.sequence && typeof input.sequence === "object") return parseSequenceInfo(input.sequence);
+  const inputId = typeof input.inputId === "string" ? input.inputId.trim() : "";
+  return (inputId ? archiveSeries.find((item) => item.inputId === inputId)?.sequence : undefined) ?? UNKNOWN_SEQUENCE;
+}
 
 export function seriesFromPlaneRun(run: AiRunResponse, workspace: PersistedPlaneWorkspace): PersistedStudySeries | null {
   const planeRun = planeRunRecord(run, workspace.plane);

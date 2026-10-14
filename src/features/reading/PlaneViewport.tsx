@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { sequenceProvenanceHint, sequenceText, type SequenceInfo } from "./sequenceInfo";
 import type { OrientationLabels } from "./orientationMarkers";
 import { MriSliceViewer, type MeasurementOverlay, type RawSlicePixels, type SliceNavigation } from "../../components/MriSliceViewer";
 import type { FindingMarker } from "./MeasurementLayer";
@@ -33,6 +34,8 @@ export type PlaneViewportProps = {
   caseLabel: string;
   seriesName: string;
   seriesRoleLabel: "Analizada IA" | "Referencia";
+  /** Secuencia de la serie que se mira y su procedencia. Ausente: no se muestra la línea. */
+  sequence?: SequenceInfo;
   model: ReturnType<typeof studyRunToMriViewerModel>;
   spacingLabel: string;
   slice?: SliceNavigation;
@@ -102,7 +105,7 @@ export type PlaneViewportProps = {
  * axiales no se recorren con el mismo índice.
  */
 export function PlaneViewport({
-  plane, caseLabel, seriesName, seriesRoleLabel, model, spacingLabel,
+  plane, caseLabel, seriesName, seriesRoleLabel, sequence, model, spacingLabel,
   slice, active, onActivate, selectedLandmarkId, onSelectLandmark, readonly, measurementsReadonly, addMode,
   subarticularMode, onSubarticularPoint, orientation, pixelSpacingMm,
   onMoveLandmark, onAddLandmark, onLandmarkAddComplete, onOverlayAvailableChange,
@@ -188,6 +191,15 @@ export function PlaneViewport({
         <div className="rr-corner rr-corner-tr">
           <strong>{seriesName}</strong>
           {sliceLabel}{"\n"}<span className="rr-viewport-role">{seriesRoleLabel}</span>
+          {sequence && (
+            <span
+              className={`rr-viewport-sequence${sequence.value === "unknown" ? " is-unknown" : ""}`}
+              data-testid="viewport-sequence"
+              title={sequenceProvenanceHint(sequence)}
+            >
+              {"\n"}Secuencia: {sequenceText(sequence)}
+            </span>
+          )}
         </div>
         {/* W/L es información de lectura. Modelo y modo viven en Más → Técnico. */}
         <div className="rr-corner rr-corner-bl">

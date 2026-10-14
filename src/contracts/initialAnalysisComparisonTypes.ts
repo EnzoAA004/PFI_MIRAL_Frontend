@@ -22,6 +22,10 @@ export type ComparisonStudySide = {
   reviewStatus: string | null;
   modelKey: string | null;
   sagittalSequence: string | null;
+  /** `user_declared`, `auto_detected` o `unknown`: una declaración no es una detección ni una validación. */
+  sagittalSequenceSource: string | null;
+  /** Texto libre de la secuencia «Otra»; solo informativo. */
+  sagittalSequenceDescription: string | null;
   usableMeasurementCount: number;
   patientLink: PatientLink;
 };

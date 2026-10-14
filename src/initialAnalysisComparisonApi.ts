@@ -83,6 +83,8 @@ export function parseStudySide(value: unknown, field = "estudio"): ComparisonStu
     reviewStatus: nullableText(raw.reviewStatus),
     modelKey: nullableText(raw.modelKey),
     sagittalSequence: nullableText(raw.sagittalSequence),
+    sagittalSequenceSource: nullableText(raw.sagittalSequenceSource),
+    sagittalSequenceDescription: nullableText(raw.sagittalSequenceDescription),
     usableMeasurementCount: finite(raw.usableMeasurementCount, `${field}.usableMeasurementCount`),
     patientLink: oneOf(raw.patientLink, LINKS, `${field}.patientLink`),
   };

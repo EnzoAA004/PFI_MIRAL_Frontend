@@ -470,6 +470,8 @@ export type ReviewableRun = AiRunResponse & {
  * archivo del estudio traía, y la mayoría de sus entradas no tienen corrida detrás.
  */
 export type StudyArchiveSeries = {
+  /** Secuencia y procedencia (declarada o detectada). Ausente en datos anteriores: se lee como desconocida. */
+  sequence?: import("./features/reading/sequenceInfo").SequenceInfo;
   inputId: string;
   plane: "sagittal" | "axial" | "coronal" | "unknown";
   /** Cómo la nombró el equipo: `t2_tse_sag_384`. */
