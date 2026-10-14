@@ -112,6 +112,11 @@ function App() {
   const requestedCaseIdRef = useRef<string | undefined>(undefined);
   const [studiesSummary, setStudiesSummary] = useState<StudiesSummary | undefined>();
   const [selectedRun, setSelectedRun] = useState<AiRunResponse | null>(null);
+  /*
+   * "Comparar" desde el historial: el estudio que se abre y la referencia con la que se abre la comparación
+   * visual. Se consume una vez cuando el visor de ese estudio se monta.
+   */
+  const [pendingCompare, setPendingCompare] = useState<{ caseId: string; referenceCaseId: string } | null>(null);
   const [studyReview, setStudyReview] = useState<any | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [auditTrail, setAuditTrail] = useState<AuditEvent[]>([]);
@@ -511,7 +516,7 @@ function App() {
       {reviewSnapshotStatus === "error" && <div className="toast warning">No se pudo consultar el snapshot de revisión; no bloquea la lista de trabajo.</div>}
       {info && <div className="toast info">{info}</div>}
       {isWorklistView && <Worklist studies={realStudyRows} loading={shouldShowDataLoading} onOpenReview={handleOpenReview} onAnalysisReady={handleViewSavedAnalysis} />}
-      {activeView === "review" && (reviewLoading ? <LoadingState title="Cargando corrida" detail={`Consultando corridas persistidas para ${selectedStudy?.caseId ?? "el estudio seleccionado"}.`} /> : contractIssue ? <ContractErrorState detail={`${contractIssue.message}${contractIssue.path ? ` (${contractIssue.path})` : ""}${contractIssue.traceId ? ` · trace ${contractIssue.traceId}` : ""}`} onBackToStudies={() => changeView(lastStudyNavView)} /> : reviewError ? <ContractErrorState detail={reviewError} onBackToStudies={() => changeView(lastStudyNavView)} /> : safeRun ? <StudyReviewView run={safeRun} studyReview={studyReview} measurements={measurements} auditTrail={auditTrail} saving={saving} onBackToStudies={() => changeView(lastStudyNavView)} onMeasurementsChange={handleMeasurementsChange} onSaveReview={handleSaveReview} onStudyMetadataUpdated={handleStudyMetadataUpdated} selectedDetail={selectedDetail} onOpenPatientHistory={(subjectRef) => { setPatientHistoryCurrentCaseId(safeRun?.caseId ?? null); navigate(pathForPatient(subjectRef)); }} /> : <EmptyReviewState onBackToStudies={() => changeView(lastStudyNavView)} />)}
+      {activeView === "review" && (reviewLoading ? <LoadingState title="Cargando corrida" detail={`Consultando corridas persistidas para ${selectedStudy?.caseId ?? "el estudio seleccionado"}.`} /> : contractIssue ? <ContractErrorState detail={`${contractIssue.message}${contractIssue.path ? ` (${contractIssue.path})` : ""}${contractIssue.traceId ? ` · trace ${contractIssue.traceId}` : ""}`} onBackToStudies={() => changeView(lastStudyNavView)} /> : reviewError ? <ContractErrorState detail={reviewError} onBackToStudies={() => changeView(lastStudyNavView)} /> : safeRun ? <StudyReviewView run={safeRun} initialDualReference={pendingCompare && pendingCompare.caseId === safeRun.caseId ? pendingCompare.referenceCaseId : null} onInitialDualConsumed={() => setPendingCompare(null)} studyReview={studyReview} measurements={measurements} auditTrail={auditTrail} saving={saving} onBackToStudies={() => changeView(lastStudyNavView)} onMeasurementsChange={handleMeasurementsChange} onSaveReview={handleSaveReview} onStudyMetadataUpdated={handleStudyMetadataUpdated} selectedDetail={selectedDetail} onOpenPatientHistory={(subjectRef) => { setPatientHistoryCurrentCaseId(safeRun?.caseId ?? null); navigate(pathForPatient(subjectRef)); }} /> : <EmptyReviewState onBackToStudies={() => changeView(lastStudyNavView)} />)}
       {activeView === "patients" && <PatientsView onOpenPatient={(patientId) => navigate(pathForPatient(patientId))} />}
       {activeView === "history" && (routePatientId ? (
         <PatientHistoryPage
@@ -519,6 +524,7 @@ function App() {
           currentCaseId={patientHistoryCurrentCaseId}
           onBack={() => navigate(pathForView("patients"))}
           onOpenStudy={(caseId) => navigate(pathForStudy(caseId))}
+          onCompareStudies={(caseId, referenceCaseId) => { setPendingCompare({ caseId, referenceCaseId }); navigate(pathForStudy(caseId)); }}
         />
       ) : (
         <section className="panel-card clinical-empty-state">

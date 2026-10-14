@@ -185,17 +185,8 @@ async function main() {
   const compareButtons = page.getByRole("button", { name: "Comparar" });
   if (await compareButtons.count()) {
     await compareButtons.first().click();
-    await page.waitForSelector("text=Comparar con estudio actual", { timeout: 10000 });
-    const baselineSelect = page.locator("select").filter({ hasText: "Seleccionar estudio" }).first();
-    if (await baselineSelect.count()) {
-      const options = await baselineSelect.locator("option").all();
-      if (options.length > 1) {
-        const value = await options[1].getAttribute("value");
-        await baselineSelect.selectOption(value);
-        await page.waitForTimeout(1000);
-      }
-    }
-    console.log("ok 15 - comparación longitudinal (Stage 79) abre desde el historial nuevo y consulta un baseline");
+    await page.waitForSelector('[data-testid="dual-comparison"]', { timeout: 10000 });
+    console.log("ok 15 - 'Comparar' abre desde el historial la comparación visual real del estudio actual con el baseline elegido");
   } else {
     console.log("skip 15 - sin baseline con análisis usable todavía (esperado si A1/A2 no tienen corrida propia en este fixture)");
   }

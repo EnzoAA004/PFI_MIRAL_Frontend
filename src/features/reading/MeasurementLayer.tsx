@@ -159,7 +159,11 @@ function plateDirection(kind: MeasurementKind, points: AnnotationPoint[]): Annot
   if (kind !== "distance" || points.length < 2) return { x: 0, y: -1 };
   const direction = unitVector(points[0], points[1]);
   const normal = { x: -direction.y, y: direction.x };
-  // Siempre hacia arriba, para que dos cotas paralelas no se lean una a cada lado.
+  // Siempre hacia arriba, para que dos cotas paralelas no se lean una a cada lado. Una cota vertical
+  // (la altura de un disco en el sagital, o casi) no tiene "arriba": se aparta siempre hacia la izquierda, así
+  // dos cotas apenas inclinadas distinto no caen cada una de un lado.
+  const vertical = Math.abs(normal.y) < 0.4;
+  if (vertical) return normal.x > 0 ? { x: -normal.x, y: -normal.y } : normal;
   return normal.y > 0 ? { x: -normal.x, y: -normal.y } : normal;
 }
 
@@ -267,9 +271,18 @@ export function MeasurementLayer({
     const width = plateWidth(figure.label, fontSize);
     const at = (distance: number) => ({ x: base.x + direction.x * distance, y: base.y + direction.y * distance });
     const boxAt = (point: AnnotationPoint): Box => ({ x: point.x - width / 2, y: point.y - plateHeight / 2, w: width, h: plateHeight });
-    let anchor = at(clearance);
+    /*
+     * La separación se mide hasta el borde de la placa en la dirección en que se aparta, no hasta su centro.
+     * Con una cota horizontal la dirección es vertical y la mitad de la altura alcanza —es el valor de
+     * siempre—; con una cota vertical (la altura de un disco) la placa se corre de costado, y ahí lo que
+     * hay que despejar es la mitad de su ancho: con la separación de antes la placa quedaba encima de la
+     * propia cota y la tapaba.
+     */
+    const reach = Math.abs(direction.x) * width / 2 + Math.abs(direction.y) * plateHeight / 2;
+    const away = reach + (clearance - plateHeight / 2);
+    let anchor = at(away);
     for (let step = 1; step <= 6 && placed.some((other) => overlaps(other, boxAt(anchor))); step += 1) {
-      anchor = at(clearance + step * plateHeight * 1.25);
+      anchor = at(away + step * plateHeight * 1.25);
     }
     placed.push(boxAt(anchor));
     anchors.set(figure.id, anchor);

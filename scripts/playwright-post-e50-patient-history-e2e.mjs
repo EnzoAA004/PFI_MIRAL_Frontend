@@ -107,8 +107,9 @@ async function main() {
   const compareButtons = page.locator("button", { hasText: "Comparar" });
   if (await compareButtons.count()) {
     await compareButtons.first().click();
-    await page.waitForSelector("text=Comparar con estudio actual", { timeout: 10000 });
-    console.log("ok 7 - la acción 'Comparar' abre el panel de comparación (Stage 79) desde el historial");
+    // "Comparar" lleva al visor del estudio actual con la comparación visual real abierta.
+    await page.waitForSelector('[data-testid="dual-comparison"]', { timeout: 10000 });
+    console.log("ok 7 - la acción 'Comparar' abre la comparación visual real desde el historial");
   } else {
     console.log("skip 7 - no había un botón 'Comparar' visible (verificar selector si esto persiste)");
   }

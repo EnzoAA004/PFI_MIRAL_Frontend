@@ -1,6 +1,8 @@
 import { multiplanarRequest } from "./multiplanarApi";
 import type {
+  ComparisonLocation,
   ComparisonStudySide,
+  GeometryPoint,
   ComparisonTrend,
   ComparisonValue,
   ExclusionSide,
@@ -86,6 +88,53 @@ export function parseStudySide(value: unknown, field = "estudio"): ComparisonStu
   };
 }
 
+const LOCATION_STATUSES = ["located", "slice_only", "not_located"] as const;
+const GEOMETRY_KINDS = ["segment", "angle", "none"] as const;
+
+function parsePoints(value: unknown): GeometryPoint[] | null {
+  if (!Array.isArray(value)) return null;
+  const points: GeometryPoint[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const { x, y } = item as Record<string, unknown>;
+    if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    points.push({ x, y });
+  }
+  return points;
+}
+
+/**
+ * La ubicación es aditiva: si falta o viene rota se la trata como "no localizable" en vez de romper la
+ * comparación numérica, y nunca se completa con valores por defecto.
+ */
+export function parseLocation(value: unknown): ComparisonLocation | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const status = LOCATION_STATUSES.find((item) => item === raw.status);
+  const kind = GEOMETRY_KINDS.find((item) => item === raw.geometryKind);
+  const geometry = parsePoints(raw.geometry ?? []);
+  const correctedGeometry = parsePoints(raw.correctedGeometry ?? []);
+  if (!status || !kind || !geometry || !correctedGeometry) return null;
+  const expected = kind === "segment" ? 2 : kind === "angle" ? 4 : 0;
+  if (status === "located" && (geometry.length !== expected || expected === 0)) return null;
+  if (status !== "located" && (geometry.length > 0 || correctedGeometry.length > 0)) return null;
+  if (correctedGeometry.length > 0 && correctedGeometry.length !== geometry.length) return null;
+  return {
+    plane: typeof raw.plane === "string" ? raw.plane : "",
+    planeRunId: nullableText(raw.planeRunId),
+    inputId: nullableText(raw.inputId),
+    sliceIndex: nullableFinite(raw.sliceIndex),
+    coordinateSpace: nullableText(raw.coordinateSpace),
+    coordinateWidth: nullableFinite(raw.coordinateWidth),
+    coordinateHeight: nullableFinite(raw.coordinateHeight),
+    geometryKind: kind,
+    geometry,
+    correctedGeometry,
+    status,
+    reason: nullableText(raw.reason),
+  };
+}
+
 function parseValue(value: unknown, field: string): ComparisonValue {
   const raw = record(value, field);
   return {
@@ -95,6 +144,7 @@ function parseValue(value: unknown, field: string): ComparisonValue {
     correctedValue: nullableFinite(raw.correctedValue),
     corrected: raw.corrected === true,
     sliceIndex: nullableFinite(raw.sliceIndex),
+    location: parseLocation(raw.location),
   };
 }
 

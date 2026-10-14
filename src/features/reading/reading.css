@@ -3204,3 +3204,294 @@
   .rr-help-body ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
   .rr-help-body section { display: flex; flex-direction: column; gap: 4px; }
 }
+
+/* Comparación visual entre estudios ---------------------------------------- */
+@layer components {
+  .rr-cmp-visual { align-self: flex-start; }
+
+  .rr-dual {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--bg-app);
+    color: var(--text);
+    font-size: var(--fs-small);
+    outline: none;
+  }
+  .rr-dual-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 6px var(--sp-3);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex: none;
+  }
+  .rr-dual-bar-title { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
+  .rr-dual-bar-title strong { font-size: var(--fs-body); }
+  .rr-dual-bar-title .rr-note { margin: 0; font-size: var(--fs-micro); }
+  .rr-dual-select { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .rr-dual-select span { color: var(--text-muted); }
+  .rr-dual-select select { max-width: 24rem; min-width: 0; }
+  .rr-dual-close {
+    padding: 4px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .rr-dual > .rr-note, .rr-dual > .honest-empty-state { margin: 6px var(--sp-3); flex: none; }
+  .rr-dual-link { color: var(--text-muted); }
+
+  .rr-dual-main {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 23rem);
+  }
+  .rr-dual-panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 2px;
+    min-height: 0;
+    min-width: 0;
+    background: var(--border);
+  }
+  .rr-dual-pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--viewport-bg);
+  }
+  .rr-dual-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    padding: 6px 10px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    min-width: 0;
+  }
+  .rr-dual-head strong { overflow-wrap: anywhere; }
+  .rr-dual-badge {
+    padding: 1px 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    font-size: var(--fs-micro);
+    font-weight: var(--fw-semibold);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .rr-dual-reference .rr-dual-badge { border-style: dashed; }
+  .rr-dual-sub { color: var(--text-muted); }
+  .rr-dual-planes { margin-left: auto; display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius-btn); overflow: hidden; }
+  .rr-dual-planes button {
+    padding: 2px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .rr-dual-planes button.is-on { background: var(--primary); color: var(--on-primary, #fff); }
+  .rr-dual-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .rr-dual-body .rr-plane { flex: 1; }
+  .rr-dual-state { margin: auto; padding: var(--sp-3); color: var(--text-muted); text-align: center; }
+  .rr-dual-error { color: var(--text-warning-strong); }
+  .rr-dual-note {
+    margin: 0;
+    padding: 5px 10px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .rr-dual-note:empty { display: none; }
+  .rr-dual-note-unavailable { color: var(--text-warning-strong); }
+  .rr-dual-note .rr-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--primary);
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+  }
+  /* El resto de las capas se atenúa para que la diferencia elegida sea lo único que se lee. */
+  .rr-dual-pane.has-selection .mri-overlay-img { filter: opacity(.45); }
+  .rr-dual-pane .mri-measure.is-selected line,
+  .rr-dual-pane .mri-measure.is-selected polygon { stroke-width: 2.5; stroke-dasharray: none; }
+
+  .rr-dual-diffs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--sp-2) var(--sp-3);
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+  }
+  .rr-dual-diffs-top { display: flex; flex-direction: column; gap: 4px; }
+  .rr-dual-count, .rr-dual-pos { margin: 0; }
+  .rr-dual-pos { color: var(--text-muted); font-size: var(--fs-micro); min-height: 1.2em; }
+  .rr-dual-stepper { display: flex; gap: 6px; }
+  .rr-dual-stepper button {
+    flex: 1;
+    padding: 4px 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+  }
+  .rr-dual-stepper button:disabled { opacity: .45; cursor: default; }
+  .rr-dual-filters { display: flex; flex-direction: column; gap: 4px; }
+  .rr-dual-check { display: flex; gap: 6px; align-items: center; }
+  .rr-dual-filters .rr-link {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--primary);
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+  }
+  .rr-dual-minimums { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .rr-dual-minimums label { display: grid; grid-template-columns: 1fr 6rem 2.6rem; gap: 6px; align-items: center; }
+  .rr-dual-minimums input { min-width: 0; text-align: right; font-family: var(--font-mono); }
+  .rr-dual-filter-state { margin: 0; padding: 4px 8px; border: 1px solid var(--border-info, var(--border)); border-radius: var(--radius-btn); }
+  .rr-dual-selected {
+    padding: 8px 10px;
+    border: 2px solid var(--primary);
+    border-radius: var(--radius-btn);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .rr-dual-selected dl { margin: 0; display: grid; gap: 2px; }
+  .rr-dual-selected dl div { display: grid; grid-template-columns: 6rem 1fr; gap: 6px; }
+  .rr-dual-selected dt { color: var(--text-muted); }
+  .rr-dual-selected dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .rr-dual-list section { margin-bottom: var(--sp-2); }
+  .rr-dual-list h4 { margin: 0 0 4px; font-size: var(--fs-body); }
+  .rr-dual-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+  .rr-dual-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1px 8px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
+  .rr-dual-row.is-selected { border-color: var(--primary); border-left-width: 6px; font-weight: var(--fw-semibold); }
+  .rr-dual-row-values, .rr-dual-row-delta { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .rr-dual-row-values { color: var(--text-muted); }
+  .rr-dual-row-name { grid-row: 1; }
+  .rr-dual-row-delta small { font-family: var(--font-sans, inherit); color: var(--text-muted); }
+  .rr-dual-row-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 8px; color: var(--text-muted); font-size: var(--fs-micro); font-weight: var(--fw-regular); }
+  .rr-dual-row small { font-size: var(--fs-micro); font-weight: var(--fw-regular); color: var(--text-muted); }
+  .rr-dual-prov { text-decoration: none; border-bottom: 1px dotted currentColor; }
+  .rr-dual-prov.is-corrected { color: var(--text-warning-strong); }
+  .rr-dual-place.is-missing { font-style: italic; }
+  .rr-dual-flag { color: var(--text-warning-strong); }
+  .rr-dual-empty { padding: var(--sp-3); border: 1px dashed var(--border-strong); border-radius: var(--radius-btn); }
+  .rr-dual-note-text { margin: 0; }
+
+  @media (max-width: 1100px) {
+    .rr-dual-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 40%); }
+    .rr-dual-diffs { border-left: 0; border-top: 1px solid var(--border); }
+  }
+  @media (max-width: 720px) {
+    .rr-dual { overflow-y: auto; }
+    .rr-dual-main { display: flex; flex-direction: column; flex: none; }
+    .rr-dual-panes { grid-template-columns: minmax(0, 1fr); }
+    .rr-dual-pane { min-height: 420px; }
+    .rr-dual-diffs { overflow: visible; }
+  }
+}
+
+@layer components {
+  .rr-dual-side { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface); border-left: 1px solid var(--border); }
+  .rr-dual-side > [role="tabpanel"] { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .rr-dual-side > [role="tabpanel"][hidden] { display: none; }
+  .rr-dual-side .rr-dual-diffs { flex: 1; border-left: 0; }
+  .rr-dual-tabs { display: flex; border-bottom: 1px solid var(--border); flex: none; }
+  .rr-dual-tabs button {
+    flex: 1;
+    padding: 6px 8px;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font: inherit;
+  }
+  .rr-dual-tabs button.is-on { color: var(--text); border-bottom-color: var(--primary); font-weight: var(--fw-semibold); }
+  .rr-dual-findings { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-2) var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-3); }
+  .rr-dual-findings-side h4 { margin: 0 0 4px; font-size: var(--fs-body); overflow-wrap: anywhere; }
+  @media (max-width: 1100px) {
+    .rr-dual-side { border-left: 0; border-top: 1px solid var(--border); }
+  }
+}
+
+@layer components {
+  /* Lo que orienta (conteos, recorrido, filtros y la diferencia elegida) queda a la vista; la lista se desplaza. */
+  .rr-dual-diffs-head {
+    position: sticky;
+    top: calc(var(--sp-2) * -1);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    margin: calc(var(--sp-2) * -1) calc(var(--sp-3) * -1) 0;
+    padding: var(--sp-2) var(--sp-3) var(--sp-2);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+@layer components {
+  /*
+   * Ventanas angostas o bajas: las imágenes no se aprietan para hacerle lugar a la lista. La columna se
+   * desplaza como una sola y los dos visores quedan fijos arriba, así que la diferencia elegida abajo se
+   * sigue viendo en las dos imágenes mientras se recorre la lista.
+   */
+  @media (max-width: 1100px) {
+    .rr-dual-main { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
+    .rr-dual-panes { flex: none; position: sticky; top: 0; z-index: 3; height: clamp(420px, 70vh, 720px); }
+    .rr-dual-side { flex: none; overflow: visible; border-top: 1px solid var(--border); }
+    .rr-dual-side > [role="tabpanel"] { flex: none; }
+    .rr-dual-side .rr-dual-diffs { overflow: visible; }
+    .rr-dual-diffs-head { position: static; margin: 0; padding: 0 0 var(--sp-2); }
+    .rr-dual-findings { overflow: visible; }
+  }
+  @media (max-width: 720px) {
+    .rr-dual-panes { position: static; height: auto; grid-template-columns: minmax(0, 1fr); }
+    .rr-dual-pane { min-height: 440px; }
+  }
+  /* Poca altura con ancho suficiente: el resumen fijo ocuparía la lista entera. */
+  @media (min-width: 1101px) and (max-height: 700px) {
+    .rr-dual-diffs-head { position: static; margin: 0; padding: 0 0 var(--sp-2); }
+  }
+}
+
+@layer components {
+  /* La segmentación pasa a segundo plano: lo que se lee es la medición elegida. */
+  .rr-dual-pane.has-selection .mri-segmentation-canvas { filter: opacity(.4); }
+}

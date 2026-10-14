@@ -220,9 +220,10 @@ await test("13. estudio actual se marca explícitamente, no sólo por color", ()
   assert.match(historyViewSource, /Estudio actual/);
 });
 
-await test("14. acción Comparar existe y reutiliza LongitudinalComparisonPanel (Stage 79), no recalcula en Frontend", () => {
+await test("14. acción Comparar existe y abre la comparación visual real; no recalcula en Frontend ni usa el circuito de demostración", () => {
   assert.match(historyViewSource, /Comparar/);
-  assert.match(historyViewSource, /LongitudinalComparisonPanel/);
+  assert.match(historyViewSource, /onCompareStudies/);
+  assert.doesNotMatch(historyViewSource, /LongitudinalComparisonPanel/);
   assert.doesNotMatch(historyViewSource, /deltaAbsolute\s*=|current\s*-\s*baseline/);
 });
 

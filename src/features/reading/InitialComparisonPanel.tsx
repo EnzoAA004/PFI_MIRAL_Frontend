@@ -26,6 +26,8 @@ type Props = {
   caseId: string;
   /** La corrida del análisis inicial que el visor muestra; el Backend consulta esa y no otra. */
   currentRunId: string | null;
+  /** Abre la comparación visual con la referencia indicada (vacía si todavía no hay una elegida). */
+  onOpenVisual?: (referenceCaseId: string) => void;
 };
 
 function ValueCell({ value }: { value: ComparisonValue }) {
@@ -69,7 +71,7 @@ function ComparisonRow({ row }: { row: InitialComparisonRow }) {
  * diferencia (abierto − referencia) y el porcentaje. Todo viene calculado del Backend; acá solo se da
  * formato. Lo que no se pudo emparejar con certeza se lista aparte con su motivo.
  */
-export function InitialComparisonPanel({ caseId, currentRunId }: Props) {
+export function InitialComparisonPanel({ caseId, currentRunId, onOpenVisual }: Props) {
   const { state, select } = useInitialComparison(caseId, currentRunId);
   const { candidates, comparison } = state;
   const eligible = candidates?.candidates.filter((candidate) => candidate.eligible) ?? [];
@@ -122,6 +124,17 @@ export function InitialComparisonPanel({ caseId, currentRunId }: Props) {
             ) : null}
           </div>
         </section>
+      )}
+
+      {onOpenVisual && candidates && emptyKind === null && (
+        <button
+          className="rr-more-action rr-cmp-visual"
+          data-testid="open-dual-comparison"
+          onClick={() => onOpenVisual(state.selectedCaseId ?? "")}
+          type="button"
+        >
+          Abrir comparación visual
+        </button>
       )}
 
       {emptyKind && (

@@ -647,7 +647,16 @@ export function MriSliceViewer({
 
   useEffect(() => {
     setFitInitialized(false);
-    setImageSize({ width: 0, height: 0 });
+    /*
+     * Si la imagen ya terminó de cargar antes de que corra este efecto —un blob en
+     * caché con el árbol ocupado— su `onLoad` ya pasó y no vuelve a disparar: reiniciar
+     * el tamaño a 0 dejaba el visor sin zoom de ajuste y la imagen sin dimensiones. Se
+     * lee el tamaño de la que está montada; si todavía no cargó, `onLoad` lo completa.
+     */
+    const mounted = imageRef.current;
+    setImageSize(mounted && mounted.complete && mounted.naturalWidth > 0
+      ? { width: mounted.naturalWidth, height: mounted.naturalHeight }
+      : { width: 0, height: 0 });
     setPan({ x: 0, y: 0 });
   }, [inputUrl]);
 

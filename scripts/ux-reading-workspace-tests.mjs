@@ -112,7 +112,8 @@ check("los cortes adyacentes usan el inputId exacto de la serie analizada", () =
     index: 6,
     aiIndex: 7,
   }), "https://backend.example/api/ai/series/input%20con%20espacio/slices/6");
-  assert.match(reviewSource, /sourceInputId = typeof metadata\.inputId/);
+  // La lectura de la serie persistida vive en `planeSeries.ts`, compartida con el visor de comparación.
+  assert.match(readFileSync("src/features/reading/planeSeries.ts", "utf8"), /sourceInputId = typeof metadata\.inputId/);
   assert.match(reviewSource, /sourceInputId: analyzedSeries\.sourceInputId/);
 });
 
