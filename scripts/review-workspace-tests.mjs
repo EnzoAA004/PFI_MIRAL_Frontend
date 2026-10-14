@@ -146,7 +146,7 @@ test("Q humanReviewRequired y notClinicalDiagnosis permanecen visibles", () => {
   assert.match(source, /<GovernanceNotice/);
   assert.match(workspaceGovernance, /IA asistida · Revisi.n profesional requerida/);
   assert.match(workspaceGovernance, /no[\s\S]*constituyen un diagn.stico aut.nomo/);
-  assert.match(governance, /requieren revisi.n profesional/);
+  assert.match(governance, /Requieren revisi.n profesional/i);
   assert.match(governance, /DISC_FINDINGS_NOTICE/);
   assert.match(display, /No constituye un diagn.stico cl.nico aut.nomo/);
   assert.doesNotMatch(viewport, /No apto para diagn.stico cl.nico/);

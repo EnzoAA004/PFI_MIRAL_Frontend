@@ -3010,4 +3010,133 @@
   @media (max-width: 1179px) {
     .rr-resize-handle { display: none; }
   }
+
+  /* ====================================================================================
+     Panel derecho, segunda pasada: compacto, con los resultados primero.
+     La tipografía no se achica: se quitan explicaciones repetidas y se pliegan las generales.
+     ==================================================================================== */
+  .rr-panel { grid-template-rows: auto auto minmax(0, 1fr); }
+  /* Lo oculto con `hidden` no se muestra aunque su clase le dé `display`. */
+  .rr-panel [hidden] { display: none !important; }
+
+  .rr-panel-head {
+    display: flex;
+    align-items: center;
+    padding: 6px var(--sp-3);
+    border-bottom: 1px solid var(--border);
+  }
+  .rr-tools-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    justify-content: center;
+    height: 30px;
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-btn);
+    background: var(--surface-subtle);
+    color: var(--text);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-semibold);
+    cursor: pointer;
+  }
+  .rr-tools-button:hover { background: var(--surface-soft); }
+  .rr-tools-button[aria-pressed="true"] { border-color: var(--primary); background: var(--surface-soft); }
+  .rr-tools-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  .rr-panel-body > .rr-tools-panel:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    min-height: 100%;
+    min-width: 0;
+  }
+  .rr-tools { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+  .rr-tools-index:not([hidden]) { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .rr-tools-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .rr-tools-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .rr-tool-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: 100%;
+    padding: 8px 10px;
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .rr-tool-item:hover { background: var(--surface-subtle); border-color: var(--border-strong); }
+  .rr-tool-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .rr-tool-item-title { font-size: var(--fs-body); font-weight: var(--fw-medium); }
+  .rr-tool-item-hint { font-size: var(--fs-small); color: var(--text-muted); }
+  .rr-tool-item-provenance { font-size: var(--fs-small); color: var(--text-warning-strong); }
+  .rr-tools-group[data-demo="true"] .rr-tool-item { border-style: dashed; }
+  .rr-tool-view:not([hidden]) { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+  .rr-tool-view-head { display: flex; flex-direction: column; gap: 4px; }
+  .rr-tool-back { align-self: flex-start; font-size: var(--fs-small); }
+  .rr-tool-view-head h3:focus { outline: none; }
+  .rr-tool-view-head h3:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  /* Mediciones: encabezado compacto del nivel elegido */
+  .rr-level-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-btn);
+    background: var(--surface-soft);
+    font-size: var(--fs-body);
+    color: var(--text);
+  }
+  .rr-level-header-actions { display: inline-flex; gap: var(--sp-3); font-size: var(--fs-small); }
+
+  /* Hallazgos: aviso de una línea, tabla compacta */
+  .rr-ai-governance-line { margin: 0; font-size: var(--fs-body); color: var(--text); }
+  .rr-study-limit { color: var(--text-warning-strong); }
+  .rr-ai-governance { display: flex; flex-direction: column; gap: 6px; }
+  .rr-disc-level-summary { align-items: start; }
+  .rr-disc-level-summary > strong { padding-top: 1px; }
+  .rr-disc-positives { display: flex; flex-direction: column; gap: 1px; }
+  .rr-disc-missing { display: block; font-size: var(--fs-small); color: var(--text-warning-strong); font-weight: var(--fw-regular); }
+  .rr-disc-overview-head,
+  .rr-disc-level-summary { grid-template-columns: 44px minmax(0, 1fr) 70px; }
+  .rr-disc-overview-head { align-items: end; }
+  .rr-disc-level > .rr-disc-block { padding-left: 10px; padding-right: 10px; }
+
+  /* Ayudas plegadas (cerradas al inicio) */
+  .rr-help { font-size: var(--fs-small); color: var(--text-muted); }
+  .rr-help > summary {
+    cursor: pointer;
+    color: var(--text-primary-strong);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-medium);
+    list-style: none;
+  }
+  .rr-help > summary::-webkit-details-marker { display: none; }
+  .rr-help > summary::before { content: "▸ "; }
+  .rr-help[open] > summary::before { content: "▾ "; }
+  .rr-help > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 2px; }
+  .rr-help-body { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
+  .rr-help-body p { margin: 0; line-height: 1.5; }
+  .rr-ai-governance-details > summary { list-style: none; }
+  .rr-ai-governance-details > summary::-webkit-details-marker { display: none; }
+  .rr-ai-governance-details > summary::before { content: "▸ "; }
+  .rr-ai-governance-details[open] > summary::before { content: "▾ "; }
+
+  /* Revisión: una línea, notas y estado primero, anotaciones en lista compacta */
+  .rr-review-oneliner { color: var(--text); }
+  .rr-annot-toggle { align-self: flex-start; }
+  .rr-annots { margin: 0; }
+  .rr-review-footer { gap: 6px; padding: 8px var(--sp-3); }
+  .rr-review-buttons { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-2); }
+  .rr-review-buttons > button { width: 100%; min-height: 32px; }
+  .rr-review-footer .rr-note { margin: 0; }
 }

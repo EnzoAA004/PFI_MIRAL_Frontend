@@ -22,8 +22,16 @@ const layout = loadModule("src/features/reading/inspectorLayout.ts", [
   "inspectorWidthForPointer", "parseStoredInspectorWidth", "INSPECTOR_MIN_WIDTH", "INSPECTOR_KEY_STEP", "INSPECTOR_KEY_STEP_LARGE",
 ]);
 const display = loadModule("src/features/reading/inspectorDisplay.ts", [
-  "measurementCountLabel", "discClassificationScope", "reviewActionState", "clinicalContextRows", "hasAnyClinicalContext", "NOT_REPORTED",
+  "measurementCountLabel", "discClassificationRows", "discPositivesSummary", "DISC_COUNT_NOTE", "reviewActionState",
+  "clinicalContextRows", "hasAnyClinicalContext", "NOT_REPORTED", "ageProvenanceShort", "ageProvenanceHelp", "CONTEXT_HELP_NOTES",
+  "annotationsPendingNotice",
 ]);
+const tools = loadModule("src/features/reading/inspectorToolsIndex.ts", [
+  "INSPECTOR_TOOLS", "INSPECTOR_TOOL_GROUPS", "inspectorToolById", "inspectorToolsInGroup",
+]);
+
+// Los módulos corren en otro contexto de vm: se compara por contenido, no por prototipo.
+const deepEqual = (actual, expected) => assert.equal(JSON.stringify(actual), JSON.stringify(expected));
 
 let passed = 0;
 function check(name, fn) {
@@ -95,57 +103,91 @@ check("los conteos dicen qué cuentan: '5 mediciones', '1 medición', 'Sin medic
 
 /* ------------------------------------------------------------ alcance de clasificaciones */
 
-const finding = (findingType, label, deploymentStatus = "supported_internal") => ({ findingType, label, deploymentStatus });
+const finding = (findingType, label, deploymentStatus = "supported_internal", confidence = 0.8) => ({ findingType, label, deploymentStatus, confidence });
 const FOUR_ABSENT = [
   finding("disc_bulging", "absent"), finding("disc_narrowing", "absent"),
   finding("upper_endplate_change", "absent"), finding("lower_endplate_change", "absent"),
   finding("pfirrmann_grade", "II", "experimental"),
 ];
 
-check("'ausente' se dice sobre las clasificaciones evaluadas, nunca como disco normal", () => {
-  const scope = display.discClassificationScope(FOUR_ABSENT);
-  assert.equal(scope.summary, "Ausente en las 4 clasificaciones evaluadas");
-  assert.equal(scope.evaluated.length, 4);
-  assert.equal(scope.present.length, 0);
-  assert.match(scope.scopeNote, /abombamiento, estrechamiento, cambio del platillo superior y cambio del platillo inferior/);
-  assert.match(scope.scopeNote, /no descarta otras alteraciones/);
-  assert.doesNotMatch(scope.summary, /normal|Sin hallazgos/i);
+check("cuatro clasificaciones válidas: '0 de 4', sin 'normal' ni 'sin hallazgos'", () => {
+  const summary = display.discPositivesSummary(FOUR_ABSENT);
+  assert.equal(summary.text, "0 de 4");
+  assert.equal(summary.complete, true);
+  assert.equal(summary.missingText, null);
+  assert.doesNotMatch(summary.text, /normal|Sin hallazgos/i);
 });
 
-check("Pfirrmann se separa de las demás clasificaciones y no cuenta como una de ellas", () => {
-  const scope = display.discClassificationScope(FOUR_ABSENT);
-  assert.equal(scope.pfirrmann, "II");
-  assert.ok(!scope.evaluated.includes("pfirrmann_grade"));
-});
-
-check("presente en algunas: se cuenta sobre las evaluadas", () => {
-  const scope = display.discClassificationScope([
+check("positivas: '2 de 4' solo con las cuatro presentes en el contrato", () => {
+  const summary = display.discPositivesSummary([
     finding("disc_bulging", "present"), finding("disc_narrowing", "present"),
     finding("upper_endplate_change", "absent"), finding("lower_endplate_change", "absent"),
   ]);
-  assert.equal(scope.summary, "Presente en 2 de 4 clasificaciones evaluadas");
-  assert.deepEqual(scope.present, ["disc_bulging", "disc_narrowing"]);
+  assert.equal(summary.text, "2 de 4");
+  assert.equal(summary.positives, 2);
 });
 
-check("un disco sin clasificaciones no se presenta como negativo ni como normal", () => {
-  const scope = display.discClassificationScope([]);
-  assert.equal(scope.summary, "Sin clasificaciones informadas");
-  assert.equal(scope.scopeNote, null);
-  assert.equal(scope.pfirrmann, null);
+check("el grado de Pfirrmann va aparte: es solo el grado y no cuenta entre las cuatro", () => {
+  const summary = display.discPositivesSummary(FOUR_ABSENT);
+  assert.equal(summary.pfirrmann, "II");
+  assert.equal(display.discClassificationRows(FOUR_ABSENT).length, 4);
+  assert.ok(display.discClassificationRows(FOUR_ABSENT).every((row) => row.type !== "pfirrmann_grade"));
 });
 
-check("solo Pfirrmann informado: no hay clasificaciones 'ausentes' que inventar", () => {
-  const scope = display.discClassificationScope([finding("pfirrmann_grade", "III", "experimental")]);
-  assert.equal(scope.summary, "Sin clasificaciones informadas");
-  assert.equal(scope.pfirrmann, "III");
-});
-
-check("los resultados de investigación no entran en el resumen del disco", () => {
-  const scope = display.discClassificationScope([
-    finding("disc_bulging", "absent"), finding("modic_change", "II", "not_product_supported"),
+check("datos faltantes: nunca '0 de 4' ni negativos; se dice cuántas se evaluaron y cuáles faltan", () => {
+  const summary = display.discPositivesSummary([
+    finding("disc_bulging", "present"), finding("upper_endplate_change", "absent"), finding("lower_endplate_change", "absent"),
   ]);
-  assert.equal(scope.evaluated.length, 1);
-  assert.equal(scope.summary, "Ausente en la clasificación evaluada");
+  assert.equal(summary.complete, false);
+  assert.equal(summary.text, "1 de 3 evaluadas");
+  assert.doesNotMatch(summary.text, /de 4/);
+  assert.match(summary.missingText, /Sin dato: estrechamiento discal/);
+  const rows = display.discClassificationRows([finding("disc_bulging", "present")]);
+  deepEqual(rows.map((row) => row.result), ["present", "missing", "missing", "missing"]);
+});
+
+check("un valor que no es presente/ausente no cuenta como negativo ni como positivo", () => {
+  const rows = display.discClassificationRows([
+    finding("disc_bulging", "absent"), finding("disc_narrowing", "indeterminado"),
+    finding("upper_endplate_change", "absent"), finding("lower_endplate_change", "absent"),
+  ]);
+  const narrowing = rows.find((row) => row.type === "disc_narrowing");
+  assert.equal(narrowing.result, "missing");
+  assert.equal(narrowing.rawLabel, "indeterminado");
+  const summary = display.discPositivesSummary([
+    finding("disc_bulging", "absent"), finding("disc_narrowing", "indeterminado"),
+    finding("upper_endplate_change", "absent"), finding("lower_endplate_change", "absent"),
+  ]);
+  assert.equal(summary.text, "0 de 3 evaluadas");
+  assert.equal(summary.complete, false);
+});
+
+check("un disco sin clasificaciones: 'Sin datos', no un negativo", () => {
+  const summary = display.discPositivesSummary([]);
+  assert.equal(summary.text, "Sin datos");
+  assert.equal(summary.positives, 0);
+  assert.equal(summary.complete, false);
+  assert.equal(summary.pfirrmann, null);
+});
+
+check("solo Pfirrmann informado: las cuatro clasificaciones quedan sin dato, no ausentes", () => {
+  const summary = display.discPositivesSummary([finding("pfirrmann_grade", "III", "experimental")]);
+  assert.equal(summary.text, "Sin datos");
+  assert.equal(summary.pfirrmann, "III");
+  assert.ok(display.discClassificationRows([finding("pfirrmann_grade", "III")]).every((row) => row.result === "missing"));
+});
+
+check("los resultados de investigación no entran en el conteo ni en las filas del disco", () => {
+  const rows = display.discClassificationRows([
+    finding("disc_bulging", "absent"), finding("disc_narrowing", "present", "not_product_supported"),
+  ]);
+  assert.equal(rows.find((row) => row.type === "disc_narrowing").result, "missing");
+  assert.equal(display.discPositivesSummary([finding("disc_bulging", "absent"), finding("modic_change", "II", "not_product_supported")]).text, "0 de 1 evaluadas");
+});
+
+check("el conteo se explica una sola vez: qué clasificaciones cubre y que no expresa gravedad ni normalidad", () => {
+  assert.match(display.DISC_COUNT_NOTE, /abombamiento, estrechamiento y cambio de platillo superior e inferior/);
+  assert.match(display.DISC_COUNT_NOTE, /No expresa gravedad ni normalidad/);
 });
 
 /* ----------------------------------------------------------------------------- revisión */
@@ -192,22 +234,35 @@ check("un estudio finalizado avisa que los valores están bloqueados", () => {
 
 /* ------------------------------------------------------------------------------ contexto */
 
-check("el contexto muestra edad con su procedencia y marca lo no informado", () => {
+check("el contexto muestra la edad con una etiqueta breve de procedencia y marca lo no informado", () => {
   const rows = display.clinicalContextRows(
     { ageAtStudy: 51, clinicalReason: "Lumbalgia", symptoms: null, symptomDuration: null, relevantHistory: null },
-    "Calculada con la fecha de nacimiento",
+    "calculated",
   );
   const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
-  assert.equal(byKey.age, "51 años · Calculada con la fecha de nacimiento");
+  assert.equal(byKey.age, "51 años · Calculada");
   assert.equal(byKey.reason, "Lumbalgia");
   assert.equal(byKey.symptoms, null);
   assert.equal(byKey.duration, null);
   assert.equal(byKey.history, null);
   assert.equal(display.hasAnyClinicalContext(rows), true);
+  const reported = display.clinicalContextRows({ ageAtStudy: 62, clinicalReason: null, symptoms: null, symptomDuration: null, relevantHistory: null }, "reported");
+  assert.equal(reported[0].value, "62 años · Declarada");
+});
+
+check("la explicación completa de la edad va en la ayuda, no en la fila", () => {
+  assert.match(display.ageProvenanceHelp("calculated"), /fecha de nacimiento/);
+  assert.match(display.ageProvenanceHelp("reported"), /declaró quien cargó el estudio/);
+  assert.match(display.ageProvenanceHelp(null), /no registra/);
+  assert.equal(display.ageProvenanceShort("calculated"), "Calculada");
+  assert.equal(display.ageProvenanceShort("reported"), "Declarada");
+  assert.equal(display.ageProvenanceShort(undefined), "Procedencia no informada");
+  assert.ok(display.CONTEXT_HELP_NOTES.some((note) => /no se recalcula/.test(note)));
+  assert.ok(display.CONTEXT_HELP_NOTES.some((note) => /no se envían al asistente/.test(note)));
 });
 
 check("sin contexto todos los campos quedan sin informar (null), no inventados", () => {
-  const rows = display.clinicalContextRows(null, "Procedencia no informada");
+  const rows = display.clinicalContextRows(null, null);
   assert.equal(rows.length, 5);
   assert.ok(rows.every((row) => row.value === null));
   assert.equal(display.hasAnyClinicalContext(rows), false);
@@ -216,10 +271,57 @@ check("sin contexto todos los campos quedan sin informar (null), no inventados",
 
 check("la edad es la guardada para el estudio: no hay ninguna fecha actual en la lógica de contexto", () => {
   const source = readFileSync("src/features/reading/inspectorDisplay.ts", "utf8");
-  const contextPart = source.slice(source.indexOf("export function clinicalContextRows"));
+  const contextPart = source.slice(source.indexOf("export function clinicalContextRows"), source.indexOf("export function hasAnyClinicalContext"));
   assert.doesNotMatch(contextPart, /new Date|Date\.now/);
   const panel = readFileSync("src/features/reading/StudyContextPanel.tsx", "utf8");
   assert.doesNotMatch(panel, /new Date|Date\.now|birthDate/);
+});
+
+/* --------------------------------------------------------------------------- anotaciones */
+
+check("el aviso de anotaciones dice dónde se guardan y qué falta, solo cuando hay algo pendiente", () => {
+  assert.equal(display.annotationsPendingNotice({ unsaved: false, draftText: "" }), null);
+  assert.equal(display.annotationsPendingNotice({ unsaved: false, draftText: "   " }), null);
+  assert.match(display.annotationsPendingNotice({ unsaved: true, draftText: "" }), /Guardar borrador/);
+  assert.match(display.annotationsPendingNotice({ unsaved: false, draftText: "texto" }), /sin agregar/);
+  assert.match(display.annotationsPendingNotice({ unsaved: true, draftText: "texto" }), /texto sin agregar y anotaciones sin guardar/);
+});
+
+/* --------------------------------------------------------------------- herramientas del estudio */
+
+const EXPECTED_TOOLS = ["history", "comparison", "report", "assistant", "concordance", "feedback", "audit", "three-d", "technical", "demo"];
+
+check("el índice contiene todas las funciones inventariadas, una sola vez cada una", () => {
+  const ids = tools.INSPECTOR_TOOLS.map((tool) => tool.id);
+  deepEqual([...ids].sort(), [...EXPECTED_TOOLS].sort());
+  assert.equal(new Set(ids).size, ids.length);
+  for (const tool of tools.INSPECTOR_TOOLS) {
+    assert.ok(tool.title && tool.hint, `título y descripción de ${tool.id}`);
+    assert.ok(tools.INSPECTOR_TOOL_GROUPS.some((group) => group.id === tool.group), `grupo de ${tool.id}`);
+    assert.equal(tools.inspectorToolById(tool.id), tool);
+  }
+});
+
+check("las herramientas se agrupan por propósito y el análisis de demostración queda solo y separado", () => {
+  for (const group of tools.INSPECTOR_TOOL_GROUPS) {
+    assert.ok(tools.inspectorToolsInGroup(group.id).length > 0, `el grupo ${group.id} no está vacío`);
+  }
+  deepEqual(tools.inspectorToolsInGroup("demo").map((tool) => tool.id), ["demo"]);
+  assert.match(tools.INSPECTOR_TOOL_GROUPS.find((group) => group.id === "demo").description, /No es el análisis real/);
+  deepEqual(tools.inspectorToolsInGroup("follow-up").map((tool) => tool.id), ["history", "comparison"]);
+  deepEqual(tools.inspectorToolsInGroup("delivery").map((tool) => tool.id), ["report", "assistant"]);
+});
+
+check("los consumidores del circuito de producto declaran su procedencia ya en el índice", () => {
+  for (const id of ["comparison", "report", "assistant"]) {
+    assert.match(tools.inspectorToolById(id).provenance ?? "", /análisis de demostración/, id);
+  }
+  assert.match(tools.inspectorToolById("assistant").provenance, /no recibe contexto clínico/);
+});
+
+check("ninguna herramienta ofrece iniciar un análisis nuevo", () => {
+  const demo = tools.inspectorToolById("demo");
+  assert.doesNotMatch(`${demo.title} ${demo.hint}`, /analizar|reanalizar|iniciar/i);
 });
 
 console.log(`Viewer panel logic tests passed: ${passed}`);

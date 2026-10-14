@@ -328,10 +328,10 @@ check("los resultados adicionales se agrupan dinámicamente por deploymentStatus
 check("la UI clínica prioriza nombres funcionales y hallazgos naturales", () => {
   const panel = readFileSync("src/features/reading/DiscDegenerativeFindingsPanel.tsx", "utf8");
   assert.match(panel, />Hallazgos discales</);
-  assert.match(panel, />Otras clasificaciones</);
+  assert.match(panel, />Clasificaciones positivas</);
   // "Sin hallazgos" a secas se leia como "disco normal": ahora se dice sobre que clasificaciones habla.
   assert.doesNotMatch(panel, /Sin hallazgos/);
-  assert.match(panel, /discClassificationScope/);
+  assert.match(panel, /discPositivesSummary/);
   assert.doesNotMatch(panel, /Hallazgos discales P10\.7|Resumen P10\.7/);
 });
 
@@ -348,7 +348,7 @@ check("las explicaciones largas viven una sola vez fuera de los cinco niveles", 
   const governance = readFileSync("src/features/reading/GovernanceNotice.tsx", "utf8");
   assert.doesNotMatch(panel, /DEPLOYMENT_NOTES/);
   assert.equal((governance.match(/DEPLOYMENT_NOTES\[status\]/g) ?? []).length, 1);
-  assert.match(governance, /<details className="rr-ai-governance-details">/);
+  assert.match(governance, /<details className="rr-ai-governance-details"/);
 });
 
 check("un status futuro mixto conserva indicador junto al finding", () => {

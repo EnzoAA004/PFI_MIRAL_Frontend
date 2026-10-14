@@ -17,7 +17,7 @@ import {
   displayDiscFindingConfidence,
   displayDiscFindingValue,
 } from "./discFindingDisplay";
-import { discClassificationScope } from "./inspectorDisplay";
+import { DISC_COUNT_NOTE, discClassificationRows, discPositivesSummary } from "./inspectorDisplay";
 
 type Props = {
   findings: DiscFinding[];
@@ -96,24 +96,26 @@ function statusByFindingType(findings: DiscFinding[]): Map<DiscFindingType, Homo
 }
 
 /*
- * El resumen del disco dice sobre QUÉ clasificaciones habla (ver discClassificationScope). Una
- * frase sin alcance se leía como "disco normal", y el modelo solo clasifica unas pocas
- * alteraciones: ausente en ellas no descarta el resto. Un disco sin ninguna clasificación
- * informada tampoco se presenta como negativo.
+ * La tabla dice cuántas de las clasificaciones evaluadas dieron positivo (ver discPositivesSummary) y
+ * lo aclara una sola vez debajo. "n de 4" solo aparece con las cuatro clasificaciones válidas; si falta
+ * alguna, se dice cuántas se evaluaron y cuáles faltan, sin contarlas como negativas.
  */
 
 function FindingRows({
   findings,
   homogeneousStatuses,
+  nameOverride,
 }: {
   findings: DiscFinding[];
   homogeneousStatuses: Map<DiscFindingType, HomogeneousStatus>;
+  /** Cuando el bloque ya se titula (p. ej. "Pfirrmann"), la fila no repite el nombre. */
+  nameOverride?: string;
 }) {
   return (
     <div className="rr-disc-finding-rows">
       {findings.map((finding) => (
         <article className="rr-disc-finding" key={finding.findingId}>
-          <span>{DISC_FINDING_LABELS[finding.findingType]}</span>
+          <span>{nameOverride ?? DISC_FINDING_LABELS[finding.findingType]}</span>
           <span className="rr-disc-finding-result">
             {homogeneousStatuses.get(finding.findingType) === "mixed" && (
               <span className={`rr-disc-deployment is-${finding.deploymentStatus}`}>
@@ -134,6 +136,45 @@ function FindingRows({
           </span>
         </article>
       ))}
+    </div>
+  );
+}
+
+/** Las cuatro clasificaciones esperadas de un disco; la que falta se rotula "Sin dato", nunca "Ausente". */
+function ClassificationRows({
+  findings,
+  homogeneousStatuses,
+}: {
+  findings: DiscFinding[];
+  homogeneousStatuses: Map<DiscFindingType, HomogeneousStatus>;
+}) {
+  return (
+    <div className="rr-disc-finding-rows">
+      {discClassificationRows(findings).map((row) => {
+        const finding = findings.find((item) => item.findingType === row.type && item.deploymentStatus !== "not_product_supported");
+        return (
+          <article className="rr-disc-finding" data-result={row.result} key={row.type}>
+            <span>{row.name}</span>
+            <span className="rr-disc-finding-result">
+              {finding && row.result !== "missing" && homogeneousStatuses.get(finding.findingType) === "mixed" && (
+                <span className={`rr-disc-deployment is-${finding.deploymentStatus}`}>
+                  {DEPLOYMENT_LABELS[finding.deploymentStatus]}
+                </span>
+              )}
+              {row.result === "missing" ? (
+                <strong className="rr-not-reported">{row.rawLabel ? `Sin dato válido («${row.rawLabel}»)` : "Sin dato"}</strong>
+              ) : (
+                <>
+                  <strong>{displayDiscFindingValue(row.result)}</strong>
+                  <span className="rr-disc-confidence" title="Probabilidad de la clase informada por el modelo">
+                    {row.confidence === null ? displayDiscFindingConfidence(undefined) : `prob. ${displayDiscFindingConfidence(row.confidence)}`}
+                  </span>
+                </>
+              )}
+            </span>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -171,25 +212,29 @@ export function DiscDegenerativeFindingsPanel({
         <>
           {regionNotice && <p className="rr-findings-warning" role="status">{regionNotice}</p>}
 
-          <div className="rr-disc-overview" role="group" aria-label="Resumen de hallazgos discales por nivel">
+          <div className="rr-disc-overview" role="group" aria-label="Resumen de hallazgos discales por disco">
             <div className="rr-disc-overview-head" aria-hidden="true">
               <span>Disco</span>
-              <span>Otras clasificaciones</span>
+              <span>Clasificaciones positivas</span>
               <span>Pfirrmann</span>
             </div>
             {DISC_LEVELS.map((level) => {
               const levelFindings = (groups.get(level) ?? []).filter(
                 (finding) => finding.deploymentStatus !== "not_product_supported",
               );
-              const scope = discClassificationScope(levelFindings);
+              const summary = discPositivesSummary(levelFindings);
               const pfirrmann = levelFindings.find((finding) => finding.findingType === "pfirrmann_grade");
-              const otherFindings = levelFindings.filter((finding) => finding.findingType !== "pfirrmann_grade");
               return (
-                <details className="rr-disc-level" key={level}>
+                <details className="rr-disc-level" data-level={level} key={level}>
                   <summary className="rr-disc-level-summary">
                     <strong>{level}</strong>
-                    <span>{scope.summary}</span>
-                    <span>{pfirrmann ? `Pfirrmann ${displayDiscFindingValue(pfirrmann.label)}` : "Sin Pfirrmann"}</span>
+                    <span className="rr-disc-positives" data-complete={summary.complete ? "true" : "false"}>
+                      {summary.text}
+                      {summary.missingText && <small className="rr-disc-missing">{summary.missingText}</small>}
+                    </span>
+                    <span className={pfirrmann ? undefined : "rr-not-reported"}>
+                      {pfirrmann ? displayDiscFindingValue(pfirrmann.label) : "Sin dato"}
+                    </span>
                   </summary>
                   {levelFindings.length ? (
                     <>
@@ -200,19 +245,18 @@ export function DiscDegenerativeFindingsPanel({
                         onGoToRegion={onGoToRegion}
                         viewedInputId={viewedInputId}
                       />
-                      {pfirrmann && (
-                        <div className="rr-disc-block" data-block="pfirrmann">
-                          <p className="rr-disc-block-title">Clasificación de Pfirrmann</p>
-                          <FindingRows findings={[pfirrmann]} homogeneousStatuses={homogeneousStatuses} />
-                        </div>
-                      )}
-                      {otherFindings.length > 0 && (
-                        <div className="rr-disc-block" data-block="other">
-                          <p className="rr-disc-block-title">Otras clasificaciones del disco</p>
-                          <FindingRows findings={otherFindings} homogeneousStatuses={homogeneousStatuses} />
-                        </div>
-                      )}
-                      {scope.scopeNote && <p className="rr-note" data-testid="disc-scope-note">{scope.scopeNote}</p>}
+                      <div className="rr-disc-block" data-block="classifications">
+                        <p className="rr-disc-block-title">Clasificaciones</p>
+                        <ClassificationRows findings={levelFindings} homogeneousStatuses={homogeneousStatuses} />
+                      </div>
+                      <div className="rr-disc-block" data-block="pfirrmann">
+                        <p className="rr-disc-block-title">Pfirrmann</p>
+                        {pfirrmann ? (
+                          <FindingRows findings={[pfirrmann]} homogeneousStatuses={homogeneousStatuses} nameOverride="Grado" />
+                        ) : (
+                          <p className="rr-note rr-not-reported">Sin dato en esta corrida.</p>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <p className="rr-findings-empty">Esta corrida no informa clasificaciones para este disco.</p>
@@ -221,9 +265,10 @@ export function DiscDegenerativeFindingsPanel({
               );
             })}
           </div>
+          <p className="rr-note" data-testid="disc-count-note">{DISC_COUNT_NOTE}</p>
 
           {researchFindings.length > 0 && (
-            <details className="rr-disc-research">
+            <details className="rr-disc-research" data-testid="research-results">
               <summary>
                 <span>Resultados de investigación (no soportados para uso clínico)</span>
               </summary>
@@ -243,10 +288,6 @@ export function DiscDegenerativeFindingsPanel({
               })}
             </details>
           )}
-
-          <p className="rr-findings-foot">
-            Estos resultados se revisan junto con la corrida del análisis inicial, en la pestaña Revisión; no hay revisión por hallazgo.
-          </p>
         </>
       )}
     </section>

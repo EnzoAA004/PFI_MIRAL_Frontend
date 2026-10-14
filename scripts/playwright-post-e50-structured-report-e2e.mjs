@@ -30,9 +30,7 @@ async function startDemoAnalysis(caseId) {
 }
 
 async function openDemoAnalysis(page) {
-  await page.getByRole("tab", { name: "Contexto" }).click();
-  const section = page.getByTestId("section-demo-analysis");
-  if ((await section.getAttribute("open")) === null) await section.locator("summary").click();
+  await openTool(page, "demo");
   await page.getByTestId("demo-analysis-notice").waitFor({ timeout: 10000 });
 }
 
@@ -140,8 +138,7 @@ async function main() {
   await page.waitForSelector("text=Aceptado por el profesional", { timeout: 10000 });
   console.log("ok 6 - revisión profesional persistida");
 
-  await page.getByRole("tab", { name: "Contexto" }).click();
-  await page.locator("summary", { hasText: "Informe y exportación" }).click();
+  await openTool(page, "report");
   await page.getByTestId("backend-study-report").waitFor({ timeout: 15000 });
   const reportUiText = await page.getByTestId("backend-study-report").textContent();
   const fullUiText = await page.textContent("body");
@@ -196,3 +193,15 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+/** Abre una herramienta del estudio desde su índice ("Herramientas del estudio" en la cabecera del panel). */
+async function openTool(page, id) {
+  const index = page.getByTestId("tools-index");
+  if (!(await index.isVisible())) {
+    const open = page.getByTestId("tools-open");
+    if ((await open.getAttribute("aria-pressed")) !== "true") await open.click();
+    else await page.locator(".rr-tool-view:visible .rr-tool-back").click();
+  }
+  await page.locator(`[data-tool-id="${id}"]`).click();
+  await page.locator(`.rr-tool-view[data-tool="${id}"]`).waitFor();
+}

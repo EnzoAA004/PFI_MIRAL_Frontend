@@ -20,9 +20,7 @@ async function startDemoAnalysis(caseId) {
 }
 
 async function openDemoAnalysis(page) {
-  await page.getByRole("tab", { name: "Contexto" }).click();
-  const section = page.getByTestId("section-demo-analysis");
-  if ((await section.getAttribute("open")) === null) await section.locator("summary").click();
+  await openTool(page, "demo");
   await page.getByTestId("demo-analysis-notice").waitFor({ timeout: 10000 });
 }
 
@@ -119,9 +117,7 @@ async function main() {
   assertTruthy(findingsText.includes("L4-L5"), "no se ve nivel L4-L5");
   console.log("ok 3 - hallazgos AI partial visibles");
 
-  await page.getByRole("tab", { name: "Contexto" }).click();
-  const historySummary = page.locator("summary", { hasText: "Historial del paciente" }).first();
-  if (await historySummary.count()) await historySummary.click();
+  await openTool(page, "history");
   await page.getByRole("button", { name: "Ver historial del paciente" }).click();
   await page.waitForSelector("text=Línea de tiempo de estudios", { timeout: 10000 });
   const historyText = await page.textContent("body");
@@ -145,8 +141,7 @@ async function main() {
   console.log("ok 5 - evolución determinística 11.9 -> 12.3 -> 12.9 visible");
 
   await page.goto(`${frontendUrl}/estudio/DEMO-LUMBAR-2026-03`, { waitUntil: "networkidle" });
-  await page.getByRole("tab", { name: "Contexto" }).click();
-  await page.locator("summary", { hasText: "Informe y exportación" }).click();
+  await openTool(page, "report");
   await page.getByTestId("backend-study-report").waitFor({ timeout: 10000 });
   const reportText = await page.getByTestId("backend-study-report").textContent();
   assertTruthy(reportText.includes("pfi.study-report.v1"), "reporte estructurado no visible en UI");
@@ -176,8 +171,7 @@ async function main() {
   console.log("ok 9 - assistant determinístico y conversación persistida");
 
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("tab", { name: "Contexto" }).click();
-  await page.locator("summary", { hasText: "Informe y exportación" }).click();
+  await openTool(page, "report");
   await page.getByTestId("backend-study-report").waitFor({ timeout: 10000 });
   assertTruthy((await page.textContent("body")).includes("12.9"), "reload no preservó corrección/reporte");
   console.log("ok 10 - reload persistence");
@@ -199,3 +193,15 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+/** Abre una herramienta del estudio desde su índice ("Herramientas del estudio" en la cabecera del panel). */
+async function openTool(page, id) {
+  const index = page.getByTestId("tools-index");
+  if (!(await index.isVisible())) {
+    const open = page.getByTestId("tools-open");
+    if ((await open.getAttribute("aria-pressed")) !== "true") await open.click();
+    else await page.locator(".rr-tool-view:visible .rr-tool-back").click();
+  }
+  await page.locator(`[data-tool-id="${id}"]`).click();
+  await page.locator(`.rr-tool-view[data-tool="${id}"]`).waitFor();
+}

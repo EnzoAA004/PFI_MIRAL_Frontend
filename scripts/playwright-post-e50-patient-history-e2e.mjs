@@ -64,12 +64,9 @@ async function main() {
   console.log("ok 1 - StudyReviewView (CASE-84-C) renderiza contra el Backend real");
 
   // 2. Abrir "Más" -> "Historial del paciente".
-  const moreTab = page.locator("button", { hasText: "Contexto" }).first();
-  await moreTab.click();
-  const historyDetails = page.locator("summary", { hasText: "Historial del paciente" }).first();
-  assertTruthy((await historyDetails.count()) > 0, "no se encontró la sección 'Historial del paciente'");
-  await historyDetails.click();
-  console.log("ok 2 - la sección 'Historial del paciente' existe en la pestaña 'Más'");
+  await openTool(page, "history");
+  assertTruthy((await page.getByRole("button", { name: "Ver historial del paciente" }).count()) > 0, "no se encontró la herramienta 'Historial del paciente'");
+  console.log("ok 2 - la herramienta 'Historial del paciente' existe en 'Herramientas del estudio'");
 
   // 3. Click "Ver historial del paciente" -> navega a /pacientes/PAT-84-1.
   // Se espera un texto que sólo existe en la página YA cargada (no el shell/loading state ni el
@@ -133,3 +130,15 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+/** Abre una herramienta del estudio desde su índice ("Herramientas del estudio" en la cabecera del panel). */
+async function openTool(page, id) {
+  const index = page.getByTestId("tools-index");
+  if (!(await index.isVisible())) {
+    const open = page.getByTestId("tools-open");
+    if ((await open.getAttribute("aria-pressed")) !== "true") await open.click();
+    else await page.locator(".rr-tool-view:visible .rr-tool-back").click();
+  }
+  await page.locator(`[data-tool-id="${id}"]`).click();
+  await page.locator(`.rr-tool-view[data-tool="${id}"]`).waitFor();
+}

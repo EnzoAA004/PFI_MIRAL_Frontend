@@ -76,15 +76,13 @@ async function main() {
   console.log("ok 2 - el caseId real del Study aparece en la página");
 
   // 3. La pestaña "Más" -> abrir "Evolución" y "Asistente" (Stage 79/80/81 features).
-  const moreTab = page.locator("button", { hasText: "Contexto" }).first();
-  if (await moreTab.count()) {
-    await moreTab.click();
-    const evolucion = page.locator("summary", { hasText: "Comparación entre estudios" }).first();
-    const asistente = page.locator("summary", { hasText: "Asistente" }).first();
-    assertTruthy((await evolucion.count()) > 0, "no se encontró la sección 'Evolución'");
-    assertTruthy((await asistente.count()) > 0, "no se encontró la sección 'Asistente'");
-    await asistente.click();
-    console.log("ok 3 - las secciones 'Evolución' y 'Asistente' existen en la pestaña 'Más'");
+  const toolsButton = page.getByTestId("tools-open");
+  if (await toolsButton.count()) {
+    await toolsButton.click();
+    assertTruthy((await page.locator('[data-tool-id="comparison"]').count()) > 0, "no se encontró la herramienta 'Comparación entre estudios'");
+    assertTruthy((await page.locator('[data-tool-id="assistant"]').count()) > 0, "no se encontró la herramienta 'Asistente'");
+    await openTool(page, "assistant");
+    console.log("ok 3 - las herramientas 'Comparación entre estudios' y 'Asistente' existen en 'Herramientas del estudio'");
 
     // 4. Enviar una pregunta real al asistente (Backend real -> mock LLM real).
     const textarea = page.locator('textarea[aria-label="Escribir una pregunta"]');
@@ -97,7 +95,7 @@ async function main() {
       console.log("skip 4 - textarea del asistente no visible (revisar disclaimer/estado inicial)");
     }
   } else {
-    console.log("skip 3-4 - pestaña 'Más' no encontrada, revisar selectores");
+    console.log("skip 3-4 - acceso a las herramientas no encontrado, revisar selectores");
   }
 
   const seriousErrors = consoleErrors.filter((entry) => !entry.includes("favicon"));
@@ -112,3 +110,15 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+/** Abre una herramienta del estudio desde su índice ("Herramientas del estudio" en la cabecera del panel). */
+async function openTool(page, id) {
+  const index = page.getByTestId("tools-index");
+  if (!(await index.isVisible())) {
+    const open = page.getByTestId("tools-open");
+    if ((await open.getAttribute("aria-pressed")) !== "true") await open.click();
+    else await page.locator(".rr-tool-view:visible .rr-tool-back").click();
+  }
+  await page.locator(`[data-tool-id="${id}"]`).click();
+  await page.locator(`.rr-tool-view[data-tool="${id}"]`).waitFor();
+}

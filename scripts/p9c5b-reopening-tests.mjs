@@ -149,8 +149,10 @@ test("10 fetchThreeDProxyAsset valida el origin de forma independiente antes de 
 // 11. el tab de reapertura se llama "Proxy 3D experimental", sin frases de reconstruccion paciente-especifica
 test("11 el tab de StudyReviewView se llama Proxy 3D experimental y no queda ningun texto de reconstruccion paciente-especifica", () => {
   const source = readSource("src/components/StudyReviewView.tsx");
-  assert.match(source, /Proxy 3D/);
-  assert.match(source, /experimental/);
+  // El acceso vive en el índice de "Herramientas del estudio".
+  const tools = readSource("src/features/reading/inspectorToolsIndex.ts");
+  assert.match(tools, /Proxy 3D experimental/);
+  assert.match(source, /Vista secundaria para inspección académica/);
   assert.ok(!source.includes("paciente-específico"), "StudyReviewView no debe contener texto de reconstruccion paciente-especifica");
   assert.ok(!source.includes("paciente-especifico"), "StudyReviewView no debe contener texto de reconstruccion paciente-especifica");
 });

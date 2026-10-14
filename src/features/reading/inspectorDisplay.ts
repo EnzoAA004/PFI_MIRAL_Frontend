@@ -17,67 +17,95 @@ export type DiscScopeInput = {
   findingType: string;
   label: string;
   deploymentStatus?: string;
+  confidence?: number;
 };
 
-const NON_BINARY_TYPES = new Set(["pfirrmann_grade", "modic_change"]);
+/** Las cuatro clasificaciones binarias que el contrato informa por disco (Pfirrmann va aparte). */
+export const DISC_CLASSIFICATION_TYPES = [
+  "disc_bulging",
+  "disc_narrowing",
+  "upper_endplate_change",
+  "lower_endplate_change",
+] as const;
 
-const TYPE_NAMES: Record<string, string> = {
-  disc_bulging: "abombamiento",
-  disc_narrowing: "estrechamiento",
-  upper_endplate_change: "cambio del platillo superior",
-  lower_endplate_change: "cambio del platillo inferior",
-  disc_herniation: "hernia",
-  spondylolisthesis: "espondilolistesis",
-  modic_change: "cambio Modic",
+export const DISC_CLASSIFICATION_NAMES: Record<string, string> = {
+  disc_bulging: "Abombamiento discal",
+  disc_narrowing: "Estrechamiento discal",
+  upper_endplate_change: "Cambio del platillo superior",
+  lower_endplate_change: "Cambio del platillo inferior",
 };
 
-export type DiscClassificationScope = {
-  /** Grado de Pfirrmann tal como lo informa el contrato, aparte del resto. */
-  pfirrmann: string | null;
-  evaluated: string[];
-  present: string[];
-  absent: string[];
-  /** Una frase que dice qué se evaluó, nunca "normal". */
-  summary: string;
-  /** Qué clasificaciones entran en la frase anterior. */
-  scopeNote: string | null;
+/** Se dice una sola vez, debajo de la tabla: el conteo no es una medida de gravedad ni de normalidad. */
+export const DISC_COUNT_NOTE =
+  "El conteo corresponde a las clasificaciones evaluadas (abombamiento, estrechamiento y cambio de platillo superior e inferior). No expresa gravedad ni normalidad.";
+
+export type DiscClassificationRow = {
+  type: string;
+  name: string;
+  /** `missing` = el contrato no trae el dato (o no es un valor válido): nunca cuenta como negativo. */
+  result: "present" | "absent" | "missing";
+  /** Valor crudo cuando no es válido, para mostrarlo tal cual. */
+  rawLabel: string | null;
+  confidence: number | null;
+  deploymentStatus: string | null;
 };
 
-function joinNames(names: string[]): string {
-  if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
+const isBinary = (label: string) => label === "present" || label === "absent";
+
+/** Una fila por cada clasificación esperada; la que falta se rotula como sin dato, no como ausente. */
+export function discClassificationRows(findings: readonly DiscScopeInput[]): DiscClassificationRow[] {
+  return DISC_CLASSIFICATION_TYPES.map((type) => {
+    const found = findings.find((finding) => finding.findingType === type && finding.deploymentStatus !== "not_product_supported");
+    const valid = found !== undefined && isBinary(found.label);
+    return {
+      type,
+      name: DISC_CLASSIFICATION_NAMES[type],
+      result: valid ? (found.label as "present" | "absent") : "missing",
+      rawLabel: found !== undefined && !valid ? found.label : null,
+      confidence: found !== undefined && typeof found.confidence === "number" ? found.confidence : null,
+      deploymentStatus: found?.deploymentStatus ?? null,
+    };
+  });
 }
 
-/**
- * Resume las clasificaciones del disco SIN concluir normalidad: "ausente" se dice solo
- * sobre las clasificaciones que el contrato informó para ese nivel. Un nivel sin ninguna
- * no se presenta como negativo: el contrato no distingue "no evaluado" de "no disponible".
- */
-export function discClassificationScope(findings: readonly DiscScopeInput[]): DiscClassificationScope {
-  const pfirrmann = findings.find((finding) => finding.findingType === "pfirrmann_grade")?.label ?? null;
-  const binary = findings.filter(
-    (finding) => !NON_BINARY_TYPES.has(finding.findingType) && finding.deploymentStatus !== "not_product_supported",
-  );
-  const evaluated = binary.map((finding) => finding.findingType);
-  const present = binary.filter((finding) => finding.label === "present").map((finding) => finding.findingType);
-  const absent = binary.filter((finding) => finding.label === "absent" || finding.label === "none").map((finding) => finding.findingType);
+export type DiscPositivesSummary = {
+  /** "2 de 4" solo con las cuatro clasificaciones válidas; si no, se dice cuántas se evaluaron. */
+  text: string;
+  complete: boolean;
+  positives: number;
+  evaluated: number;
+  missing: string[];
+  /** Detalle de lo que falta, para mostrarlo junto al conteo. */
+  missingText: string | null;
+  pfirrmann: string | null;
+};
 
-  if (!evaluated.length) {
-    return {
-      pfirrmann,
-      evaluated,
-      present,
-      absent,
-      summary: "Sin clasificaciones informadas",
-      scopeNote: null,
-    };
+/**
+ * Resumen de "clasificaciones positivas" de un disco. "n de 4" exige las cuatro con datos válidos;
+ * los datos faltantes nunca se cuentan como negativos y se muestran como ausencia explícita.
+ */
+export function discPositivesSummary(findings: readonly DiscScopeInput[]): DiscPositivesSummary {
+  const rows = discClassificationRows(findings);
+  const valid = rows.filter((row) => row.result !== "missing");
+  const positives = valid.filter((row) => row.result === "present").length;
+  const missing = rows.filter((row) => row.result === "missing").map((row) => row.name);
+  const pfirrmann = findings.find((finding) => finding.findingType === "pfirrmann_grade")?.label ?? null;
+  const complete = valid.length === DISC_CLASSIFICATION_TYPES.length;
+  if (complete) {
+    return { text: `${positives} de ${DISC_CLASSIFICATION_TYPES.length}`, complete, positives, evaluated: valid.length, missing, missingText: null, pfirrmann };
   }
-  const names = evaluated.map((type) => TYPE_NAMES[type] ?? type);
-  const scopeNote = `Clasificaciones evaluadas: ${joinNames(names)}. Que figuren como ausentes no descarta otras alteraciones del disco.`;
-  const summary = present.length === 0
-    ? (evaluated.length === 1 ? "Ausente en la clasificación evaluada" : `Ausente en las ${evaluated.length} clasificaciones evaluadas`)
-    : `Presente en ${present.length} de ${evaluated.length} clasificaciones evaluadas`;
-  return { pfirrmann, evaluated, present, absent, summary, scopeNote };
+  if (!valid.length) {
+    return { text: "Sin datos", complete, positives: 0, evaluated: 0, missing, missingText: "No hay clasificaciones informadas", pfirrmann };
+  }
+  return {
+    text: `${positives} de ${valid.length} evaluadas`,
+    complete,
+    positives,
+    evaluated: valid.length,
+    missing,
+    missingText: `Sin dato: ${missing.join(", ").toLowerCase()}`,
+    pfirrmann,
+  };
 }
 
 /* ------------------------------------------------------------------------------ revisión */
@@ -130,7 +158,7 @@ export function reviewActionState(input: { status: PanelReviewStatus; saving: bo
   }
 
   return {
-    draftLabel: "Guardar borrador (queda pendiente)",
+    draftLabel: "Guardar borrador",
     draftDisabled: saving,
     draftReason: saving ? "Guardando la revisión…" : null,
     confirmLabel,
@@ -145,6 +173,9 @@ export function reviewActionState(input: { status: PanelReviewStatus; saving: bo
   };
 }
 
+/** Una línea que identifica qué análisis se revisa. */
+export const REVIEW_ONE_LINER = "Revisás el análisis inicial del estudio (el de Mediciones y Hallazgos IA).";
+
 export const REVIEW_SCOPE_COVERS = [
   "las mediciones de esta corrida y las correcciones que hagas",
   "los hallazgos discales de esta corrida, que se revisan como conjunto",
@@ -152,6 +183,15 @@ export const REVIEW_SCOPE_COVERS = [
 ];
 
 export const REVIEW_SCOPE_EXCLUDES = "No incluye el análisis de demostración, que tiene su propia revisión.";
+
+/** Aviso breve cuando hay algo sin guardar: dónde se guarda y qué falta agregar. */
+export function annotationsPendingNotice(input: { unsaved: boolean; draftText: string }): string | null {
+  const draft = input.draftText.trim().length > 0;
+  if (draft && input.unsaved) return "Hay un texto sin agregar y anotaciones sin guardar. Se guardan con «Guardar borrador» o al confirmar.";
+  if (draft) return "Hay un texto escrito sin agregar a la lista de anotaciones.";
+  if (input.unsaved) return "Hay anotaciones sin guardar. Se guardan junto con la revisión («Guardar borrador» o al confirmar).";
+  return null;
+}
 
 /* ------------------------------------------------------------------------------ contexto */
 
@@ -167,12 +207,34 @@ export type ContextFieldInput = {
 
 export type ContextRow = { key: string; label: string; value: string | null };
 
+/** Etiqueta breve junto a la edad. La explicación completa va en la ayuda desplegable. */
+export function ageProvenanceShort(provenance: string | null | undefined): string {
+  if (provenance === "calculated") return "Calculada";
+  if (provenance === "reported") return "Declarada";
+  return "Procedencia no informada";
+}
+
+export function ageProvenanceHelp(provenance: string | null | undefined): string {
+  if (provenance === "calculated") {
+    return "La edad se calculó al cargar el estudio con la fecha de nacimiento del paciente y la fecha de este estudio.";
+  }
+  if (provenance === "reported") {
+    return "La edad la declaró quien cargó el estudio; no se calculó con una fecha de nacimiento.";
+  }
+  return "El estudio no registra cómo se obtuvo la edad.";
+}
+
+export const CONTEXT_HELP_NOTES = [
+  "Es el contexto de este estudio al momento de cargarlo: la edad no se recalcula con datos actuales del paciente.",
+  "Estos datos no se envían al asistente.",
+];
+
 /**
  * Filas del contexto del estudio. La edad es la guardada para ESE estudio: no se recalcula
  * con la fecha actual ni con datos actuales del paciente. `null` = no informado.
  */
-export function clinicalContextRows(context: ContextFieldInput | null, ageProvenanceText: string): ContextRow[] {
-  const ageValue = context?.ageAtStudy == null ? null : `${context.ageAtStudy} años · ${ageProvenanceText}`;
+export function clinicalContextRows(context: ContextFieldInput | null, provenance: string | null | undefined): ContextRow[] {
+  const ageValue = context?.ageAtStudy == null ? null : `${context.ageAtStudy} años · ${ageProvenanceShort(provenance)}`;
   return [
     { key: "age", label: "Edad al estudio", value: ageValue },
     { key: "reason", label: "Motivo del estudio", value: context?.clinicalReason ?? null },

@@ -18,8 +18,11 @@ export const REVIEW_INSPECTOR_TABS: readonly { id: ReviewInspectorTab; label: st
 ];
 
 type Props = {
-  activeTab: ReviewInspectorTab;
+  /** `null` cuando se están viendo las herramientas del estudio: ninguna pestaña queda activa. */
+  activeTab: ReviewInspectorTab | null;
   onTabChange: (tab: ReviewInspectorTab) => void;
+  toolsOpen: boolean;
+  onToggleTools: () => void;
   width: number;
   viewportWidth: number;
   onWidthChange: (width: number) => void;
@@ -28,7 +31,7 @@ type Props = {
   children: ReactNode;
 };
 
-export function ReviewInspector({ activeTab, onTabChange, width, viewportWidth, onWidthChange, scrollKey, children }: Props) {
+export function ReviewInspector({ activeTab, onTabChange, toolsOpen, onToggleTools, width, viewportWidth, onWidthChange, scrollKey, children }: Props) {
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const asideRef = useRef<HTMLElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -94,6 +97,18 @@ export function ReviewInspector({ activeTab, onTabChange, width, viewportWidth, 
         tabIndex={0}
         title="Arrastrá o usá las flechas ← → para cambiar el ancho (Mayús: pasos grandes)"
       />
+      {/* Acceso a las herramientas en una fila propia: las tres pestañas conservan todo su ancho. */}
+      <div className="rr-panel-head">
+        <button
+          aria-pressed={toolsOpen}
+          className="rr-tools-button"
+          data-testid="tools-open"
+          onClick={onToggleTools}
+          type="button"
+        >
+          <span aria-hidden="true">{toolsOpen ? "✕" : "▦"}</span> Herramientas del estudio
+        </button>
+      </div>
       <div aria-label="Secciones del inspector" className="rr-tabs" role="tablist">
         {REVIEW_INSPECTOR_TABS.map((tab, index) => (
           <button
@@ -106,7 +121,7 @@ export function ReviewInspector({ activeTab, onTabChange, width, viewportWidth, 
             onKeyDown={(event) => onTabKeyDown(event, index)}
             ref={(node) => { tabRefs.current[index] = node; }}
             role="tab"
-            tabIndex={activeTab === tab.id ? 0 : -1}
+            tabIndex={activeTab === tab.id || (activeTab === null && index === 0) ? 0 : -1}
             type="button"
           >
             {tab.label}
@@ -120,7 +135,7 @@ export function ReviewInspector({ activeTab, onTabChange, width, viewportWidth, 
 }
 
 type PanelProps = {
-  activeTab: ReviewInspectorTab;
+  activeTab: ReviewInspectorTab | null;
   tab: ReviewInspectorTab;
   /**
    * Con `lazy`, el contenido se monta la primera vez que se abre la pestaña: reorganizar el panel

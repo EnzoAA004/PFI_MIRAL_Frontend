@@ -141,13 +141,14 @@ check("IDs y selección de mediciones permanecen intactos", () => {
 });
 
 check("Proxy 3D queda accesible únicamente como función secundaria", () => {
-  assert.match(reviewSource, /title="Reconstrucción 3D"/);
+  const toolsSource = readFileSync("src/features/reading/inspectorToolsIndex.ts", "utf8");
+  assert.match(toolsSource, /title: "Reconstrucción 3D"/);
   assert.match(reviewSource, /Abrir reconstrucción 3D/);
   assert.doesNotMatch(reviewSource, /aria-label="Series del estudio"/);
 });
 
 check("información técnica sigue accesible y sale del chrome del viewport", () => {
-  assert.match(reviewSource, /title="Detalles técnicos"/);
+  assert.match(readFileSync("src/features/reading/inspectorToolsIndex.ts", "utf8"), /title: "Detalles técnicos"/);
   assert.match(reviewSource, /Modo efectivo/);
   assert.doesNotMatch(viewportSource, /modelLabel|inferenceLabel/);
   assert.match(viewportSource, /\{displayParams\}/);

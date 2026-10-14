@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { patientDisplayName } from "../../patientApi";
-import { ageProvenanceLabel } from "../../studyAge";
 import { fetchStudyContext, type StudyContext } from "../../studyContextApi";
 import { InspectorGroup } from "./InspectorSection";
-import { NOT_REPORTED, clinicalContextRows, hasAnyClinicalContext } from "./inspectorDisplay";
+import {
+  CONTEXT_HELP_NOTES,
+  NOT_REPORTED,
+  ageProvenanceHelp,
+  clinicalContextRows,
+  hasAnyClinicalContext,
+} from "./inspectorDisplay";
 
 type Props = {
   caseId: string;
@@ -14,9 +19,10 @@ type Props = {
 type Phase = "loading" | "ready" | "error";
 
 /**
- * Paciente y contexto clínico del estudio, tal como quedaron guardados con él
- * (`GET /api/studies/{caseId}/context`). Solo lectura: no escribe nada, no recalcula la edad con
- * la fecha de hoy ni con datos actuales del paciente, y no envía estos datos a ningún servicio.
+ * Contexto: únicamente el paciente y los datos clínicos del estudio, tal como quedaron guardados con él
+ * (`GET /api/studies/{caseId}/context`). Solo lectura: no escribe nada, no recalcula la edad con la fecha
+ * de hoy ni con datos actuales del paciente, y no envía estos datos a ningún servicio. La edad lleva una
+ * etiqueta breve de procedencia ("Calculada"/"Declarada"); la explicación completa está en la ayuda.
  */
 export function StudyContextPanel({ caseId, subjectLabel }: Props) {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -41,11 +47,13 @@ export function StudyContextPanel({ caseId, subjectLabel }: Props) {
 
   useEffect(() => load(), [load]);
 
-  const rows = clinicalContextRows(context?.clinicalContext ?? null, ageProvenanceLabel(context?.clinicalContext?.ageProvenance));
+  const provenance = context?.clinicalContext?.ageProvenance;
+  const rows = clinicalContextRows(context?.clinicalContext ?? null, provenance);
   const patientName = context?.patient ? patientDisplayName(context.patient) : "";
+  const hasAge = context?.clinicalContext?.ageAtStudy != null;
 
   return (
-    <InspectorGroup id="patient-context" title="Paciente y contexto del estudio">
+    <InspectorGroup id="patient-context" title="Paciente y datos clínicos del estudio">
       {phase === "loading" && <p className="rr-note" role="status">Consultando el contexto del estudio…</p>}
       {phase === "error" && (
         <p className="rr-note rr-note-warn" role="alert">
@@ -76,10 +84,13 @@ export function StudyContextPanel({ caseId, subjectLabel }: Props) {
               Este estudio no tiene contexto clínico registrado (por ejemplo, fue cargado antes de que existiera).
             </p>
           )}
-          <p className="rr-note">
-            Es el contexto de este estudio al momento de cargarlo: la edad no se recalcula con datos actuales.
-            Estos datos no se envían al asistente.
-          </p>
+          <details className="rr-help" data-testid="context-help">
+            <summary>Ayuda sobre estos datos</summary>
+            <div className="rr-help-body">
+              {hasAge && <p>{ageProvenanceHelp(provenance)}</p>}
+              {CONTEXT_HELP_NOTES.map((note) => <p key={note}>{note}</p>)}
+            </div>
+          </details>
         </>
       )}
     </InspectorGroup>

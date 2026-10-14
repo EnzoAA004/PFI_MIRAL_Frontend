@@ -275,8 +275,7 @@ async function seedBrowserSession(page, cycleToken) {
 }
 
 async function openBackendReportPanel(page) {
-  await page.getByRole("tab", { name: "Contexto" }).click();
-  await page.locator("summary", { hasText: "Informe y exportación" }).click();
+  await openTool(page, "report");
   await page.getByTestId("backend-study-report").waitFor({ timeout: 30000 });
 }
 
@@ -335,3 +334,15 @@ main().catch((error) => {
   }
   process.exit(1);
 });
+
+/** Abre una herramienta del estudio desde su índice ("Herramientas del estudio" en la cabecera del panel). */
+async function openTool(page, id) {
+  const index = page.getByTestId("tools-index");
+  if (!(await index.isVisible())) {
+    const open = page.getByTestId("tools-open");
+    if ((await open.getAttribute("aria-pressed")) !== "true") await open.click();
+    else await page.locator(".rr-tool-view:visible .rr-tool-back").click();
+  }
+  await page.locator(`[data-tool-id="${id}"]`).click();
+  await page.locator(`.rr-tool-view[data-tool="${id}"]`).waitFor();
+}

@@ -36,9 +36,7 @@ async function startDemoAnalysis(caseId) {
 }
 
 async function openDemoAnalysis(page) {
-  await page.getByRole("tab", { name: "Contexto" }).click();
-  const section = page.getByTestId("section-demo-analysis");
-  if ((await section.getAttribute("open")) === null) await section.locator("summary").click();
+  await openTool(page, "demo");
   await page.getByTestId("demo-analysis-notice").waitFor({ timeout: 10000 });
 }
 
@@ -162,18 +160,17 @@ async function main() {
   await page.waitForSelector("text=Aceptado por el profesional", { timeout: 10000 });
   console.log("ok 11 - review aceptado y persistido");
 
-  // 12. Corregir measurement.
-  await page.getByRole("tab", { name: "Contexto" }).click();
+  // 12. Corregir measurement (los controles viven en la herramienta "Análisis de demostración").
+  await openDemoAnalysis(page);
   const correctButtons = page.getByRole("button", { name: "Corregir" });
   if (await correctButtons.count()) {
-    console.log("ok 12 - control de corrección disponible en la pestaña Más (wiring confirmado; valor ya corregido vía API en la evidencia curl del reporte)");
+    console.log("ok 12 - control de corrección disponible en Herramientas > Análisis de demostración (wiring confirmado; valor ya corregido vía API en la evidencia curl del reporte)");
   } else {
     console.log("skip 12 - control de corrección no visible en este layout (ver evidencia curl equivalente en el reporte)");
   }
 
   // 13. Abrir historial (la sección vive plegada bajo un <details>, como en Stage 84).
-  const historyDetails = page.locator("summary", { hasText: "Historial del paciente" }).first();
-  if (await historyDetails.count()) await historyDetails.click();
+  await openTool(page, "history");
   await page.getByRole("button", { name: "Ver historial del paciente" }).click();
   await page.waitForSelector("text=Línea de tiempo de estudios", { timeout: 10000 });
   console.log("ok 13 - historial del paciente abre");
@@ -205,11 +202,11 @@ async function main() {
 
   // 16-18. Asistente: abrir, preguntar, recibir respuesta -- vuelve al Study y usa la pestaña Más.
   await page.goto(`${frontendUrl}/estudio/${caseId}`, { waitUntil: "networkidle" });
-  await page.getByRole("tab", { name: "Contexto" }).click();
+  await openTool(page, "assistant");
   const suggestedQuestion = page.getByRole("button", { name: "¿Qué cambió respecto del estudio anterior?" });
   if (await suggestedQuestion.count()) {
     await suggestedQuestion.click();
-    await page.waitForSelector("text=Respuesta determinista del asistente contextual", { timeout: 10000 });
+    await page.waitForSelector("text=Fuentes:", { timeout: 10000 });
     console.log("ok 16-18 - Asistente abre, envía pregunta (sugerida) y recibe respuesta del mock LLM");
   } else {
     console.log("skip 16-18 - sección Asistente no visible en este layout");
@@ -243,3 +240,15 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+/** Abre una herramienta del estudio desde su índice ("Herramientas del estudio" en la cabecera del panel). */
+async function openTool(page, id) {
+  const index = page.getByTestId("tools-index");
+  if (!(await index.isVisible())) {
+    const open = page.getByTestId("tools-open");
+    if ((await open.getAttribute("aria-pressed")) !== "true") await open.click();
+    else await page.locator(".rr-tool-view:visible .rr-tool-back").click();
+  }
+  await page.locator(`[data-tool-id="${id}"]`).click();
+  await page.locator(`.rr-tool-view[data-tool="${id}"]`).waitFor();
+}

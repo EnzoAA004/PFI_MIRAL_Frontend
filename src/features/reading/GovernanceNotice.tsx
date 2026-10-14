@@ -10,28 +10,27 @@ type Props = {
 };
 
 /**
- * Un solo punto de entrada para el alcance de los resultados IA del inspector.
- * `details` conserva la explicación completa sin repetirla por nivel y es operable
- * con click, mouse y teclado sin depender de hover.
+ * Aviso de los resultados de IA: una línea a la vista y todo lo general (alcance del modelo, validación,
+ * nomenclatura) en "Alcance y limitaciones", cerrado al inicio. Lo que depende de ESTE estudio y condiciona
+ * la lectura —la localización técnica— queda visible junto a los resultados.
  */
 export function GovernanceNotice({ discLocalizationAvailable }: Props) {
   return (
-    <section className="rr-ai-governance" aria-labelledby="rr-ai-governance-title">
-      <p id="rr-ai-governance-title">Los resultados requieren revisión profesional.</p>
-      {/* Las limitaciones que condicionan la lectura van a la vista; la explicación del modelo y su
-          nomenclatura quedan como detalle secundario. */}
-      <ul className="rr-limits" aria-label="Limitaciones de estos resultados">
-        <li>{DISC_FINDINGS_NOTICE}</li>
-        <li>Solo se clasifican las alteraciones indicadas en cada disco: que figuren como ausentes no descarta otras.</li>
-        <li>Validación interna del proyecto; no cuenta con validación externa.</li>
-        {discLocalizationAvailable && (
-          <li>La localización automática se ejecutó técnicamente sobre este estudio real; esto no implica que su precisión clínica o general esté validada.</li>
-        )}
-      </ul>
-
-      <details className="rr-ai-governance-details">
-        <summary>ⓘ Cómo interpretar el alcance del modelo</summary>
+    <section className="rr-ai-governance" aria-label="Aviso de los resultados de IA">
+      <p className="rr-ai-governance-line">Resultados generados por IA. Requieren revisión profesional.</p>
+      {discLocalizationAvailable && (
+        <p className="rr-note rr-study-limit" data-testid="study-limitation">
+          En este estudio la localización automática se ejecutó técnicamente; no implica que su precisión esté validada.
+        </p>
+      )}
+      <details className="rr-ai-governance-details" data-testid="scope-limitations">
+        <summary>Alcance y limitaciones</summary>
         <div className="rr-ai-governance-content">
+          <p>{DISC_FINDINGS_NOTICE}</p>
+          <p>
+            Solo se clasifican las alteraciones indicadas en cada disco: que figuren como ausentes no descarta otras.
+            El modelo cuenta con validación interna del proyecto y no con validación externa.
+          </p>
           <dl>
             {DEPLOYMENT_ORDER.map((status) => (
               <div key={status}>
@@ -42,6 +41,7 @@ export function GovernanceNotice({ discLocalizationAvailable }: Props) {
               </div>
             ))}
           </dl>
+          <p>Estos resultados se revisan junto con la corrida del análisis inicial, en la pestaña Revisión; no hay revisión por hallazgo.</p>
         </div>
       </details>
     </section>

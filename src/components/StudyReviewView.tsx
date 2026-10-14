@@ -12,15 +12,19 @@ import { allFindingsUnassigned, groupFindingsByLevel, type LevelGroup } from "..
 import { LevelNavigator } from "../features/reading/LevelNavigator";
 import { groupMeasurements } from "../features/reading/measurementGrouping";
 import { ReviewInspector, ReviewInspectorPanel, type ReviewInspectorTab } from "../features/reading/ReviewInspector";
-import { InspectorDisclosure, InspectorGroup } from "../features/reading/InspectorSection";
+import { InspectorGroup } from "../features/reading/InspectorSection";
+import { InspectorTools } from "../features/reading/InspectorTools";
+import type { InspectorToolId } from "../features/reading/inspectorToolsIndex";
 import { StudyContextPanel } from "../features/reading/StudyContextPanel";
 import { useInspectorWidth } from "../features/reading/useInspectorWidth";
 import {
   ASSISTANT_SOURCE_NOTE,
   COMPARISON_SOURCE_NOTE,
   REPORT_SOURCE_NOTE,
+  REVIEW_ONE_LINER,
   REVIEW_SCOPE_COVERS,
   REVIEW_SCOPE_EXCLUDES,
+  annotationsPendingNotice,
   measurementCountLabel,
   reviewActionState,
 } from "../features/reading/inspectorDisplay";
@@ -460,8 +464,17 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   const [panelTab, setPanelTab] = useState<ReviewInspectorTab>("results");
   /** Dentro de Resultados: las mediciones de la corrida o sus hallazgos de IA. */
   const [resultsView, setResultsView] = useState<"measurements" | "findings">("measurements");
-  /** El informe se consulta recién cuando se abre su sección, no al abrir el panel. */
+  /** El informe se consulta recién cuando se abre su herramienta, no al abrir el panel. */
   const [reportRequested, setReportRequested] = useState(false);
+  /** Herramientas del estudio: índice (activeTool = null) o una herramienta. Las pestañas conservan su estado. */
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [activeTool, setActiveTool] = useState<InspectorToolId | null>(null);
+  /** Con un nivel elegido, el selector se oculta; "Cambiar nivel" lo vuelve a mostrar. */
+  const [levelPickerOpen, setLevelPickerOpen] = useState(false);
+  /** El editor de anotaciones se oculta sin descartar lo escrito (el texto vive en `noteDraft`). */
+  const [annotEditorOpen, setAnnotEditorOpen] = useState(false);
+  /** Anotaciones tal como están guardadas, para avisar cuando hay cambios sin guardar. */
+  const [savedAnnotationsKey, setSavedAnnotationsKey] = useState("[]");
   const { width: inspectorWidth, viewportWidth, setWidth: setInspectorWidth } = useInspectorWidth();
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
   /*
@@ -498,11 +511,16 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   useEffect(() => {
     const runId = run.runId;
     setAnnotations([]);
+    setSavedAnnotationsKey("[]");
     setAnnotationsError("");
     if (!runId) return;
     let cancelled = false;
     getRunAnnotations(runId)
-      .then((persisted) => { if (!cancelled) setAnnotations(persisted as Annotation[]); })
+      .then((persisted) => {
+        if (cancelled) return;
+        setAnnotations(persisted as Annotation[]);
+        setSavedAnnotationsKey(JSON.stringify(persisted));
+      })
       .catch((error: unknown) => {
         if (cancelled) return;
         setAnnotationsError(error instanceof Error ? `No se pudieron cargar las anotaciones: ${error.message}` : "No se pudieron cargar las anotaciones.");
@@ -1781,6 +1799,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
         ));
         const saved = await saveRunAnnotations(runId, withLandmarkAnnotations(annotations, markers));
         setAnnotations(saved as Annotation[]);
+        setSavedAnnotationsKey(JSON.stringify(saved));
         setLandmarkDrafts({});
         setAnnotationsError("");
       } catch (error) {
@@ -1869,6 +1888,32 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   );
   const levelUnassigned = allFindingsUnassigned(levelGroups);
   const activeGroup = levelGroups.find((group: LevelGroup) => group.key === selectedLevel);
+  const showLevelPicker = !activeGroup || levelPickerOpen;
+  /** Elegir (o quitar) un nivel cierra el selector; no toca correcciones ni el corte. */
+  function handleLevelSelect(key: string | null) {
+    setSelectedLevel(key);
+    setLevelPickerOpen(false);
+  }
+  const annotationsUnsaved = JSON.stringify(annotations) !== savedAnnotationsKey || Object.keys(landmarkDrafts).length > 0;
+  const annotationsNotice = annotationsPendingNotice({ unsaved: annotationsUnsaved, draftText: noteDraft });
+
+  /* Pestañas y herramientas comparten el panel, pero cada una conserva su estado: solo cambia qué se ve. */
+  function selectInspectorTab(tab: ReviewInspectorTab) {
+    setToolsOpen(false);
+    setPanelTab(tab);
+  }
+  function toggleInspectorTools() {
+    if (toolsOpen) {
+      setToolsOpen(false);
+      return;
+    }
+    setActiveTool(null);
+    setToolsOpen(true);
+  }
+  function selectInspectorTool(tool: InspectorToolId | null) {
+    setActiveTool(tool);
+    if (tool === "report") setReportRequested(true);
+  }
   const visibleRows = activeGroup ? resultRows.filter((row) => activeGroup.findings.some((finding) => finding.id === row.id)) : [];
   /*
    * Nivel activo para anclar anotaciones de alcance "level". Es el nivel que el
@@ -2332,14 +2377,16 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
         </ViewportGrid>
 
         <ReviewInspector
-          activeTab={panelTab}
-          onTabChange={setPanelTab}
+          activeTab={toolsOpen ? null : panelTab}
+          onTabChange={selectInspectorTab}
+          onToggleTools={toggleInspectorTools}
           onWidthChange={setInspectorWidth}
-          scrollKey={resultsView}
+          scrollKey={`${resultsView}:${toolsOpen ? (activeTool ?? "index") : "tabs"}`}
+          toolsOpen={toolsOpen}
           viewportWidth={viewportWidth}
           width={inspectorWidth}
         >
-          <ReviewInspectorPanel activeTab={panelTab} tab="results">
+          <ReviewInspectorPanel activeTab={toolsOpen ? null : panelTab} tab="results">
             <div aria-label="Vistas de resultados" className="rr-subnav" role="tablist">
               <button
                 aria-controls="rr-results-measurements"
@@ -2374,42 +2421,40 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
               id="rr-results-measurements"
               role="tabpanel"
             >
-              <InspectorGroup id="levels" title="Niveles" description="Elegí un nivel para ver sus mediciones y marcarlas en la imagen. No mueve el corte.">
-                <LevelNavigator groups={levelGroups} onSelect={setSelectedLevel} selectedKey={selectedLevel} />
-                {levelUnassigned && (
-                  <p className="rr-note">
-                    Ninguna medición de esta corrida pudo atribuirse a un nivel vertebral. Se listan
-                    sin nivel asignado en vez de repartirlas por suposición.
-                  </p>
-                )}
-              </InspectorGroup>
-
-              <section aria-label="Mediciones del nivel" className="rr-group" data-group="measurements">
-                <div className="rr-selected-level" data-testid="selected-level" data-selected={activeGroup ? "true" : "false"}>
-                  {activeGroup ? (
-                    <>
-                      <span>
-                        Nivel seleccionado: <strong>{activeGroup.label}</strong> · {measurementCountLabel(activeGroup.findings.length)}
-                      </span>
-                      <button className="rr-link" onClick={() => setSelectedLevel(null)} type="button">Quitar selección</button>
-                    </>
-                  ) : (
-                    <span>Ningún nivel seleccionado</span>
+              {/*
+                Sin nivel elegido: el selector, con su única indicación. Con un nivel elegido: un
+                encabezado compacto y, debajo, los valores. "Cambiar nivel" vuelve a mostrar el
+                selector sin tocar correcciones (viven en StudyReviewView) ni el corte.
+              */}
+              {showLevelPicker && (
+                <InspectorGroup id="levels" title="Niveles">
+                  {!activeGroup && <p className="rr-note">Seleccioná un nivel para ver sus mediciones.</p>}
+                  <LevelNavigator groups={levelGroups} onSelect={handleLevelSelect} selectedKey={selectedLevel} />
+                  {levelUnassigned && (
+                    <p className="rr-note">
+                      Ninguna medición de esta corrida pudo atribuirse a un nivel vertebral. Se listan
+                      sin nivel asignado en vez de repartirlas por suposición.
+                    </p>
                   )}
-                </div>
-                {/*
-                  La fila y la cota son la misma medición vista de dos maneras, así que
-                  se comportan como una sola: pasar el mouse por la fila resalta su
-                  línea, y tocarla la elige. Sin eso, con tres cotas sobre el mismo
-                  disco no hay forma de saber cuál corresponde a cuál número.
+                </InspectorGroup>
+              )}
 
-                  Sin nivel elegido no se lista nada: el navegador de arriba ya agrupa por nivel
-                  todas las mediciones, y repetirlas por categoría sería la misma información dos
-                  veces con dos criterios.
-                */}
-                {!activeGroup ? (
-                  <p className="rr-note">Seleccioná un nivel para ver sus mediciones.</p>
-                ) : (
+              {activeGroup && (
+                <div className="rr-level-header" data-testid="level-header">
+                  <span className="rr-level-header-name">
+                    <strong>{activeGroup.label}</strong> · {measurementCountLabel(activeGroup.findings.length)}
+                  </span>
+                  <span className="rr-level-header-actions">
+                    <button aria-expanded={levelPickerOpen} className="rr-link" data-testid="change-level" onClick={() => setLevelPickerOpen((open) => !open)} type="button">
+                      {levelPickerOpen ? "Cerrar selector" : "Cambiar nivel"}
+                    </button>
+                    <button className="rr-link" data-testid="clear-level" onClick={() => handleLevelSelect(null)} type="button">Quitar selección</button>
+                  </span>
+                </div>
+              )}
+
+              {activeGroup && (
+                <section aria-label="Mediciones del nivel" className="rr-group" data-group="measurements" hidden={levelPickerOpen}>
                   <MeasurementGroupList
                     collapsible={false}
                     emptyNote={hasPlaneWorkspaces && !persistedMeasurements.length
@@ -2427,8 +2472,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                     groups={measurementGroups}
                     selectedId={selectedMeasurementId}
                   />
-                )}
-              </section>
+                </section>
+              )}
             </div>
 
             <div
@@ -2481,23 +2526,15 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
             </div>
           </ReviewInspectorPanel>
 
-          <ReviewInspectorPanel activeTab={panelTab} tab="review">
+          <ReviewInspectorPanel activeTab={toolsOpen ? null : panelTab} tab="review">
             <div className="rr-pane">
-              <InspectorGroup id="review-scope" title="Qué cubre esta revisión">
-                <p className="rr-note">
-                  Es la revisión del análisis inicial del estudio, el que muestran Mediciones y Hallazgos IA. Cubre:
-                </p>
-                <ul className="rr-scope-list">
-                  {REVIEW_SCOPE_COVERS.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-                <p className="rr-note">{REVIEW_SCOPE_EXCLUDES}</p>
-                {reviewActions.lockedNotice && <p className="rr-note rr-note-warn" data-testid="review-locked-notice">{reviewActions.lockedNotice}</p>}
-              </InspectorGroup>
+              <p className="rr-note rr-review-oneliner" data-testid="review-oneliner">{REVIEW_ONE_LINER}</p>
+              {reviewActions.lockedNotice && <p className="rr-note rr-note-warn" data-testid="review-locked-notice">{reviewActions.lockedNotice}</p>}
 
-              <InspectorGroup id="review-notes" title="Notas de revisión" description="Texto general de la revisión de todo el estudio: observaciones, hallazgos o el motivo del estado elegido.">
+              <InspectorGroup id="review-notes" title="Notas y estado">
                 <label className="rr-field">
-                  <span className="rr-visually-hidden">Notas de revisión</span>
-                  <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Hallazgos, observaciones o motivo del estado…" />
+                  <span>Notas de revisión</span>
+                  <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Observaciones generales de la revisión del estudio, o el motivo del estado elegido…" />
                 </label>
                 {reviewActions.notesHint && <p className="rr-note rr-note-warn" data-testid="review-notes-hint">{reviewActions.notesHint}</p>}
                 <label className="rr-field">
@@ -2511,13 +2548,43 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                 </label>
               </InspectorGroup>
 
-              <InspectorGroup id="annotations" title="Anotaciones" description="Observaciones ancladas a un lugar: todo el estudio, el nivel seleccionado o el corte que se está mirando. No cambian el estado de la revisión.">
+              <InspectorGroup id="annotations" title={`Anotaciones (${annotations.length})`}>
                 {/*
                   El alcance se elige al escribir, no después: una observación del
                   estudio y una acotada a un corte se leen igual en una lista plana,
                   y sin el alcance explícito la anotación pierde el contexto que la
                   hace interpretable.
                 */}
+                {annotations.length ? (
+                  <ul className="rr-annots">
+                    {annotations.map((item) => (
+                      <li className="rr-annot" key={item.id}>
+                        <span className="rr-annot-scope">{displayAnnotationScope(item)}</span>
+                        <span className="rr-annot-body">
+                          {item.kind === "measurement" && item.value !== undefined && item.unit
+                            ? formatMeasurement(item.value, item.unit)
+                            : item.text}
+                          {item.kind === "measurement" && item.unit === "px" && (
+                            <em> · la corrida no informó escala física</em>
+                          )}
+                        </span>
+                        <button aria-label="Eliminar anotación" className="rr-annot-del" onClick={() => removeAnnotation(item.id)} type="button">×</button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="rr-note">Sin anotaciones del revisor.</p>}
+                {annotationsError && <p className="rr-note rr-note-warn">{annotationsError}</p>}
+                <button
+                  aria-expanded={annotEditorOpen}
+                  className="rr-ghost rr-annot-toggle"
+                  data-testid="annotation-toggle"
+                  onClick={() => setAnnotEditorOpen((open) => !open)}
+                  type="button"
+                >
+                  {annotEditorOpen ? "Ocultar editor" : "Agregar anotación"}{!annotEditorOpen && noteDraft.trim() ? " · texto sin agregar" : ""}
+                </button>
+                {/* El editor solo se oculta: lo escrito queda en el estado de la sala y no se descarta. */}
+                <div hidden={!annotEditorOpen}>
                 <div className="rr-annot-new">
                   <div className="rr-annot-scopes" role="group" aria-label="Alcance de la anotación">
                     <button className={noteScope === "study" ? "is-active" : ""} onClick={() => setNoteScope("study")} type="button">Estudio</button>
@@ -2558,49 +2625,39 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                         createdAt: new Date().toISOString(),
                       });
                       setNoteDraft("");
+                      setAnnotEditorOpen(false);
                     }}
                     type="button"
                   >
                     Agregar
                   </button>
                 </div>
-
-                {annotations.length ? (
-                  <ul className="rr-annots">
-                    {annotations.map((item) => (
-                      <li className="rr-annot" key={item.id}>
-                        <span className="rr-annot-scope">{displayAnnotationScope(item)}</span>
-                        <span className="rr-annot-body">
-                          {item.kind === "measurement" && item.value !== undefined && item.unit
-                            ? formatMeasurement(item.value, item.unit)
-                            : item.text}
-                          {item.kind === "measurement" && item.unit === "px" && (
-                            <em> · la corrida no informó escala física</em>
-                          )}
-                        </span>
-                        <button aria-label="Eliminar anotación" className="rr-annot-del" onClick={() => removeAnnotation(item.id)} type="button">×</button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className="rr-note">Sin anotaciones del revisor.</p>}
-                {annotationsError
-                  ? <p className="rr-note rr-note-warn">{annotationsError}</p>
-                  : <p className="rr-note">Se guardan junto con la revisión (Guardar borrador o Confirmar).</p>}
+                </div>
+                {annotationsNotice && <p className="rr-note rr-note-warn" data-testid="annotations-pending">{annotationsNotice}</p>}
               </InspectorGroup>
+
+              <details className="rr-help" data-testid="review-scope">
+                <summary>Qué incluye esta revisión</summary>
+                <div className="rr-help-body">
+                  <p>Cubre:</p>
+                  <ul className="rr-scope-list">
+                    {REVIEW_SCOPE_COVERS.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                  <p>{REVIEW_SCOPE_EXCLUDES}</p>
+                </div>
+              </details>
 
               <AgentSummary agentDecision={run.aiOutput?.agentDecision ?? studyReview?.aiOutput?.agentDecision ?? run.agentDecision} />
             </div>
 
-            {/* Pie propio de la revisión: queda al final del contenido y no tapa ningún campo. */}
+            {/* Pie propio de la revisión: compacto, al final del contenido, sin tapar ningún campo. */}
             <div className="rr-review-footer" data-testid="review-footer">
-              <div className="rr-review-action">
+              <div className="rr-review-buttons">
                 <button className="rr-ghost rr-secondary" disabled={reviewActions.draftDisabled} onClick={() => void save("pendiente")} type="button">{reviewActions.draftLabel}</button>
-                {reviewActions.draftReason && <p className="rr-note" data-testid="draft-reason">{reviewActions.draftReason}</p>}
-              </div>
-              <div className="rr-review-action">
                 <button className="rr-primary" disabled={reviewActions.confirmDisabled} onClick={() => void save(reviewStatus)} type="button">{reviewActions.confirmLabel}</button>
-                {reviewActions.confirmReason && <p className="rr-note" data-testid="confirm-reason">{reviewActions.confirmReason}</p>}
               </div>
+              {reviewActions.draftReason && <p className="rr-note" data-testid="draft-reason">{reviewActions.draftReason}</p>}
+              {reviewActions.confirmReason && <p className="rr-note" data-testid="confirm-reason">{reviewActions.confirmReason}</p>}
               {saveMessage && <p className="rr-ok" role="status">{saveMessage}</p>}
               {reportReady && (
                 <div className="rr-report-ready">
@@ -2614,51 +2671,51 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
             </div>
           </ReviewInspectorPanel>
 
-          <ReviewInspectorPanel activeTab={panelTab} lazy tab="context">
+          <ReviewInspectorPanel activeTab={toolsOpen ? null : panelTab} lazy tab="context">
             <div className="rr-pane">
               <StudyContextPanel caseId={displayRun.caseId ?? ""} subjectLabel={currentSubjectRef || undefined} />
+            </div>
+          </ReviewInspectorPanel>
 
-              {displayRun.caseId && (
-                <InspectorGroup id="follow-up" title="Seguimiento" description="Otros estudios del mismo paciente.">
-                  {(() => {
+          {/* Herramientas del estudio: un índice agrupado por propósito y una herramienta por vez. */}
+          <div aria-label="Herramientas del estudio" className="rr-tools-panel" hidden={!toolsOpen} id="review-inspector-tools" role="region">
+            <InspectorTools
+              activeTool={activeTool}
+              onSelectTool={selectInspectorTool}
+              renderTool={(tool) => {
+                const caseId = displayRun.caseId;
+                switch (tool) {
+                  case "history": {
                     const patientHistorySubjectRef = selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null;
-                    return (
-                      <InspectorDisclosure hint="Línea de tiempo de los estudios del paciente" testId="section-history" title="Historial del paciente">
-                        {patientHistorySubjectRef ? (
-                          <button
-                            className="rr-more-action"
-                            type="button"
-                            onClick={() => onOpenPatientHistory?.(patientHistorySubjectRef)}
-                            disabled={!onOpenPatientHistory}
-                          >
-                            Ver historial del paciente
-                          </button>
-                        ) : (
-                          <p className="panel-hidden-placeholder honest-empty-state">
-                            Este estudio no tiene una referencia longitudinal disponible.
-                          </p>
-                        )}
-                      </InspectorDisclosure>
+                    return patientHistorySubjectRef ? (
+                      <button
+                        className="rr-more-action"
+                        type="button"
+                        onClick={() => onOpenPatientHistory?.(patientHistorySubjectRef)}
+                        disabled={!onOpenPatientHistory}
+                      >
+                        Ver historial del paciente
+                      </button>
+                    ) : (
+                      <p className="panel-hidden-placeholder honest-empty-state">
+                        Este estudio no tiene una referencia longitudinal disponible.
+                      </p>
                     );
-                  })()}
-                  <InspectorDisclosure hint="Compara con otro estudio del paciente" testId="section-comparison" title="Comparación entre estudios">
-                    <p className="rr-note" data-testid="comparison-source-note">{COMPARISON_SOURCE_NOTE}</p>
-                    <LongitudinalComparisonPanel
-                      caseId={displayRun.caseId}
-                      subjectRef={selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null}
-                    />
-                  </InspectorDisclosure>
-                </InspectorGroup>
-              )}
-
-              <InspectorGroup id="delivery" title="Informe y asistente">
-                <InspectorDisclosure
-                  hint="Informe estructurado, PDF/JSON y DICOM"
-                  onOpen={() => setReportRequested(true)}
-                  testId="section-report"
-                  title="Informe y exportación"
-                >
-                  <p className="rr-note" data-testid="report-source-note">{REPORT_SOURCE_NOTE}</p>
+                  }
+                  case "comparison":
+                    return caseId ? (
+                      <>
+                        <p className="rr-note" data-testid="comparison-source-note">{COMPARISON_SOURCE_NOTE}</p>
+                        <LongitudinalComparisonPanel
+                          caseId={caseId}
+                          subjectRef={selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null}
+                        />
+                      </>
+                    ) : <p className="rr-note">No disponible: el estudio no tiene identificador.</p>;
+                  case "report":
+                    return (
+                      <>
+                        <p className="rr-note" data-testid="report-source-note">{REPORT_SOURCE_NOTE}</p>
                 <p className="rr-note">{REPORT_SAFETY_TEXT}</p>
                 {studyReportPhase === "loading" && <p className="rr-note">Cargando informe desde Backend...</p>}
                 {studyReportPhase === "error" && <p className="rr-note rr-export-error">{studyReportError}</p>}
@@ -2840,36 +2897,37 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   Uso académico y de investigación sobre datos de-identificados. Requiere revisión
                   profesional y no constituye un diagnóstico.
                 </p>
-                </InspectorDisclosure>
-                {displayRun.caseId && (
-                  <InspectorDisclosure hint="Chat con el contexto disponible" testId="section-assistant" title="Asistente">
-                    <p className="rr-note" data-testid="assistant-source-note">{ASSISTANT_SOURCE_NOTE}</p>
-                    <ChatPanel caseId={displayRun.caseId} />
-                  </InspectorDisclosure>
-                )}
-              </InspectorGroup>
-
-              <InspectorGroup id="tools" title="Herramientas y detalles técnicos">
-                <InspectorDisclosure hint="Proxy 3D experimental de la columna" testId="section-3d" title="Reconstrucción 3D">
-                  <p className="rr-note">Vista secundaria para inspección académica; no sustituye los planos adquiridos.</p>
-                  <button
-                    className="rr-more-action"
-                    onClick={() => setTab("3D Reconstruction")}
-                    type="button"
-                  >
-                    Abrir reconstrucción 3D
-                  </button>
-                </InspectorDisclosure>
-                <InspectorDisclosure hint="Compara hallazgos de lote y clasificación subarticular" testId="section-concordance" title="Concordancia de evidencia">
-                  <EvidenceConcordancePanel caseId={displayRun.caseId ?? ""} batchFindings={degenerativeFindings} roiFindings={roiFindings} />
-                </InspectorDisclosure>
-                <InspectorDisclosure hint="Curación de material para datasets futuros" testId="section-feedback" title="Feedback y curación">
-                  <FeedbackCurationPanel caseId={studyReport?.caseId ?? displayRun.caseId ?? ""} />
-                </InspectorDisclosure>
-                <InspectorDisclosure hint="Últimos eventos del estudio" testId="section-audit" title="Auditoría">
-                  <AuditTrail events={auditTrail.slice(0, 4)} />
-                </InspectorDisclosure>
-                <InspectorDisclosure hint="Modo de inferencia, modelo y datos de la corrida" testId="section-technical" title="Detalles técnicos">
+                      </>
+                    );
+                  case "assistant":
+                    return caseId ? (
+                      <>
+                        <p className="rr-note" data-testid="assistant-source-note">{ASSISTANT_SOURCE_NOTE}</p>
+                        <ChatPanel caseId={caseId} />
+                      </>
+                    ) : <p className="rr-note">No disponible: el estudio no tiene identificador.</p>;
+                  case "concordance":
+                    return <EvidenceConcordancePanel caseId={displayRun.caseId ?? ""} batchFindings={degenerativeFindings} roiFindings={roiFindings} />;
+                  case "feedback":
+                    return <FeedbackCurationPanel caseId={studyReport?.caseId ?? displayRun.caseId ?? ""} />;
+                  case "audit":
+                    return <AuditTrail events={auditTrail.slice(0, 4)} />;
+                  case "three-d":
+                    return (
+                      <>
+                        <p className="rr-note">Vista secundaria para inspección académica; no sustituye los planos adquiridos.</p>
+                        <button
+                          className="rr-more-action"
+                          onClick={() => setTab("3D Reconstruction")}
+                          type="button"
+                        >
+                          Abrir reconstrucción 3D
+                        </button>
+                      </>
+                    );
+                  case "technical":
+                    return (
+                      <>
                 <p className="rr-section-title">Inferencia</p>
                 <dl className="rr-tech">
                   <dt>Modo efectivo</dt><dd>{inferenceModeLabel(inferenceMode)}</dd>
@@ -2905,22 +2963,16 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                 <p className="rr-note">
                   Los landmarks del revisor son borradores locales hasta que se guarda la revisión; se guardan junto con las anotaciones.
                 </p>
-                </InspectorDisclosure>
-              </InspectorGroup>
-
-              {displayRun.caseId && (
-                <InspectorGroup id="demo" title="Análisis de demostración">
-                  <InspectorDisclosure
-                    hint="Circuito de producto en modo contrato; no es el análisis real del visor"
-                    testId="section-demo-analysis"
-                    title="Resultados y revisión del análisis de demostración"
-                  >
-                    <ProductAnalysisV1Panel caseId={displayRun.caseId} />
-                  </InspectorDisclosure>
-                </InspectorGroup>
-              )}
-            </div>
-          </ReviewInspectorPanel>
+                      </>
+                    );
+                  case "demo":
+                    return caseId ? <ProductAnalysisV1Panel caseId={caseId} /> : <p className="rr-note">No disponible: el estudio no tiene identificador.</p>;
+                  default:
+                    return null;
+                }
+              }}
+            />
+          </div>
         </ReviewInspector>
       </ReadingWorkspaceBody>
 

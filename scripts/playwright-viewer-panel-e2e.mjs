@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { chromium } from "playwright";
 
 /**
- * Panel derecho del visor (etapa 1) contra el stack local real, con datos sintéticos.
+ * Panel derecho del visor (etapas 1 y 2) contra el stack local real, con datos sintéticos.
  *
  *   node scripts/playwright-viewer-panel-e2e.mjs
  *
@@ -10,10 +10,14 @@ import { chromium } from "playwright";
  * RUN_ISOLATED=1 para crear y usar un caso de prueba propio (PANEL-E2E-<n>) con STUDY_ZIP,
  * SHOTS_DIR para guardar capturas.
  *
- * Parte A (solo lectura, estudio existente): estructura, selección de nivel sin mover el corte,
- * hallazgos expandidos, "Ver en el corte", motivos de bloqueo, acceso al análisis de demostración,
- * conservación de estado al cambiar de pestaña o de ancho y ausencia de POST de análisis.
- * Parte B (caso aislado): contexto con datos y guardado de borrador y de una corrección.
+ * Parte A (solo lectura, estudio existente): estructura, selección y cambio de nivel, hallazgos
+ * compactos con "Alcance y limitaciones" cerrado, motivos de bloqueo, anotación sin guardar al navegar,
+ * índice de "Herramientas del estudio" (sin consultar nada al abrirlo), conservación de estado al
+ * cambiar de pestaña, herramienta o ancho y ausencia de POST de análisis.
+ * Parte C (otra página, respuesta del estudio alterada en el navegador y sin persistir nada): un disco
+ * con una clasificación faltante y otro sin clasificaciones, para comprobar que los datos faltantes no se
+ * cuentan como negativos.
+ * Parte B (caso aislado): contexto con datos y guardado de borrador, corrección y anotación.
  */
 
 const viewerUrl = process.env.VIEWER_URL ?? "http://localhost:8288";
@@ -43,38 +47,41 @@ const page = await context.newPage();
 
 const mutations = [];
 const imageRequests = [];
-page.on("request", (request) => {
+const getRequests = [];
+context.on("request", (request) => {
   const url = request.url();
-  if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) mutations.push(`${request.method()} ${url.replace(/^https?:\/\/[^/]+/, "")}`);
+  const path = url.replace(/^https?:\/\/[^/]+/, "");
+  if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) mutations.push(`${request.method()} ${path}`);
+  if (request.method() === "GET") getRequests.push(path);
   if (/\/slices\/|\/assets\//.test(url) && request.method() === "GET") imageRequests.push(url);
 });
 page.on("pageerror", (error) => { throw new Error(`error de página: ${error.message}`); });
 
-async function shot(name) {
-  if (shotsDir) await page.screenshot({ path: `${shotsDir}/${theme}-${width}-${name}.png` });
+async function shot(name, target = page) {
+  if (shotsDir) await target.screenshot({ path: `${shotsDir}/${theme}-${width}x${height}-${name}.png` });
 }
 
-async function login() {
-  await page.goto(`${viewerUrl}/`, { waitUntil: "networkidle" });
-  const demo = page.getByRole("button", { name: /Entrar con doctor demo/ });
+async function login(target = page) {
+  await target.goto(`${viewerUrl}/`, { waitUntil: "networkidle" });
+  const demo = target.getByRole("button", { name: /Entrar con doctor demo/ });
   if (await demo.count()) await demo.click();
-  await page.getByRole("button", { name: "Nuevo estudio" }).waitFor();
+  await target.getByRole("button", { name: "Nuevo estudio" }).waitFor();
 }
 
-async function openStudy(caseId) {
-  await page.getByText(caseId, { exact: true }).first().click();
-  await page.getByRole("button", { name: "Abrir estudio" }).click();
-  await page.locator("aside.rr-panel").waitFor();
-  await page.getByRole("tab", { name: "Resultados" }).waitFor();
-  await page.waitForTimeout(2500);
+async function openStudy(caseId, target = page) {
+  await target.getByText(caseId, { exact: true }).first().click();
+  await target.getByRole("button", { name: "Abrir estudio" }).click();
+  await target.locator("aside.rr-panel").waitFor();
+  await target.getByRole("tab", { name: "Resultados" }).waitFor();
+  await target.waitForTimeout(2500);
 }
 
-const sliceReadout = async () => (await page.locator(".rr-slice-index").first().innerText()).trim();
+const sliceReadout = async (target = page) => (await target.locator(".rr-slice-index").first().innerText()).trim();
 const analysisPosts = () => mutations.filter((item) => /product-analysis|multiplanar\/run|series-segmentation|disc-degenerative/.test(item));
 const nonLoginMutations = () => mutations.filter((item) => !/\/api\/auth\//.test(item));
 
-async function checkLayout(label) {
-  const metrics = await page.evaluate(() => {
+async function checkLayout(label, target = page) {
+  const metrics = await target.evaluate(() => {
     const body = document.querySelector(".rr-panel-body");
     const aside = document.querySelector("aside.rr-panel");
     const scrollers = Array.from(aside.querySelectorAll("*")).filter((el) => {
@@ -99,129 +106,233 @@ await shot("01-visor-completo");
 
 /* ============================ A. estudio existente, solo lectura ============================ */
 
-// A1. tres pestañas, dos vistas de Resultados
+// A1. tres pestañas sin comprimir, acceso a herramientas en la cabecera
 const tabNames = await page.locator('aside.rr-panel [role="tablist"][aria-label="Secciones del inspector"] [role="tab"]').allInnerTexts();
 assertTruthy(JSON.stringify(tabNames) === JSON.stringify(["Resultados", "Revisión", "Contexto"]), `pestañas: ${tabNames}`);
-const subNames = await page.locator('[aria-label="Vistas de resultados"] [role="tab"]').allInnerTexts();
-assertTruthy(JSON.stringify(subNames) === JSON.stringify(["Mediciones", "Hallazgos IA"]), `vistas: ${subNames}`);
 const initialMetrics = await checkLayout("inicio");
+const tabBoxes = await page.locator('aside.rr-panel [role="tablist"][aria-label="Secciones del inspector"] [role="tab"]').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+assertTruthy(tabBoxes.every((w) => w >= initialMetrics.panelWidth / 3 - 3), `las tres pestañas conservan su ancho: ${tabBoxes}`);
+const toolsButton = page.getByTestId("tools-open");
+assertTruthy(await toolsButton.isVisible() && /Herramientas del estudio/.test(await toolsButton.innerText()), "acceso visible a las herramientas");
 const expectedDefault = width >= 1800 ? 480 : 383;
 assertTruthy(Math.abs(initialMetrics.panelWidth - expectedDefault) <= 2, `ancho inicial ${initialMetrics.panelWidth} ≠ ${expectedDefault}`);
-ok(`tres pestañas, dos vistas, ancho inicial ${initialMetrics.panelWidth}px y un solo scroll sin desborde`);
+ok(`tres pestañas (${tabBoxes.join("/")} px), acceso a herramientas en la cabecera, ancho inicial ${initialMetrics.panelWidth}px y un solo scroll`);
 
-// A2. conteos con texto y nivel seleccionado evidente; el corte no se mueve
+// A2. Mediciones: selector sin selección, encabezado compacto con el nivel y los valores debajo
 const sliceBefore = await sliceReadout();
+assertTruthy((await page.locator("#rr-results-measurements").getByText("Seleccioná un nivel para ver sus mediciones.").count()) === 1, "una sola indicación de selección");
+assertTruthy((await page.getByTestId("level-header").count()) === 0, "sin nivel no hay encabezado");
 const levelButtons = await page.locator(".rr-level").evaluateAll((els) => els.map((el) => el.textContent.replace(/\s+/g, " ").trim()));
-assertTruthy(levelButtons.some((text) => /L4-L5\s*5 mediciones/.test(text)), `conteo textual: ${levelButtons.join(" | ")}`);
-assertTruthy(levelButtons.some((text) => /Medición general\s*1 medición$/.test(text)), "singular: 1 medición");
-assertTruthy((await page.getByTestId("selected-level").getAttribute("data-selected")) === "false", "sin nivel seleccionado al inicio");
+assertTruthy(levelButtons.some((text) => /L4-L5\s*5 mediciones/.test(text)) && levelButtons.some((text) => /Medición general\s*1 medición$/.test(text)), `conteos comprensibles: ${levelButtons.join(" | ")}`);
+await shot("02-mediciones-sin-nivel");
 await page.locator(".rr-level", { hasText: "L4-L5" }).first().click();
-await page.waitForTimeout(500);
-const selected = page.getByTestId("selected-level");
-assertTruthy((await selected.getAttribute("data-selected")) === "true", "nivel seleccionado evidente");
-assertTruthy(/Nivel seleccionado:\s*L4-L5\s*·\s*5 mediciones/.test(await selected.innerText()), "texto del nivel seleccionado");
-assertTruthy((await page.locator(".rr-level.is-active").count()) === 1 && (await page.locator(".rr-level.is-active").getAttribute("aria-pressed")) === "true", "el botón del nivel queda marcado");
-assertTruthy((await sliceReadout()) === sliceBefore, `seleccionar un nivel no mueve el corte (${sliceBefore} → ${await sliceReadout()})`);
-ok(`el nivel L4-L5 queda a la vista (${levelButtons.length} niveles con conteo textual) y el corte sigue en ${sliceBefore}`);
+await page.waitForTimeout(400);
+const header = page.getByTestId("level-header");
+assertTruthy(/L4-L5\s*·\s*5 mediciones/.test(await header.innerText()), "encabezado: nivel y cantidad");
+assertTruthy((await page.locator(".rr-level").count()) === 0, "la grilla se reemplaza por el encabezado");
+assertTruthy((await page.locator("#rr-results-measurements").getByText("Seleccioná un nivel para ver sus mediciones.").count()) === 0, "ya no se repite la indicación");
+const firstRowBox = await page.locator(".rr-measure").first().boundingBox();
+const headerBox = await header.boundingBox();
+assertTruthy(firstRowBox && headerBox && firstRowBox.y - (headerBox.y + headerBox.height) < 60 && firstRowBox.y + firstRowBox.height < height - 60, `los valores se ven de inmediato (primer valor en y=${Math.round(firstRowBox?.y ?? -1)})`);
+assertTruthy((await sliceReadout()) === sliceBefore, "elegir un nivel no mueve el corte");
+await shot("03-mediciones-nivel-seleccionado");
+ok(`selector → encabezado compacto “L4-L5 · 5 mediciones”; el primer valor queda en y=${Math.round(firstRowBox.y)} y el corte sigue en ${sliceBefore}`);
 
-// A3. cada medición separa nombre, valor IA, unidad y corrección profesional
+// A3. valor IA, unidad y corrección diferenciados; cambiar de nivel sin perder la corrección ni mover el corte
 const rows = page.locator(".rr-measure");
 const rowCount = await rows.count();
-assertTruthy(rowCount >= 3, `filas de medición: ${rowCount}`);
+assertTruthy(rowCount >= 3, `filas: ${rowCount}`);
 for (let i = 0; i < rowCount; i += 1) {
   const row = rows.nth(i);
-  assertTruthy((await row.locator(".rr-measure-label").innerText()).trim().length > 0, "nombre de la medición");
+  assertTruthy((await row.locator(".rr-measure-label").innerText()).trim().length > 0, "nombre");
   assertTruthy(/Valor IA|Medición propia/.test(await row.locator(".rr-measure-cell-label").first().innerText()), "celda del valor IA");
-  const aiText = (await row.locator(".rr-measure-ai").innerText()).trim();
-  assertTruthy(/^\d[\d.,]*\s*\S+$|Sin valor/.test(aiText), `valor y unidad juntos: "${aiText}"`);
+  assertTruthy(/^\d[\d.,]*\s*\S+$|Sin valor/.test((await row.locator(".rr-measure-ai").innerText()).trim()), "valor y unidad juntos");
   assertTruthy((await row.locator(".rr-measure-input").count()) === 1 && /Corrección profesional/.test(await row.innerText()), "campo de corrección profesional");
 }
-await shot("02-mediciones-L4L5");
-ok(`${rowCount} mediciones del nivel con nombre, valor IA con unidad y campo de corrección profesional`);
+const heightRowA = page.locator(".rr-measure", { hasText: "Altura discal" }).first();
+const originalA = (await heightRowA.locator(".rr-measure-ai").innerText()).trim();
+await heightRowA.locator(".rr-measure-input").fill("9.9");
+await page.getByTestId("change-level").click();
+assertTruthy(await page.locator(".rr-level").first().isVisible() && (await page.locator("section[data-group='measurements']").isHidden()), "“Cambiar nivel” vuelve a mostrar el selector");
+assertTruthy((await sliceReadout()) === sliceBefore, "cambiar de nivel no mueve el corte");
+await page.locator(".rr-level", { hasText: "L3-L4" }).first().click();
+assertTruthy(/L3-L4\s*·\s*5 mediciones/.test(await page.getByTestId("level-header").innerText()), "se muestra el nuevo nivel");
+await page.getByTestId("change-level").click();
+await page.locator(".rr-level", { hasText: "L4-L5" }).first().click();
+const heightRowB = page.locator(".rr-measure", { hasText: "Altura discal" }).first();
+assertTruthy((await heightRowB.locator(".rr-measure-input").inputValue()) === "9.9" && (await heightRowB.locator(".rr-measure-ai").innerText()).trim() === originalA, "la corrección escrita y el valor IA se conservan al cambiar de nivel");
+await page.getByTestId("clear-level").click();
+assertTruthy((await page.getByTestId("level-header").count()) === 0 && await page.locator(".rr-level").first().isVisible(), "“Quitar selección” vuelve al selector");
+assertTruthy((await sliceReadout()) === sliceBefore, "quitar la selección no mueve el corte");
+await page.locator(".rr-level", { hasText: "L4-L5" }).first().click();
+assertTruthy((await page.locator(".rr-measure", { hasText: "Altura discal" }).first().locator(".rr-measure-input").inputValue()) === "9.9", "la corrección sigue tras quitar y volver a elegir");
+await page.locator(".rr-measure", { hasText: "Altura discal" }).first().locator(".rr-measure-input").fill("");
+ok("cambiar y quitar el nivel conserva la corrección (valor IA visible) y no mueve el corte");
 
-// A4. Hallazgos IA: Pfirrmann separado, alcance de las clasificaciones, "Ver en el corte"
+// A4. Hallazgos IA: aviso breve, "Alcance y limitaciones" cerrado, tabla compacta
 await page.getByRole("tab", { name: "Hallazgos IA" }).click();
 await page.waitForTimeout(400);
-assertTruthy(await page.getByRole("list", { name: "Limitaciones de estos resultados" }).isVisible(), "las limitaciones están a la vista");
+const findingsPane = page.locator("#rr-results-findings");
+assertTruthy(/Resultados generados por IA\. Requieren revisión profesional\./.test(await findingsPane.innerText()), "aviso breve");
+assertTruthy(!/pendiente de revisión/i.test(await findingsPane.innerText()), "no afirma un estado de revisión que no existe");
+const scope = page.getByTestId("scope-limitations");
+assertTruthy((await scope.getAttribute("open")) === null, "“Alcance y limitaciones” empieza cerrado");
+assertTruthy(await page.getByTestId("study-limitation").isVisible(), "la limitación propia de este estudio sigue a la vista");
 assertTruthy((await page.getByRole("button", { name: /Analizar estudio|Reanalizar/ }).count()) === 0, "Hallazgos IA no ofrece analizar");
-assertTruthy(!/Sin hallazgos/.test(await page.locator("#rr-results-findings").innerText()), "ningún 'Sin hallazgos' a secas");
-const summaries = await page.locator("summary.rr-disc-level-summary").evaluateAll((els) => els.map((el) => el.innerText.replace(/\s+/g, " ").trim()));
-assertTruthy(summaries.every((text) => /clasificaci|Sin clasificaciones/.test(text) && /Pfirrmann/.test(text)), `resúmenes con alcance y Pfirrmann: ${summaries.join(" | ")}`);
-await page.locator("summary.rr-disc-level-summary", { hasText: "L4-L5" }).first().click();
-const expanded = page.locator("details.rr-disc-level[open]");
-assertTruthy((await expanded.locator('[data-block="pfirrmann"]').count()) === 1, "bloque Pfirrmann aparte");
-assertTruthy((await expanded.locator('[data-block="other"]').count()) === 1, "bloque de otras clasificaciones aparte");
-assertTruthy((await expanded.locator('[data-block="pfirrmann"]').innerText()).includes("Pfirrmann") && !/Abombamiento/.test(await expanded.locator('[data-block="pfirrmann"]').innerText()), "Pfirrmann no se mezcla con las demás");
-assertTruthy(/Que figuren como ausentes no descarta otras alteraciones/.test(await expanded.getByTestId("disc-scope-note").innerText()), "nota de alcance");
-await shot("03-hallazgos-expandido");
+const head = (await findingsPane.locator(".rr-disc-overview-head").innerText()).replace(/\s+/g, " ").trim();
+assertTruthy(/Disco\s+Clasificaciones positivas\s+Pfirrmann/i.test(head), `columnas: ${head}`);
+const summaries = await findingsPane.locator("summary.rr-disc-level-summary").evaluateAll((els) => els.map((el) => Array.from(el.children).map((c) => c.textContent.replace(/\s+/g, " ").trim())));
+assertTruthy(summaries.length === 5 && summaries.every(([disc, count, grade]) => /^L\d-/.test(disc) && /^\d de 4$/.test(count) && /^(I|II|III|IV|V)$/.test(grade)), `filas compactas: ${JSON.stringify(summaries)}`);
+assertTruthy(summaries.some(([, count]) => count === "0 de 4") && summaries.some(([, count]) => count === "4 de 4"), "conteos del contrato real");
+assertTruthy((await findingsPane.getByTestId("disc-count-note").count()) === 1 && /No expresa gravedad ni normalidad/.test(await findingsPane.getByTestId("disc-count-note").innerText()), "una sola aclaración del conteo");
+const researchBlock = findingsPane.getByTestId("research-results");
+if (await researchBlock.count()) assertTruthy((await researchBlock.getAttribute("open")) === null, "resultados de investigación plegados");
+const tableBox = await findingsPane.locator(".rr-disc-overview").boundingBox();
+assertTruthy(tableBox && tableBox.y < height * 0.62, `la tabla aparece sin desplazarse (y=${Math.round(tableBox?.y ?? -1)})`);
+await shot("04-hallazgos-al-abrir");
+await scope.locator("summary").click();
+assertTruthy(/validación interna/i.test(await scope.innerText()), "al abrirlo explica alcance y validación");
+await scope.locator("summary").click();
+ok(`hallazgos: aviso de una línea, ayudas cerradas, tabla Disco | Clasificaciones positivas | Pfirrmann (${summaries.map((s) => s[1]).join(", ")}) a y=${Math.round(tableBox.y)}`);
+
+// A5. detalle de un disco: nombres y resultados, "Ver en el corte" conservado
+await findingsPane.locator("summary.rr-disc-level-summary", { hasText: "L4-L5" }).first().click();
+const expanded = findingsPane.locator("details.rr-disc-level[open]");
+const classNames = await expanded.locator('[data-block="classifications"] .rr-disc-finding > span:first-child').allInnerTexts();
+assertTruthy(JSON.stringify(classNames) === JSON.stringify(["Abombamiento discal", "Estrechamiento discal", "Cambio del platillo superior", "Cambio del platillo inferior"]), `clasificaciones: ${classNames}`);
+assertTruthy(/Presente/.test(await expanded.locator('[data-block="classifications"]').innerText()), "con sus resultados");
+assertTruthy(/Grado/.test(await expanded.locator('[data-block="pfirrmann"]').innerText()) && !/Abombamiento/.test(await expanded.locator('[data-block="pfirrmann"]').innerText()), "Pfirrmann en su bloque");
 const goToRegion = expanded.getByRole("button", { name: /Ver en el corte/ });
 const sliceBeforeGo = await sliceReadout();
 await goToRegion.click();
 await page.waitForTimeout(700);
 const sliceAfterGo = await sliceReadout();
-assertTruthy(sliceAfterGo !== sliceBeforeGo || /Marcado/.test(await expanded.locator(".rr-disc-region button").innerText()), `"Ver en el corte" conserva su efecto (${sliceBeforeGo} → ${sliceAfterGo})`);
-ok(`hallazgos expandidos: Pfirrmann separado, alcance explícito y "Ver en el corte" (${sliceBeforeGo} → ${sliceAfterGo})`);
+assertTruthy(sliceAfterGo !== sliceBeforeGo || /Marcado/.test(await expanded.locator(".rr-disc-region button").innerText()), "“Ver en el corte” conserva su efecto");
+await shot("05-hallazgo-expandido");
+ok(`disco expandido con nombres y resultados y “Ver en el corte” (${sliceBeforeGo} → ${sliceAfterGo})`);
 
-// A5. Revisión: motivos de bloqueo visibles, etiquetas por efecto, aviso de nota
+// A6. Revisión: notas y estado primero, ayuda cerrada, anotaciones compactas, pie compacto con motivos
 await page.getByRole("tab", { name: "Revisión" }).click();
 await page.waitForTimeout(300);
+const reviewPane = page.locator("#review-inspector-panel-review");
+assertTruthy(/Revisás el análisis inicial del estudio/.test(await page.getByTestId("review-oneliner").innerText()), "una línea que identifica el análisis revisado");
+const notesBox = await reviewPane.locator("textarea").first().boundingBox();
+const annotBox = await page.getByTestId("annotation-toggle").boundingBox();
+const scopeBox = await page.getByTestId("review-scope").boundingBox();
+assertTruthy(notesBox && annotBox && scopeBox && notesBox.y < annotBox.y && annotBox.y < scopeBox.y, "notas y estado antes que las anotaciones y las explicaciones largas");
+assertTruthy((await page.getByTestId("review-scope").getAttribute("open")) === null, "“Qué incluye esta revisión” cerrado");
 const confirm = page.locator(".rr-review-footer .rr-primary");
-assertTruthy(await confirm.isDisabled(), "Confirmar deshabilitado con estado Pendiente");
-assertTruthy(/Elegí Observado, Finalizado o Descartado/.test(await page.getByTestId("confirm-reason").innerText()), "el motivo está en pantalla, junto al botón");
-assertTruthy(await page.getByRole("button", { name: /Guardar borrador \(queda pendiente\)/ }).isEnabled(), "Guardar borrador disponible");
-assertTruthy(/Qué cubre esta revisión/.test(await page.locator("#review-inspector-panel-review").innerText()) && /análisis de demostración/.test(await page.locator("#review-inspector-panel-review").innerText()), "explica qué cubre y qué no");
-await page.getByLabel("Estado de revisión").selectOption("observado");
-assertTruthy((await confirm.innerText()).trim() === "Marcar como observado" && await confirm.isEnabled(), "etiqueta describe el efecto");
-assertTruthy(/al menos 5 caracteres/.test(await page.getByTestId("review-notes-hint").innerText()), "aviso de la nota requerida");
-await page.getByLabel("Estado de revisión").selectOption("aceptado");
-assertTruthy((await confirm.innerText()).trim() === "Finalizar y aprobar estudio", "etiqueta de finalizar");
-await page.getByLabel("Estado de revisión").selectOption("pendiente");
+assertTruthy(await confirm.isDisabled() && /Elegí Observado, Finalizado o Descartado/.test(await page.getByTestId("confirm-reason").innerText()), "motivo específico visible junto al botón");
 const footerBox = await page.getByTestId("review-footer").boundingBox();
-const lastField = await page.locator("#review-inspector-panel-review .rr-pane").boundingBox();
-assertTruthy(footerBox && lastField && footerBox.y + footerBox.height <= height + 1, "el pie de la revisión está dentro de la ventana");
-await shot("04-revision");
-ok("Revisión: Confirmar deshabilitado con el motivo visible, etiquetas por efecto y aviso de nota, sin guardar nada");
+assertTruthy(footerBox.height <= 130, `pie compacto (${Math.round(footerBox.height)} px)`);
+assertTruthy(footerBox.y >= scopeBox.y + scopeBox.height - 1, "el pie no se superpone al contenido");
+await page.getByLabel("Estado de revisión").selectOption("observado");
+assertTruthy((await confirm.innerText()).trim() === "Marcar como observado" && /al menos 5 caracteres/.test(await page.getByTestId("review-notes-hint").innerText()), "etiqueta por efecto y aviso de nota");
+await shot("06-revision");
+await page.getByLabel("Estado de revisión").selectOption("pendiente");
+ok("Revisión: una línea, notas y estado primero, ayuda cerrada, pie compacto con motivos visibles");
 
-// A6. Contexto: accesos y análisis de demostración, sin POST
+// A7. anotación sin guardar: el editor se oculta sin descartar el texto y el aviso explica el guardado
+assertTruthy((await page.getByTestId("annotations-pending").count()) === 0, "sin cambios no hay aviso");
+await page.getByTestId("annotation-toggle").click();
+const editor = reviewPane.getByLabel("Texto de la anotación");
+await editor.waitFor();
+assertTruthy(await reviewPane.getByRole("button", { name: "Estudio" }).isVisible() && await reviewPane.getByRole("button", { name: /Corte \d+/ }).isVisible(), "destinos Estudio / Nivel / Corte");
+await editor.fill(`texto-sin-agregar-${stamp}`);
+await page.getByTestId("annotation-toggle").click();
+assertTruthy(await editor.isHidden() && /texto sin agregar/.test(await page.getByTestId("annotation-toggle").innerText()), "ocultar el editor no descarta el texto y lo indica");
+assertTruthy(/texto escrito sin agregar/.test(await page.getByTestId("annotations-pending").innerText()), "aviso de texto pendiente");
+await page.getByRole("tab", { name: "Contexto" }).click();
+await page.getByTestId("tools-open").click();
+await page.getByRole("tab", { name: "Revisión" }).click();
+assertTruthy(/texto sin agregar/.test(await page.getByTestId("annotation-toggle").innerText()), "navegar entre pestañas y herramientas conserva el texto");
+await page.getByTestId("annotation-toggle").click();
+assertTruthy((await editor.inputValue()) === `texto-sin-agregar-${stamp}`, "el texto escrito sigue en el editor");
+await reviewPane.getByRole("button", { name: "Agregar", exact: true }).click();
+assertTruthy(await editor.isHidden() && (await reviewPane.locator(".rr-annots li").count()) === 1, "al agregar, el editor se cierra y la anotación queda en la lista compacta");
+assertTruthy(/anotaciones sin guardar/.test(await page.getByTestId("annotations-pending").innerText()) && /Guardar borrador/.test(await page.getByTestId("annotations-pending").innerText()), "aviso breve de dónde se guardan");
+await shot("07-anotaciones-sin-guardar");
+await reviewPane.getByRole("button", { name: "Eliminar anotación" }).click();
+ok("anotación: el editor se oculta sin perder el texto, se conserva al navegar y el aviso explica cómo se guarda");
+
+// A8. Contexto exclusivo de paciente y datos clínicos
 await page.getByRole("tab", { name: "Contexto" }).click();
 await page.getByTestId("study-context").waitFor({ timeout: 15000 });
-const contextText = await page.getByTestId("study-context").innerText();
-assertTruthy(/Edad al estudio/.test(contextText) && /Antecedentes/.test(contextText), "campos del contexto");
+const contextText = await page.locator("#review-inspector-panel-context").innerText();
+assertTruthy(/Edad al estudio/.test(contextText) && /Antecedentes/.test(contextText) && /Paciente/.test(contextText), "campos del contexto");
+assertTruthy(!/Historial del paciente|Comparación entre estudios|Informe y exportación|Asistente|Reconstrucción 3D|Concordancia|Feedback|Auditoría|Detalles técnicos|demostración/i.test(contextText), "Contexto no reúne herramientas");
 const hasContext = !(await page.getByTestId("study-context-empty").count());
 if (!hasContext) assertTruthy((contextText.match(/No informado/g) ?? []).length === 5, "los cinco campos sin informar se rotulan");
-await shot("05-contexto");
-for (const id of ["section-history", "section-comparison", "section-report", "section-assistant", "section-3d", "section-concordance", "section-feedback", "section-audit", "section-technical", "section-demo-analysis"]) {
-  assertTruthy((await page.getByTestId(id).count()) === 1, `acceso presente: ${id}`);
-}
-const demoSection = page.getByTestId("section-demo-analysis");
-assertTruthy((await page.getByTestId("demo-analysis-notice").count()) === 0, "el análisis de demostración no carga hasta que se abre");
-await demoSection.locator("summary").click();
-await page.getByTestId("demo-analysis-notice").waitFor();
-assertTruthy(/No corresponden al análisis real/.test(await page.getByTestId("demo-analysis-notice").innerText()), "explica que no es el análisis real");
-assertTruthy((await demoSection.getByRole("button", { name: /Analizar estudio|Reanalizar|Reintentar/ }).count()) === 0, "sin disparador de corridas nuevas");
-await page.waitForTimeout(800);
-await page.locator(".rr-panel-body").evaluate((el) => { el.scrollTop = el.scrollHeight; });
-await shot("06-demostracion");
-await page.getByTestId("section-comparison").locator("summary").click();
-assertTruthy(/no las mediciones que ves en el visor/.test(await page.getByTestId("comparison-source-note").innerText()), "la comparación declara su fuente");
-await page.getByTestId("section-report").locator("summary").click();
-await page.getByTestId("report-source-note").waitFor();
-assertTruthy(/análisis de demostración registrado/.test(await page.getByTestId("report-source-note").innerText()), "el informe declara su fuente");
-await page.getByTestId("section-assistant").locator("summary").click();
-assertTruthy(/No recibe las mediciones del visor ni el contexto clínico/.test(await page.getByTestId("assistant-source-note").innerText()), "el asistente declara su fuente y que no recibe contexto");
-await page.waitForTimeout(1200);
-assertTruthy(analysisPosts().length === 0 && nonLoginMutations().length === 0, `ningún POST al navegar el panel: ${nonLoginMutations().join(", ")}`);
-await checkLayout("contexto abierto");
-ok("Contexto: accesos a historial, comparación, informe, asistente y herramientas; demostración separada y sin disparador; ningún POST");
+assertTruthy((await page.getByTestId("context-help").getAttribute("open")) === null, "la ayuda sobre los datos empieza cerrada");
+await shot("08-contexto");
+ok("Contexto solo con paciente y datos clínicos; faltantes rotulados 'No informado'; ayuda cerrada");
 
-// A7. cambiar de pestaña, de vista y de ancho no pierde estado ni recarga imágenes
+// A9. Herramientas del estudio: índice agrupado, una herramienta por vez, regreso al índice
+const getsBeforeIndex = getRequests.length;
+await toolsButton.click();
+await page.getByTestId("tools-index").waitFor();
+await page.waitForTimeout(800);
+const consulted = getRequests.slice(getsBeforeIndex).filter((path) => /report|longitudinal|chat|feedback|concordance|product-analyses|\/subjects|audit/.test(path));
+assertTruthy(consulted.length === 0, `abrir el índice no consulta herramientas: ${consulted.join(", ")}`);
+const groupTitles = await page.locator(".rr-tools-group > h3").allInnerTexts();
+assertTruthy(JSON.stringify(groupTitles) === JSON.stringify(["Seguimiento del paciente", "Informe y consulta", "Evidencia y trazabilidad", "Inspección técnica", "Análisis de demostración"]), `grupos: ${groupTitles}`);
+const itemTitles = await page.locator(".rr-tool-item-title").allInnerTexts();
+assertTruthy(itemTitles.length === 10, `diez herramientas: ${itemTitles.length}`);
+assertTruthy((await page.locator(".rr-tool-view").count()) === 0, "ninguna herramienta está montada al abrir el índice");
+assertTruthy(await page.locator('[data-tool-id="comparison"] .rr-tool-item-provenance').isVisible(), "la procedencia se ve en el índice");
+assertTruthy((await page.getByRole("tab", { selected: true }).count()) === 0, "con las herramientas abiertas ninguna pestaña figura activa");
+await checkLayout("índice de herramientas");
+await shot("09-herramientas-indice");
+await page.locator('[data-tool-id="history"]').click();
+const historyView = page.locator('.rr-tool-view[data-tool="history"]');
+assertTruthy(await historyView.isVisible() && await historyView.getByRole("button", { name: "Ver historial del paciente" }).isVisible(), "la herramienta se muestra en el mismo panel");
+assertTruthy(await page.getByTestId("tools-index").isHidden() && (await page.locator(".rr-tool-view:visible").count()) === 1, "una herramienta por vez");
+assertTruthy(await historyView.getByRole("heading", { name: "Historial del paciente" }).isVisible(), "con su título");
+await historyView.getByRole("button", { name: /Herramientas del estudio/ }).click();
+assertTruthy(await page.getByTestId("tools-index").isVisible(), "regreso al índice");
+assertTruthy(await page.evaluate(() => document.activeElement?.getAttribute("data-tool-id") === "history"), "el foco vuelve al elemento que se abrió");
+const getsBeforeReport = getRequests.length;
+await page.locator('[data-tool-id="report"]').click();
+await page.getByTestId("report-source-note").waitFor();
+await page.waitForTimeout(1200);
+assertTruthy(getRequests.slice(getsBeforeReport).some((path) => /\/report$/.test(path)), "recién al elegir el informe se consulta");
+assertTruthy(/análisis de demostración registrado/.test(await page.getByTestId("report-source-note").innerText()), "declara su fuente");
+await shot("10-herramienta-informe");
+await page.locator('.rr-tool-view[data-tool="report"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
+await page.locator('[data-tool-id="comparison"]').click();
+assertTruthy(/no las mediciones que ves en el visor/.test(await page.getByTestId("comparison-source-note").innerText()), "la comparación declara su fuente");
+await page.locator('.rr-tool-view[data-tool="comparison"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
+await page.locator('[data-tool-id="assistant"]').click();
+assertTruthy(/No recibe las mediciones del visor ni el contexto clínico/.test(await page.getByTestId("assistant-source-note").innerText()), "el asistente declara su fuente");
+await page.locator('.rr-tool-view[data-tool="assistant"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
+await page.locator('[data-tool-id="demo"]').click();
+await page.getByTestId("demo-analysis-notice").waitFor();
+assertTruthy(/No corresponden al análisis real/.test(await page.getByTestId("demo-analysis-notice").innerText()), "demostración identificada");
+assertTruthy((await page.locator('.rr-tool-view[data-tool="demo"]').getByRole("button", { name: /Analizar estudio|Reanalizar|Reintentar/ }).count()) === 0, "sin disparador de corridas");
+await shot("11-herramienta-demostracion");
+await page.locator('.rr-tool-view[data-tool="demo"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
+for (const id of ["concordance", "feedback", "audit", "three-d", "technical"]) {
+  await page.locator(`[data-tool-id="${id}"]`).click();
+  assertTruthy(await page.locator(`.rr-tool-view[data-tool="${id}"]`).isVisible(), `herramienta ${id}`);
+  await page.locator(`.rr-tool-view[data-tool="${id}"]`).getByRole("button", { name: /Herramientas del estudio/ }).click();
+}
+await page.waitForTimeout(600);
+assertTruthy(analysisPosts().length === 0 && nonLoginMutations().length === 0, `ningún POST al navegar herramientas: ${nonLoginMutations().join(", ")}`);
+await page.getByRole("tab", { name: "Resultados" }).click();
+assertTruthy(await page.getByTestId("tools-index").isHidden() && await page.getByRole("tab", { name: "Resultados", selected: true }).isVisible(), "elegir una pestaña cierra las herramientas");
+ok("índice de herramientas: 10 funciones agrupadas, una por vez, regreso al índice con foco, sin consultas al abrirlo y sin POST");
+
+// A10. cambiar pestaña, vista, herramienta y ancho no pierde estado ni recarga imágenes
 await page.getByRole("tab", { name: "Revisión" }).click();
 const noteText = `nota-de-prueba-${stamp}`;
-await page.locator("#review-inspector-panel-review textarea").first().fill(noteText);
+await reviewPane.locator("textarea").first().fill(noteText);
+await page.getByLabel("Estado de revisión").selectOption("observado");
 await page.getByRole("tab", { name: "Resultados" }).click();
-await page.getByRole("tab", { name: "Mediciones" }).click();
+if ((await page.getByTestId("level-header").count()) === 0) await page.locator(".rr-level", { hasText: "L4-L5" }).first().click();
 const sliceKept = await sliceReadout();
 const imagesBeforeResize = imageRequests.length;
+await toolsButton.click();
+await page.locator('[data-tool-id="audit"]').click();
 const handle = page.getByRole("separator", { name: "Ancho del panel" });
 await handle.focus();
 const widthBefore = Number(await handle.getAttribute("aria-valuenow"));
@@ -229,25 +340,66 @@ await page.keyboard.press("ArrowLeft");
 await page.keyboard.press("ArrowLeft");
 const widthAfter = Number(await handle.getAttribute("aria-valuenow"));
 assertTruthy(widthAfter === widthBefore + 48, `el teclado ensancha el panel (${widthBefore} → ${widthAfter})`);
-const measuredWidth = Math.round((await page.locator("aside.rr-panel").boundingBox()).width);
-assertTruthy(Math.abs(measuredWidth - widthAfter) <= 1, `el ancho aplicado coincide (${measuredWidth} vs ${widthAfter})`);
+assertTruthy(Math.abs(Math.round((await page.locator("aside.rr-panel").boundingBox()).width) - widthAfter) <= 1, "el ancho aplicado coincide");
 await page.keyboard.press("End");
 const maxWidth = Number(await handle.getAttribute("aria-valuenow"));
-assertTruthy(maxWidth === Number(await handle.getAttribute("aria-valuemax")), "Fin lleva al límite máximo");
-assertTruthy(maxWidth <= width * 0.5 + 1, "el máximo deja la mitad de la ventana a la imagen");
+assertTruthy(maxWidth === Number(await handle.getAttribute("aria-valuemax")) && maxWidth <= width * 0.5 + 1, "Fin lleva al máximo, que deja la mitad a la imagen");
 await page.keyboard.press("Home");
 assertTruthy(Number(await handle.getAttribute("aria-valuenow")) === Number(await handle.getAttribute("aria-valuemin")), "Inicio lleva al mínimo");
 for (let i = 0; i < 6; i += 1) await page.keyboard.press("ArrowLeft");
-await page.waitForTimeout(500);
-assertTruthy((await page.locator(".rr-level.is-active").getAttribute("aria-pressed")) === "true" && /L4-L5/.test(await page.getByTestId("selected-level").innerText()), "el nivel seleccionado se conserva");
-assertTruthy((await sliceReadout()) === sliceKept, "el corte se conserva al cambiar de ancho");
-assertTruthy(imageRequests.length === imagesBeforeResize, `cambiar el ancho no vuelve a pedir imágenes (${imageRequests.length - imagesBeforeResize} nuevas)`);
+await page.waitForTimeout(400);
+await checkLayout("ancho cambiado con herramienta abierta");
+await page.getByRole("tab", { name: "Resultados" }).click();
+assertTruthy(/L4-L5\s*·/.test(await page.getByTestId("level-header").innerText()), "el nivel seleccionado se conserva");
+assertTruthy((await sliceReadout()) === sliceKept, "el corte se conserva");
+assertTruthy(imageRequests.length === imagesBeforeResize, `no se vuelven a pedir imágenes (${imageRequests.length - imagesBeforeResize} nuevas)`);
 await page.getByRole("tab", { name: "Revisión" }).click();
-assertTruthy((await page.locator("#review-inspector-panel-review textarea").first().inputValue()) === noteText, "la nota escrita se conserva");
-assertTruthy(nonLoginMutations().length === 0, "ningún POST ni PUT por cambiar de pestaña o de ancho");
-await checkLayout("ancho cambiado");
-await page.keyboard.press("Escape");
-ok("cambiar de pestaña, vista y ancho conserva nivel, corte y nota, no recarga imágenes y no envía nada");
+assertTruthy((await reviewPane.locator("textarea").first().inputValue()) === noteText && (await page.getByLabel("Estado de revisión").inputValue()) === "observado", "notas y estado locales se conservan");
+assertTruthy(nonLoginMutations().length === 0, "ningún POST ni PUT en toda la navegación");
+await page.getByLabel("Estado de revisión").selectOption("pendiente");
+ok("pestañas, herramientas y ancho: se conservan nivel, corte, nota y estado; no se recargan imágenes; no se envía nada");
+
+/* ============ C. datos faltantes: respuesta del estudio alterada solo en el navegador ============ */
+
+const missingPage = await context.newPage();
+missingPage.on("pageerror", (error) => { throw new Error(`error de página (datos faltantes): ${error.message}`); });
+await missingPage.route(`**/api/studies/${readonlyCase}`, async (route) => {
+  const response = await route.fetch();
+  const body = await response.json();
+  const walk = (value) => {
+    if (!value || typeof value !== "object") return;
+    for (const [key, item] of Object.entries(value)) {
+      if (key === "discDegenerativeFindings" && Array.isArray(item?.findings)) {
+        item.findings = item.findings.filter((finding) => {
+          const level = finding.anatomy?.level;
+          if (level === "L3-L4") return false; // disco sin ninguna clasificación
+          if (level === "L2-L3" && finding.findingType === "disc_narrowing") return false; // una clasificación faltante
+          if (level === "L1-L2" && finding.findingType === "pfirrmann_grade") return false; // sin grado de Pfirrmann
+          return true;
+        });
+      } else walk(item);
+    }
+  };
+  walk(body);
+  await route.fulfill({ response, json: body });
+});
+await login(missingPage);
+await openStudy(readonlyCase, missingPage);
+await missingPage.getByRole("tab", { name: "Hallazgos IA" }).click();
+await missingPage.waitForTimeout(500);
+const incompleteRows = await missingPage.locator("#rr-results-findings summary.rr-disc-level-summary").evaluateAll((els) => els.map((el) => Array.from(el.children).map((c) => c.textContent.replace(/\s+/g, " ").trim())));
+const byDisc = Object.fromEntries(incompleteRows.map(([disc, count, grade]) => [disc, { count, grade }]));
+assertTruthy(/^0 de 4$/.test(byDisc["L1-L2"].count) && byDisc["L1-L2"].grade === "Sin dato", `L1-L2 completo, sin Pfirrmann: ${JSON.stringify(byDisc["L1-L2"])}`);
+assertTruthy(/^0 de 3 evaluadas/.test(byDisc["L2-L3"].count) && /Sin dato: estrechamiento discal/.test(byDisc["L2-L3"].count) && !/de 4/.test(byDisc["L2-L3"].count), `L2-L3 con una clasificación faltante no es 0 de 4: ${JSON.stringify(byDisc["L2-L3"])}`);
+assertTruthy(/^Sin datos/.test(byDisc["L3-L4"].count) && byDisc["L3-L4"].grade === "Sin dato", `L3-L4 sin clasificaciones: ${JSON.stringify(byDisc["L3-L4"])}`);
+assertTruthy(/^4 de 4$/.test(byDisc["L4-L5"].count), "los discos completos siguen mostrando n de 4");
+await missingPage.locator("#rr-results-findings summary.rr-disc-level-summary", { hasText: "L2-L3" }).first().click();
+const missingRow = missingPage.locator('details.rr-disc-level[open] .rr-disc-finding[data-result="missing"]');
+assertTruthy((await missingRow.count()) === 1 && /Estrechamiento discal/.test(await missingRow.innerText()) && /Sin dato/.test(await missingRow.innerText()), "la clasificación faltante se rotula 'Sin dato', no 'Ausente'");
+assertTruthy((await missingPage.locator("details.rr-disc-level[open] .rr-disc-finding[data-result='absent']").count()) === 3, "las demás siguen con su resultado real");
+await shot("12-hallazgos-datos-faltantes", missingPage);
+await missingPage.close();
+ok("datos faltantes (simulados en el navegador, sin persistir): '0 de 3 evaluadas · Sin dato…', 'Sin datos' y 'Sin dato' en Pfirrmann; nunca '0 de 4'");
 
 /* =============================== B. caso aislado: guardado ================================ */
 
@@ -275,18 +427,20 @@ if (runIsolated) {
   await page.waitForTimeout(3000);
   const postsAfterCreation = mutations.length;
 
-  // contexto con datos
+  // contexto con datos: edad con etiqueta breve y ayuda desplegable
   await page.getByRole("tab", { name: "Contexto" }).click();
   await page.getByTestId("study-context").waitFor({ timeout: 15000 });
   const filled = await page.getByTestId("study-context").innerText();
-  assertTruthy(/62 años/.test(filled) && /Declarada al cargar el estudio/.test(filled), `edad con procedencia: ${filled}`);
+  assertTruthy(/62 años · Declarada/.test(filled) && !/Declarada al cargar/.test(filled), `edad con etiqueta breve: ${filled}`);
   assertTruthy(/Lumbalgia de prueba aislada/.test(filled) && /Dolor lumbar sintético/.test(filled) && /6 semanas/.test(filled) && /Sin antecedentes \(sintético\)/.test(filled), "motivo, síntomas, evolución y antecedentes");
-  assertTruthy((await page.getByTestId("study-context-empty").count()) === 0 && !/No informado/.test(filled.replace(/Paciente[\s\S]*?\n/, "")), "con contexto completo no se rotula nada como no informado");
-  await shot("07-contexto-con-datos");
+  assertTruthy(!/No informado/.test(filled), "con contexto completo no se rotula nada como no informado");
+  await page.getByTestId("context-help").locator("summary").click();
+  assertTruthy(/declaró quien cargó el estudio/.test(await page.getByTestId("context-help").innerText()) && /no se recalcula/.test(await page.getByTestId("context-help").innerText()), "la explicación completa está en la ayuda");
+  await shot("13-contexto-con-datos");
   assertTruthy(mutations.length === postsAfterCreation, "abrir el contexto no envía nada");
-  ok("el contexto del estudio aislado muestra edad con su procedencia, motivo, síntomas, evolución y antecedentes");
+  ok("contexto del caso aislado: '62 años · Declarada', datos clínicos y ayuda desplegable");
 
-  // guardado de borrador y de una corrección
+  // guardado de borrador, corrección y anotación
   await page.getByRole("tab", { name: "Resultados" }).click();
   await page.locator(".rr-level", { hasText: "L4-L5" }).first().click();
   const heightRow = page.locator(".rr-measure", { hasText: "Altura discal" }).first();
@@ -297,27 +451,31 @@ if (runIsolated) {
   await heightRow.locator(".rr-measure-input").fill(corrected);
   assertTruthy(/Corregido de/.test(await heightRow.innerText()) && (await heightRow.locator(".rr-measure-ai").innerText()).trim() === original, "al corregir, el valor original de la IA se conserva a la vista");
   await page.getByRole("tab", { name: "Revisión" }).click();
-  await page.locator("#review-inspector-panel-review textarea").first().fill("Borrador de prueba aislada");
+  const isolatedPane = page.locator("#review-inspector-panel-review");
+  await isolatedPane.locator("textarea").first().fill("Borrador de prueba aislada");
+  await page.getByTestId("annotation-toggle").click();
+  await isolatedPane.getByLabel("Texto de la anotación").fill("Anotación del caso aislado");
+  await isolatedPane.getByRole("button", { name: "Agregar", exact: true }).click();
+  assertTruthy(/anotaciones sin guardar/.test(await page.getByTestId("annotations-pending").innerText()), "aviso de anotación sin guardar");
   const before = mutations.length;
-  await page.getByRole("button", { name: /Guardar borrador \(queda pendiente\)/ }).click();
+  await page.getByRole("button", { name: "Guardar borrador", exact: true }).click();
   await page.getByText(/Borrador guardado correctamente/).first().waitFor({ timeout: 20000 });
   const saved = mutations.slice(before);
-  assertTruthy(saved.some((item) => /PUT .*\/api\/ai\/runs\/.+\/review/.test(item)), `guardó la revisión: ${saved.join(", ")}`);
+  assertTruthy(saved.some((item) => /PUT .*\/api\/ai\/runs\/.+\/review/.test(item)) && saved.some((item) => /PUT .*\/api\/ai\/runs\/.+\/annotations/.test(item)), `guardó la revisión y las anotaciones: ${saved.join(", ")}`);
   assertTruthy(saved.every((item) => !/product-analysis|multiplanar\/run/.test(item)), "el guardado no dispara análisis");
-  ok(`borrador y corrección (${original} → ${corrected}) guardados en el caso aislado ${caseId}`);
+  assertTruthy((await page.getByTestId("annotations-pending").count()) === 0, "tras guardar desaparece el aviso de cambios pendientes");
+  ok(`borrador, corrección (${original} → ${corrected}) y anotación guardados en el caso aislado ${caseId}`);
 
-  // se recupera del backend: volver a la lista y reabrir
   await page.getByRole("button", { name: "← Estudios" }).click();
   await openStudy(caseId);
   await page.locator(".rr-level", { hasText: "L4-L5" }).first().click();
   const reopenedRow = page.locator(".rr-measure", { hasText: "Altura discal" }).first();
-  assertTruthy((await reopenedRow.locator(".rr-measure-input").inputValue()) === corrected, "la corrección persiste al reabrir");
-  assertTruthy((await reopenedRow.locator(".rr-measure-ai").innerText()).trim() === original, "el original de la IA sigue visible tras reabrir");
+  assertTruthy((await reopenedRow.locator(".rr-measure-input").inputValue()) === corrected && (await reopenedRow.locator(".rr-measure-ai").innerText()).trim() === original, "corrección y valor IA persisten al reabrir");
   await page.getByRole("tab", { name: "Revisión" }).click();
   assertTruthy((await page.locator("#review-inspector-panel-review textarea").first().inputValue()) === "Borrador de prueba aislada", "las notas persisten");
-  ok("corrección y notas se recuperan del backend al reabrir el estudio");
+  assertTruthy((await page.locator("#review-inspector-panel-review .rr-annots li").count()) === 1 && (await page.getByTestId("annotations-pending").count()) === 0, "la anotación persiste y no figura como pendiente");
+  ok("corrección, notas y anotación se recuperan del backend al reabrir");
 
-  // validación existente: observar sin nota no guarda
   await page.getByLabel("Estado de revisión").selectOption("observado");
   await page.locator("#review-inspector-panel-review textarea").first().fill("");
   const beforeInvalid = mutations.length;
