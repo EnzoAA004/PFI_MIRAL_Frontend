@@ -32,6 +32,7 @@
     "test:p10c1-security": "node scripts/p10c1-security-tests.mjs",
     "test:p10c1-hotfix-endpoints": "node scripts/p10c1-hotfix-protected-endpoints-tests.mjs",
     "test:e2e:contract": "node scripts/playwright-contract-e2e.mjs",
+    "test:e2e:sequence-selector": "node scripts/playwright-sequence-selector-e2e.mjs",
     "test:e2e:p9c": "node scripts/playwright-p9c-e2e.mjs",
     "test:e2e:p9c5": "node scripts/playwright-p9c5-e2e.mjs",
     "test:e2e:p9c5b": "node scripts/playwright-p9c5b-reopening-e2e.mjs",
