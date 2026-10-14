@@ -18,11 +18,20 @@ export function GovernanceNotice({ discLocalizationAvailable }: Props) {
   return (
     <section className="rr-ai-governance" aria-labelledby="rr-ai-governance-title">
       <p id="rr-ai-governance-title">Los resultados requieren revisión profesional.</p>
+      {/* Las limitaciones que condicionan la lectura van a la vista; la explicación del modelo y su
+          nomenclatura quedan como detalle secundario. */}
+      <ul className="rr-limits" aria-label="Limitaciones de estos resultados">
+        <li>{DISC_FINDINGS_NOTICE}</li>
+        <li>Solo se clasifican las alteraciones indicadas en cada disco: que figuren como ausentes no descarta otras.</li>
+        <li>Validación interna del proyecto; no cuenta con validación externa.</li>
+        {discLocalizationAvailable && (
+          <li>La localización automática se ejecutó técnicamente sobre este estudio real; esto no implica que su precisión clínica o general esté validada.</li>
+        )}
+      </ul>
 
       <details className="rr-ai-governance-details">
-        <summary>ⓘ Alcance del modelo</summary>
+        <summary>ⓘ Cómo interpretar el alcance del modelo</summary>
         <div className="rr-ai-governance-content">
-          <p>{DISC_FINDINGS_NOTICE}</p>
           <dl>
             {DEPLOYMENT_ORDER.map((status) => (
               <div key={status}>
@@ -33,11 +42,6 @@ export function GovernanceNotice({ discLocalizationAvailable }: Props) {
               </div>
             ))}
           </dl>
-          {discLocalizationAvailable && (
-            <p className="rr-findings-warning">
-              La localización automática se ejecutó técnicamente sobre este estudio real. Esto no implica que su precisión clínica o general esté validada.
-            </p>
-          )}
         </div>
       </details>
     </section>

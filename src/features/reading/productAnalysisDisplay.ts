@@ -91,6 +91,13 @@ export const REVIEW_ACTION_LABELS = {
   rejected: "Rechazar",
 } as const;
 
+/**
+ * Qué es este circuito, dicho al profesional. No corresponde al análisis real que muestran las
+ * mediciones y los hallazgos del visor: lo produce el circuito de producto Post-E50 en modo contrato.
+ */
+export const DEMO_ANALYSIS_NOTICE =
+  "Resultados de demostración del circuito de producto (Post-E50, modo contrato). No corresponden al análisis real que muestran las mediciones y los hallazgos del visor, ni se calcularon sobre las imágenes de este estudio. Se conservan con su revisión; desde aquí no se inician corridas nuevas.";
+
 export const REVIEW_REJECT_CONFIRMATION_TEXT = "¿Confirmás que querés rechazar este análisis?";
 
 /** `null` cuando no hay identidad autenticada disponible — nunca un nombre inventado (stage 78). */

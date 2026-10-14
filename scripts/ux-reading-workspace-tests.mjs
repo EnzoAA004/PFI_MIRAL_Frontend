@@ -141,13 +141,13 @@ check("IDs y selección de mediciones permanecen intactos", () => {
 });
 
 check("Proxy 3D queda accesible únicamente como función secundaria", () => {
-  assert.match(reviewSource, /<summary>Reconstrucción 3D<\/summary>/);
+  assert.match(reviewSource, /title="Reconstrucción 3D"/);
   assert.match(reviewSource, /Abrir reconstrucción 3D/);
   assert.doesNotMatch(reviewSource, /aria-label="Series del estudio"/);
 });
 
 check("información técnica sigue accesible y sale del chrome del viewport", () => {
-  assert.match(reviewSource, /<summary>Técnico<\/summary>/);
+  assert.match(reviewSource, /title="Detalles técnicos"/);
   assert.match(reviewSource, /Modo efectivo/);
   assert.doesNotMatch(viewportSource, /modelLabel|inferenceLabel/);
   assert.match(viewportSource, /\{displayParams\}/);

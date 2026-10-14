@@ -12,6 +12,18 @@ import { allFindingsUnassigned, groupFindingsByLevel, type LevelGroup } from "..
 import { LevelNavigator } from "../features/reading/LevelNavigator";
 import { groupMeasurements } from "../features/reading/measurementGrouping";
 import { ReviewInspector, ReviewInspectorPanel, type ReviewInspectorTab } from "../features/reading/ReviewInspector";
+import { InspectorDisclosure, InspectorGroup } from "../features/reading/InspectorSection";
+import { StudyContextPanel } from "../features/reading/StudyContextPanel";
+import { useInspectorWidth } from "../features/reading/useInspectorWidth";
+import {
+  ASSISTANT_SOURCE_NOTE,
+  COMPARISON_SOURCE_NOTE,
+  REPORT_SOURCE_NOTE,
+  REVIEW_SCOPE_COVERS,
+  REVIEW_SCOPE_EXCLUDES,
+  measurementCountLabel,
+  reviewActionState,
+} from "../features/reading/inspectorDisplay";
 import {
   ReadingThemeToggle,
   ReadingWorkspaceBody,
@@ -445,7 +457,12 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   const [saveMessage, setSaveMessage] = useState("");
   /** El informe queda ofrecido cuando el estudio se finaliza. */
   const [reportReady, setReportReady] = useState(false);
-  const [panelTab, setPanelTab] = useState<ReviewInspectorTab>("measurements");
+  const [panelTab, setPanelTab] = useState<ReviewInspectorTab>("results");
+  /** Dentro de Resultados: las mediciones de la corrida o sus hallazgos de IA. */
+  const [resultsView, setResultsView] = useState<"measurements" | "findings">("measurements");
+  /** El informe se consulta recién cuando se abre su sección, no al abrir el panel. */
+  const [reportRequested, setReportRequested] = useState(false);
+  const { width: inspectorWidth, viewportWidth, setWidth: setInspectorWidth } = useInspectorWidth();
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
   /*
    * Geometría corregida por el revisor, por id de medición. Se guarda aparte de la
@@ -538,7 +555,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   }, [displayRun.caseId, displayRun.runId]);
 
   useEffect(() => {
-    if (panelTab !== "more" || !displayRun.caseId) return;
+    if (!reportRequested || !displayRun.caseId) return;
     let cancelled = false;
     setStudyReportPhase("loading");
     setStudyReportError("");
@@ -555,7 +572,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
         setStudyReportError(error instanceof Error ? error.message : "No se pudo cargar el informe estructurado.");
       });
     return () => { cancelled = true; };
-  }, [panelTab, displayRun.caseId, studyReportRefresh]);
+  }, [reportRequested, displayRun.caseId, studyReportRefresh]);
 
   // EXT-07B: the previous study's own report is fetched only for its visualEvidence (to render
   // the "Comparación con estudio previo" image+overlay side) — the numeric before/after values
@@ -804,6 +821,15 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     const canonicalPlane = asRecord(asRecord(displayRun.canonicalRun?.planes)?.[plane]);
     return parseSlicePixelsMeta(asRecord(canonicalPlane?.quality)?.slicePixels);
   }
+
+  /*
+   * Los metadatos de píxeles se calculan una vez por corrida, no en cada render. `parseSlicePixelsMeta`
+   * devuelve un objeto nuevo cada vez, y el visor lo usa como dependencia: con una identidad distinta
+   * en cada render, cambiar de pestaña, elegir un nivel o cambiar el ancho del panel volvía a pedir
+   * el corte y reiniciaba la ventana (W/L) de la imagen.
+   */
+  const slicePixelsSagittal = useMemo(() => slicePixelsForPlane("sagittal"), [displayRun.canonicalRun]);
+  const slicePixelsAxial = useMemo(() => slicePixelsForPlane("axial"), [displayRun.canonicalRun]);
 
   /** El corte que se está mirando: el navegado, o el de la IA si aún no se movió. */
   function currentSliceOf(plane: "sagittal" | "axial") {
@@ -1350,7 +1376,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
       reviewerValue: reviewerValues[item.id] ?? item.reviewerValue ?? getPersistedReviewerValue(item.id) ?? null,
     })),
   ), [axialWorkspace, hasPlaneWorkspaces, reviewerValues, sagittalWorkspace, sourceMeasurements]);
-  const confirmDisabled = saving || reviewStatus === "pendiente";
+  const reviewActions = reviewActionState({ status: reviewStatus, saving, locked: reviewLocked, notes });
 
   function selectSeries(series: any) {
     setSelectedSeriesId(series.id);
@@ -2146,7 +2172,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
         </div>
       </ReadingWorkspaceHeader>
 
-      <ReadingWorkspaceBody inspectorCollapsed={inspectorCollapsed}>
+      <ReadingWorkspaceBody inspectorCollapsed={inspectorCollapsed} inspectorWidth={inspectorWidth}>
         <ViewportGrid preset={activeLayoutPreset}>
           {tab === "3D Reconstruction" ? (
             <div className="rr-viewport rr-3d-workspace"><SpineReconstructionPreview proxy={threeDProxyViewModel} /></div>
@@ -2289,7 +2315,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   annotatedIndices={viewed ? undefined : annotatedSlices(annotations, planeName)}
                   onMoveMaskPoint={moveMaskPoint}
                   segmentation={viewed ? undefined : segmentationForPlane(planeName)}
-                  slicePixels={viewed ? undefined : slicePixelsForPlane(planeName)}
+                  slicePixels={viewed ? undefined : (planeName === "axial" ? slicePixelsAxial : slicePixelsSagittal)}
                   pixelsBaseUrl={data.series.imageUrl ?? undefined}
                   hiddenInstances={hiddenInstances[planeName] ?? []}
                   onToggleInstance={(index) => setHiddenInstances((current) => {
@@ -2305,9 +2331,50 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
           )}
         </ViewportGrid>
 
-        <ReviewInspector activeTab={panelTab} onTabChange={setPanelTab}>
-          <ReviewInspectorPanel activeTab={panelTab} tab="measurements">
-                <p className="rr-section-title">Niveles</p>
+        <ReviewInspector
+          activeTab={panelTab}
+          onTabChange={setPanelTab}
+          onWidthChange={setInspectorWidth}
+          scrollKey={resultsView}
+          viewportWidth={viewportWidth}
+          width={inspectorWidth}
+        >
+          <ReviewInspectorPanel activeTab={panelTab} tab="results">
+            <div aria-label="Vistas de resultados" className="rr-subnav" role="tablist">
+              <button
+                aria-controls="rr-results-measurements"
+                aria-selected={resultsView === "measurements"}
+                className={resultsView === "measurements" ? "is-active" : ""}
+                id="rr-results-tab-measurements"
+                onClick={() => setResultsView("measurements")}
+                role="tab"
+                type="button"
+              >
+                Mediciones
+              </button>
+              <button
+                aria-controls="rr-results-findings"
+                aria-selected={resultsView === "findings"}
+                className={resultsView === "findings" ? "is-active" : ""}
+                id="rr-results-tab-findings"
+                onClick={() => setResultsView("findings")}
+                role="tab"
+                type="button"
+              >
+                Hallazgos IA
+              </button>
+            </div>
+
+            {/* Las dos vistas siguen montadas y solo cambian de visibilidad: cambiar de vista no
+                pierde la selección de nivel ni un borrador de la clasificación subarticular. */}
+            <div
+              aria-labelledby="rr-results-tab-measurements"
+              className="rr-pane"
+              hidden={resultsView !== "measurements"}
+              id="rr-results-measurements"
+              role="tabpanel"
+            >
+              <InspectorGroup id="levels" title="Niveles" description="Elegí un nivel para ver sus mediciones y marcarlas en la imagen. No mueve el corte.">
                 <LevelNavigator groups={levelGroups} onSelect={setSelectedLevel} selectedKey={selectedLevel} />
                 {levelUnassigned && (
                   <p className="rr-note">
@@ -2315,164 +2382,136 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                     sin nivel asignado en vez de repartirlas por suposición.
                   </p>
                 )}
+              </InspectorGroup>
 
-                <p className="rr-section-title">
-                  Mediciones{activeGroup ? ` · ${activeGroup.label}` : ""}
-                </p>
+              <section aria-label="Mediciones del nivel" className="rr-group" data-group="measurements">
+                <div className="rr-selected-level" data-testid="selected-level" data-selected={activeGroup ? "true" : "false"}>
+                  {activeGroup ? (
+                    <>
+                      <span>
+                        Nivel seleccionado: <strong>{activeGroup.label}</strong> · {measurementCountLabel(activeGroup.findings.length)}
+                      </span>
+                      <button className="rr-link" onClick={() => setSelectedLevel(null)} type="button">Quitar selección</button>
+                    </>
+                  ) : (
+                    <span>Ningún nivel seleccionado</span>
+                  )}
+                </div>
                 {/*
                   La fila y la cota son la misma medición vista de dos maneras, así que
                   se comportan como una sola: pasar el mouse por la fila resalta su
                   línea, y tocarla la elige. Sin eso, con tres cotas sobre el mismo
                   disco no hay forma de saber cuál corresponde a cuál número.
-                */}
-                {/*
-                  Sin nivel elegido no se lista nada. Antes se mostraba acá un
-                  resumen por categoría —Disco, Canal, Vértebra, Generales,
-                  Otras— que reagrupaba por tipo exactamente las mismas
-                  mediciones que el navegador de arriba ya agrupa por nivel: la
-                  misma información dos veces, con dos criterios, uno debajo del
-                  otro. Y no hacía falta para llegar a ninguna: los contadores
-                  cuadran —23 en discos, 15 en vértebras, 8 en transicionales y
-                  1 general, contra 21+6+15+1+4 por categoría—, así que cada
-                  medición, la del canal incluida, se alcanza desde su nivel.
+
+                  Sin nivel elegido no se lista nada: el navegador de arriba ya agrupa por nivel
+                  todas las mediciones, y repetirlas por categoría sería la misma información dos
+                  veces con dos criterios.
                 */}
                 {!activeGroup ? (
                   <p className="rr-note">Seleccioná un nivel para ver sus mediciones.</p>
                 ) : (
-                <MeasurementGroupList
-                  collapsible={false}
-                  emptyNote={hasPlaneWorkspaces && !persistedMeasurements.length
-                    ? `La serie ${activePlano === "axial" ? "axial" : "sagital"} de este estudio no aporta mediciones. Cambiá de plano o medí a mano.`
-                    : undefined}
-                  onChangeValue={(row, value) => {
-                    if (row.source === "reviewer") return;
-                    const measurement = resultRows.find((item) => item.id === row.id);
-                    if (measurement) updateReviewerValue(measurement, value);
-                  }}
-                  onDelete={removeAnnotation}
-                  onHighlight={setHighlightedMeasurementId}
-                  onSelect={setSelectedMeasurementId}
-                  readonly={reviewLocked}
-                  groups={measurementGroups}
-                  selectedId={selectedMeasurementId}
-                />
-                )}
-          </ReviewInspectorPanel>
-
-          <ReviewInspectorPanel activeTab={panelTab} tab="ai">
-                <section className="rr-ai-findings" aria-label="Resultados asistidos por IA">
-                  <GovernanceNotice discLocalizationAvailable={discDegenerativeSnapshot.findings.length > 0} />
-
-                  <DiscDegenerativeFindingsPanel
-                    contractError={discDegenerativeSnapshot.contractError}
-                    findings={discDegenerativeSnapshot.findings}
-                    markedLevel={markedDiscLevel}
-                    onGoToRegion={goToDiscRegion}
-                    regionNotice={discRegionNotice}
-                    unavailableReason={discDegenerativeSnapshot.unavailable}
-                    viewedInputId={sagittalInputIdOf(
-                      viewportBindings.find((item) => item.plane === "sagittal")?.id ?? "sagittal",
-                      viewportBindings.find((item) => item.plane === "sagittal")?.defaultSeriesInputId,
-                    )}
-                  />
-
-                  {displayRun.caseId && <ProductAnalysisV1Panel caseId={displayRun.caseId} />}
-
-                  <DegenerativeFindingsPanel
-                    findings={visibleDegenerativeFindings}
-                    onSelectFinding={selectDegenerativeFinding}
-                    requestBlockedReason={degenerativeRequestBlockedReason}
-                    roi={demoMode ? undefined : {
-                      active: subarticularMode,
-                      available: axialAvailable && viewportBindings.some((binding) => binding.plane === "axial"),
-                      onToggle: () => {
-                        if (subarticularMode) cancelRoi();
-                        else { setSubarticularMode(true); setRoiDraft(null); setRoiError(undefined); }
-                      },
-                      draft: roiDraft,
-                      missingReason: roiDraft ? missingFieldReason(roiDraft) : "Todavía no se marcó ningún punto.",
-                      onChangeSide: (side: FindingSide) => setRoiDraft((draft) => (draft ? { ...draft, side } : draft)),
-                      onChangeLevel: (level: string) => setRoiDraft((draft) => (draft ? { ...draft, level } : draft)),
-                      onCancel: cancelRoi,
-                      onSubmit: () => { void submitRoi(); },
-                      pending: roiPending,
-                      error: roiError,
+                  <MeasurementGroupList
+                    collapsible={false}
+                    emptyNote={hasPlaneWorkspaces && !persistedMeasurements.length
+                      ? `La serie ${activePlano === "axial" ? "axial" : "sagital"} de este estudio no aporta mediciones. Cambiá de plano o medí a mano.`
+                      : undefined}
+                    onChangeValue={(row, value) => {
+                      if (row.source === "reviewer") return;
+                      const measurement = resultRows.find((item) => item.id === row.id);
+                      if (measurement) updateReviewerValue(measurement, value);
                     }}
-                    selectedFindingId={selectedFindingId}
+                    onDelete={removeAnnotation}
+                    onHighlight={setHighlightedMeasurementId}
+                    onSelect={setSelectedMeasurementId}
+                    readonly={reviewLocked}
+                    groups={measurementGroups}
+                    selectedId={selectedMeasurementId}
                   />
-                  {!demoMode && <ActivationMapPanel inputId={axialInputId()} roiDraft={roiDraft} />}
-                </section>
+                )}
+              </section>
+            </div>
+
+            <div
+              aria-labelledby="rr-results-tab-findings"
+              className="rr-pane"
+              hidden={resultsView !== "findings"}
+              id="rr-results-findings"
+              role="tabpanel"
+            >
+              <section className="rr-ai-findings" aria-label="Resultados asistidos por IA">
+                <GovernanceNotice discLocalizationAvailable={discDegenerativeSnapshot.findings.length > 0} />
+
+                <DiscDegenerativeFindingsPanel
+                  contractError={discDegenerativeSnapshot.contractError}
+                  findings={discDegenerativeSnapshot.findings}
+                  markedLevel={markedDiscLevel}
+                  onGoToRegion={goToDiscRegion}
+                  regionNotice={discRegionNotice}
+                  unavailableReason={discDegenerativeSnapshot.unavailable}
+                  viewedInputId={sagittalInputIdOf(
+                    viewportBindings.find((item) => item.plane === "sagittal")?.id ?? "sagittal",
+                    viewportBindings.find((item) => item.plane === "sagittal")?.defaultSeriesInputId,
+                  )}
+                />
+
+                <DegenerativeFindingsPanel
+                  findings={visibleDegenerativeFindings}
+                  onSelectFinding={selectDegenerativeFinding}
+                  requestBlockedReason={degenerativeRequestBlockedReason}
+                  roi={demoMode ? undefined : {
+                    active: subarticularMode,
+                    available: axialAvailable && viewportBindings.some((binding) => binding.plane === "axial"),
+                    onToggle: () => {
+                      if (subarticularMode) cancelRoi();
+                      else { setSubarticularMode(true); setRoiDraft(null); setRoiError(undefined); }
+                    },
+                    draft: roiDraft,
+                    missingReason: roiDraft ? missingFieldReason(roiDraft) : "Todavía no se marcó ningún punto.",
+                    onChangeSide: (side: FindingSide) => setRoiDraft((draft) => (draft ? { ...draft, side } : draft)),
+                    onChangeLevel: (level: string) => setRoiDraft((draft) => (draft ? { ...draft, level } : draft)),
+                    onCancel: cancelRoi,
+                    onSubmit: () => { void submitRoi(); },
+                    pending: roiPending,
+                    error: roiError,
+                  }}
+                  selectedFindingId={selectedFindingId}
+                />
+                {!demoMode && <ActivationMapPanel inputId={axialInputId()} roiDraft={roiDraft} />}
+              </section>
+            </div>
           </ReviewInspectorPanel>
 
-          <ReviewInspectorPanel activeTab={panelTab} tab="more">
-            <div className="rr-more-sections">
-              <details className="rr-more-section">
-                <summary>Reconstrucción 3D</summary>
-                <div className="rr-more-section-body">
-                  <p className="rr-section-title">Proxy 3D experimental</p>
-                  <p className="rr-note">Vista secundaria para inspección académica; no sustituye los planos adquiridos.</p>
-                  <button
-                    className="rr-more-action"
-                    onClick={() => setTab("3D Reconstruction")}
-                    type="button"
-                  >
-                    Abrir reconstrucción 3D
-                  </button>
-                </div>
-              </details>
+          <ReviewInspectorPanel activeTab={panelTab} tab="review">
+            <div className="rr-pane">
+              <InspectorGroup id="review-scope" title="Qué cubre esta revisión">
+                <p className="rr-note">
+                  Es la revisión del análisis inicial del estudio, el que muestran Mediciones y Hallazgos IA. Cubre:
+                </p>
+                <ul className="rr-scope-list">
+                  {REVIEW_SCOPE_COVERS.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+                <p className="rr-note">{REVIEW_SCOPE_EXCLUDES}</p>
+                {reviewActions.lockedNotice && <p className="rr-note rr-note-warn" data-testid="review-locked-notice">{reviewActions.lockedNotice}</p>}
+              </InspectorGroup>
 
-              {displayRun.caseId && (() => {
-                const patientHistorySubjectRef = selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null;
-                return (
-                  <details className="rr-more-section">
-                    <summary>Historial del paciente</summary>
-                    <div className="rr-more-section-body">
-                      {patientHistorySubjectRef ? (
-                        <button
-                          className="rr-more-action"
-                          type="button"
-                          onClick={() => onOpenPatientHistory?.(patientHistorySubjectRef)}
-                          disabled={!onOpenPatientHistory}
-                        >
-                          Ver historial del paciente
-                        </button>
-                      ) : (
-                        <p className="panel-hidden-placeholder honest-empty-state">
-                          Este estudio no tiene una referencia longitudinal disponible.
-                        </p>
-                      )}
-                    </div>
-                  </details>
-                );
-              })()}
+              <InspectorGroup id="review-notes" title="Notas de revisión" description="Texto general de la revisión de todo el estudio: observaciones, hallazgos o el motivo del estado elegido.">
+                <label className="rr-field">
+                  <span className="rr-visually-hidden">Notas de revisión</span>
+                  <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Hallazgos, observaciones o motivo del estado…" />
+                </label>
+                {reviewActions.notesHint && <p className="rr-note rr-note-warn" data-testid="review-notes-hint">{reviewActions.notesHint}</p>}
+                <label className="rr-field">
+                  <span>Estado de la revisión</span>
+                  <select aria-label="Estado de revisión" value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value as ReviewStatus)}>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="observado">Observado</option>
+                    <option value="aceptado">Finalizado</option>
+                    <option value="descartado">Descartado</option>
+                  </select>
+                </label>
+              </InspectorGroup>
 
-              {displayRun.caseId && (
-                <details className="rr-more-section">
-                  <summary>Evolución</summary>
-                  <div className="rr-more-section-body">
-                    <p className="rr-section-title">Comparación entre estudios</p>
-                    <LongitudinalComparisonPanel
-                      caseId={displayRun.caseId}
-                      subjectRef={selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null}
-                    />
-                  </div>
-                </details>
-              )}
-
-              {displayRun.caseId && (
-                <details className="rr-more-section">
-                  <summary>Asistente</summary>
-                  <div className="rr-more-section-body">
-                    <p className="rr-section-title">Asistente contextual</p>
-                    <ChatPanel caseId={displayRun.caseId} />
-                  </div>
-                </details>
-              )}
-
-              <details className="rr-more-section" open>
-                <summary>Anotaciones</summary>
-                <div className="rr-more-section-body">
-                <p className="rr-section-title">Anotaciones</p>
+              <InspectorGroup id="annotations" title="Anotaciones" description="Observaciones ancladas a un lugar: todo el estudio, el nivel seleccionado o el corte que se está mirando. No cambian el estado de la revisión.">
                 {/*
                   El alcance se elige al escribir, no después: una observación del
                   estudio y una acotada a un corte se leen igual en una lista plana,
@@ -2546,14 +2585,80 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                 ) : <p className="rr-note">Sin anotaciones del revisor.</p>}
                 {annotationsError
                   ? <p className="rr-note rr-note-warn">{annotationsError}</p>
-                  : <p className="rr-note">Se guardan junto con la revisión.</p>}
-                </div>
-              </details>
+                  : <p className="rr-note">Se guardan junto con la revisión (Guardar borrador o Confirmar).</p>}
+              </InspectorGroup>
 
-              <details className="rr-more-section">
-                <summary>Informe / exportación</summary>
-                <div className="rr-more-section-body">
-                <p className="rr-section-title">Informe estructurado</p>
+              <AgentSummary agentDecision={run.aiOutput?.agentDecision ?? studyReview?.aiOutput?.agentDecision ?? run.agentDecision} />
+            </div>
+
+            {/* Pie propio de la revisión: queda al final del contenido y no tapa ningún campo. */}
+            <div className="rr-review-footer" data-testid="review-footer">
+              <div className="rr-review-action">
+                <button className="rr-ghost rr-secondary" disabled={reviewActions.draftDisabled} onClick={() => void save("pendiente")} type="button">{reviewActions.draftLabel}</button>
+                {reviewActions.draftReason && <p className="rr-note" data-testid="draft-reason">{reviewActions.draftReason}</p>}
+              </div>
+              <div className="rr-review-action">
+                <button className="rr-primary" disabled={reviewActions.confirmDisabled} onClick={() => void save(reviewStatus)} type="button">{reviewActions.confirmLabel}</button>
+                {reviewActions.confirmReason && <p className="rr-note" data-testid="confirm-reason">{reviewActions.confirmReason}</p>}
+              </div>
+              {saveMessage && <p className="rr-ok" role="status">{saveMessage}</p>}
+              {reportReady && (
+                <div className="rr-report-ready">
+                  <p>El informe del estudio finalizado está listo.</p>
+                  <div className="rr-report-actions">
+                    <button onClick={printReport} type="button">Descargar PDF</button>
+                    <button onClick={() => { void exportHtml(); }} type="button">Guardar HTML</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </ReviewInspectorPanel>
+
+          <ReviewInspectorPanel activeTab={panelTab} lazy tab="context">
+            <div className="rr-pane">
+              <StudyContextPanel caseId={displayRun.caseId ?? ""} subjectLabel={currentSubjectRef || undefined} />
+
+              {displayRun.caseId && (
+                <InspectorGroup id="follow-up" title="Seguimiento" description="Otros estudios del mismo paciente.">
+                  {(() => {
+                    const patientHistorySubjectRef = selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null;
+                    return (
+                      <InspectorDisclosure hint="Línea de tiempo de los estudios del paciente" testId="section-history" title="Historial del paciente">
+                        {patientHistorySubjectRef ? (
+                          <button
+                            className="rr-more-action"
+                            type="button"
+                            onClick={() => onOpenPatientHistory?.(patientHistorySubjectRef)}
+                            disabled={!onOpenPatientHistory}
+                          >
+                            Ver historial del paciente
+                          </button>
+                        ) : (
+                          <p className="panel-hidden-placeholder honest-empty-state">
+                            Este estudio no tiene una referencia longitudinal disponible.
+                          </p>
+                        )}
+                      </InspectorDisclosure>
+                    );
+                  })()}
+                  <InspectorDisclosure hint="Compara con otro estudio del paciente" testId="section-comparison" title="Comparación entre estudios">
+                    <p className="rr-note" data-testid="comparison-source-note">{COMPARISON_SOURCE_NOTE}</p>
+                    <LongitudinalComparisonPanel
+                      caseId={displayRun.caseId}
+                      subjectRef={selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null}
+                    />
+                  </InspectorDisclosure>
+                </InspectorGroup>
+              )}
+
+              <InspectorGroup id="delivery" title="Informe y asistente">
+                <InspectorDisclosure
+                  hint="Informe estructurado, PDF/JSON y DICOM"
+                  onOpen={() => setReportRequested(true)}
+                  testId="section-report"
+                  title="Informe y exportación"
+                >
+                  <p className="rr-note" data-testid="report-source-note">{REPORT_SOURCE_NOTE}</p>
                 <p className="rr-note">{REPORT_SAFETY_TEXT}</p>
                 {studyReportPhase === "loading" && <p className="rr-note">Cargando informe desde Backend...</p>}
                 {studyReportPhase === "error" && <p className="rr-note rr-export-error">{studyReportError}</p>}
@@ -2735,33 +2840,36 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   Uso académico y de investigación sobre datos de-identificados. Requiere revisión
                   profesional y no constituye un diagnóstico.
                 </p>
-                </div>
-              </details>
+                </InspectorDisclosure>
+                {displayRun.caseId && (
+                  <InspectorDisclosure hint="Chat con el contexto disponible" testId="section-assistant" title="Asistente">
+                    <p className="rr-note" data-testid="assistant-source-note">{ASSISTANT_SOURCE_NOTE}</p>
+                    <ChatPanel caseId={displayRun.caseId} />
+                  </InspectorDisclosure>
+                )}
+              </InspectorGroup>
 
-              <details className="rr-more-section">
-                <summary>Concordancia de evidencia</summary>
-                <div className="rr-more-section-body">
+              <InspectorGroup id="tools" title="Herramientas y detalles técnicos">
+                <InspectorDisclosure hint="Proxy 3D experimental de la columna" testId="section-3d" title="Reconstrucción 3D">
+                  <p className="rr-note">Vista secundaria para inspección académica; no sustituye los planos adquiridos.</p>
+                  <button
+                    className="rr-more-action"
+                    onClick={() => setTab("3D Reconstruction")}
+                    type="button"
+                  >
+                    Abrir reconstrucción 3D
+                  </button>
+                </InspectorDisclosure>
+                <InspectorDisclosure hint="Compara hallazgos de lote y clasificación subarticular" testId="section-concordance" title="Concordancia de evidencia">
                   <EvidenceConcordancePanel caseId={displayRun.caseId ?? ""} batchFindings={degenerativeFindings} roiFindings={roiFindings} />
-                </div>
-              </details>
-
-              <details className="rr-more-section">
-                <summary>Feedback / Curación</summary>
-                <div className="rr-more-section-body">
+                </InspectorDisclosure>
+                <InspectorDisclosure hint="Curación de material para datasets futuros" testId="section-feedback" title="Feedback y curación">
                   <FeedbackCurationPanel caseId={studyReport?.caseId ?? displayRun.caseId ?? ""} />
-                </div>
-              </details>
-
-              <details className="rr-more-section">
-                <summary>Auditoría</summary>
-                <div className="rr-more-section-body">
+                </InspectorDisclosure>
+                <InspectorDisclosure hint="Últimos eventos del estudio" testId="section-audit" title="Auditoría">
                   <AuditTrail events={auditTrail.slice(0, 4)} />
-                </div>
-              </details>
-
-              <details className="rr-more-section">
-                <summary>Técnico</summary>
-                <div className="rr-more-section-body">
+                </InspectorDisclosure>
+                <InspectorDisclosure hint="Modo de inferencia, modelo y datos de la corrida" testId="section-technical" title="Detalles técnicos">
                 <p className="rr-section-title">Inferencia</p>
                 <dl className="rr-tech">
                   <dt>Modo efectivo</dt><dd>{inferenceModeLabel(inferenceMode)}</dd>
@@ -2779,7 +2887,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   <dt>Borradores</dt><dd>{reviewerDraftCount} med · {landmarkDraftCount} lm</dd>
                 </dl>
 
-                <p className="rr-section-title">Estudio de-identificado</p>
+                <p className="rr-section-title">Datos de la corrida (de-identificados)</p>
                 <dl className="rr-tech">
                   <dt>Edad</dt><dd>{String(patientSafe.ageAtStudy ?? patientSafe.age ?? "desconocida")}</dd>
                   <dt>Sexo</dt><dd>{String(patientSafe.sex ?? "desconocido")}</dd>
@@ -2795,45 +2903,21 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                     : "No hay máscaras por clase persistidas: solo se muestra la superposición combinada."}
                 </p>
                 <p className="rr-note">
-                  Los landmarks del revisor son borradores locales y aún no se persisten.
+                  Los landmarks del revisor son borradores locales hasta que se guarda la revisión; se guardan junto con las anotaciones.
                 </p>
-                </div>
-              </details>
-            </div>
-          </ReviewInspectorPanel>
+                </InspectorDisclosure>
+              </InspectorGroup>
 
-          <ReviewInspectorPanel activeTab={panelTab} tab="review">
-            <label className="rr-field">
-              <span>Notas de revisión</span>
-              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Hallazgos, observaciones o motivo del estado…" />
-            </label>
-
-            <label className="rr-field">
-              <span>Estado</span>
-              <select aria-label="Estado de revisión" value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value as ReviewStatus)}>
-                <option value="pendiente">Pendiente</option>
-                <option value="observado">Observado</option>
-                <option value="aceptado">Finalizado</option>
-                <option value="descartado">Descartado</option>
-              </select>
-            </label>
-
-            <AgentSummary agentDecision={run.aiOutput?.agentDecision ?? studyReview?.aiOutput?.agentDecision ?? run.agentDecision} />
-
-            <div className="rr-review-footer">
-              <div className="rr-actions">
-                <button className="rr-ghost rr-secondary" disabled={saving} onClick={() => void save("pendiente")} type="button">Guardar borrador</button>
-                <button className="rr-primary" disabled={confirmDisabled} onClick={() => void save(reviewStatus)} title={reviewStatus === "pendiente" ? "Usá Guardar borrador para conservar una revisión pendiente." : undefined} type="button">Confirmar</button>
-              </div>
-              {saveMessage && <p className="rr-ok" role="status">{saveMessage}</p>}
-              {reportReady && (
-                <div className="rr-report-ready">
-                  <p>El informe del estudio finalizado está listo.</p>
-                  <div className="rr-report-actions">
-                    <button onClick={printReport} type="button">Descargar PDF</button>
-                    <button onClick={() => { void exportHtml(); }} type="button">Guardar HTML</button>
-                  </div>
-                </div>
+              {displayRun.caseId && (
+                <InspectorGroup id="demo" title="Análisis de demostración">
+                  <InspectorDisclosure
+                    hint="Circuito de producto en modo contrato; no es el análisis real del visor"
+                    testId="section-demo-analysis"
+                    title="Resultados y revisión del análisis de demostración"
+                  >
+                    <ProductAnalysisV1Panel caseId={displayRun.caseId} />
+                  </InspectorDisclosure>
+                </InspectorGroup>
               )}
             </div>
           </ReviewInspectorPanel>

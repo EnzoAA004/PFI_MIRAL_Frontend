@@ -64,7 +64,7 @@ async function main() {
   console.log("ok 1 - StudyReviewView (CASE-84-C) renderiza contra el Backend real");
 
   // 2. Abrir "Más" -> "Historial del paciente".
-  const moreTab = page.locator("button", { hasText: "Más" }).first();
+  const moreTab = page.locator("button", { hasText: "Contexto" }).first();
   await moreTab.click();
   const historyDetails = page.locator("summary", { hasText: "Historial del paciente" }).first();
   assertTruthy((await historyDetails.count()) > 0, "no se encontró la sección 'Historial del paciente'");

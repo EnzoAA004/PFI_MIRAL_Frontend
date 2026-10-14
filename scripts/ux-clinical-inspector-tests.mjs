@@ -100,9 +100,9 @@ check("selección actual se preserva y segundo click limpia", () => {
   assert.equal(levels.nextLevelSelection("L4-L5", "L4-L5"), null);
 });
 
-check("inspector expone exactamente cuatro tabs", () => {
-  const labels = Array.from(inspectorSource.matchAll(/\{ id: "(?:measurements|ai|review|more)", label: "([^"]+)" \}/g), (match) => match[1]);
-  assert.deepEqual(labels, ["Mediciones", "Hallazgos IA", "Revisión", "Más"]);
+check("inspector expone exactamente tres tabs: Resultados, Revisión y Contexto", () => {
+  const labels = Array.from(inspectorSource.matchAll(/\{ id: "(?:results|review|context)", label: "([^"]+)" \}/g), (match) => match[1]);
+  assert.deepEqual(labels, ["Resultados", "Revisión", "Contexto"]);
 });
 
 check("tabs y paneles tienen semántica y teclado accesibles", () => {
@@ -114,12 +114,12 @@ check("tabs y paneles tienen semántica y teclado accesibles", () => {
 
 check("cambiar tab oculta sin desmontar contenido", () => {
   assert.ok(inspectorSource.includes("hidden={activeTab !== tab}"));
-  assert.ok(inspectorSource.includes("{children}"));
+  assert.ok(inspectorSource.includes("children"));
   assert.equal(inspectorSource.includes("activeTab === tab &&"), false);
 });
 
 check("Hallazgos IA contiene hallazgos discales y subarticular", () => {
-  const start = reviewSource.indexOf('tab="ai"');
+  const start = reviewSource.indexOf('id="rr-results-findings"');
   const end = reviewSource.indexOf("</ReviewInspectorPanel>", start);
   const aiPanel = reviewSource.slice(start, end);
   assert.ok(aiPanel.includes("DiscDegenerativeFindingsPanel"));
@@ -156,7 +156,7 @@ check("selectedLevel, drafts y slice siguen poseídos por StudyReviewView", () =
   for (const state of ["selectedLevel", "notes", "noteDraft", "annotations", "selectedMeasurementId", "sliceByPlane"]) {
     assert.match(reviewSource, new RegExp(`const \\[${state}, set`, "m"), state);
   }
-  assert.ok(reviewSource.indexOf("<PlaneViewport") < reviewSource.indexOf("<ReviewInspector activeTab"));
+  assert.ok(reviewSource.indexOf("<PlaneViewport") < reviewSource.search(/<ReviewInspector\s/));
 });
 
 check("filas agrupadas conservan id y callbacks del editor", () => {

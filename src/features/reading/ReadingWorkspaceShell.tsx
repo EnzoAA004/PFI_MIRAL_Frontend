@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Moon, Sun } from "lucide-react";
 import { readingThemeAttribute, setTheme, useTheme } from "../../design/theme";
 
@@ -46,11 +46,15 @@ export function ReadingWorkspaceHeader({ children }: { children: ReactNode }) {
 export function ReadingWorkspaceBody({
   children,
   inspectorCollapsed,
+  inspectorWidth,
 }: {
   children: ReactNode;
   inspectorCollapsed: boolean;
+  /** Ancho del panel derecho en píxeles; sin él, el CSS usa su ancho por defecto. */
+  inspectorWidth?: number;
 }) {
-  return <div className="rr-body" data-inspector={inspectorCollapsed ? "collapsed" : "visible"}>{children}</div>;
+  const style = inspectorWidth ? ({ "--rr-inspector-width": `${inspectorWidth}px` } as CSSProperties) : undefined;
+  return <div className="rr-body" data-inspector={inspectorCollapsed ? "collapsed" : "visible"} style={style}>{children}</div>;
 }
 
 export function ReadingWorkspaceToolbar({ children }: { children: ReactNode }) {

@@ -1,4 +1,5 @@
 import type { LevelGroup } from "./readingFindings";
+import { measurementCountLabel } from "./inspectorDisplay";
 
 export type LevelNavigatorSection = "disc" | "vertebra" | "other";
 
@@ -50,7 +51,7 @@ export function LevelNavigator({ groups, selectedKey, onSelect }: Props) {
                 const active = selectedKey === group.key;
                 return (
                   <button
-                    aria-label={`${group.label}: ${group.findings.length} mediciones`}
+                    aria-label={`${group.label}: ${measurementCountLabel(group.findings.length)}${active ? " (nivel seleccionado)" : ""}`}
                     aria-pressed={active}
                     className={`rr-level rr-level-${group.kind}${active ? " is-active" : ""}${group.findings.length ? "" : " is-empty"}`}
                     key={group.key}
@@ -58,7 +59,7 @@ export function LevelNavigator({ groups, selectedKey, onSelect }: Props) {
                     type="button"
                   >
                     <span className="rr-level-name">{group.label}</span>
-                    <span aria-hidden="true" className="rr-level-count">{group.findings.length || "—"}</span>
+                    <span className="rr-level-count">{measurementCountLabel(group.findings.length)}</span>
                   </button>
                 );
               })}

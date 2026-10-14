@@ -16,12 +16,30 @@ import { chromium } from "playwright";
  */
 
 const frontendUrl = process.env.POST_E50_FRONTEND_URL ?? "http://localhost:8188";
+const backendUrl = process.env.POST_E50_BACKEND_URL ?? "http://localhost:8180";
 const token = process.env.POST_E50_E2E_TOKEN;
 const caseId = process.env.POST_E50_E2E_CASE_ID ?? "CASE-87-A4";
 
 if (!token) {
   console.error("POST_E50_E2E_TOKEN is required (a real JWT minted via POST /api/auth/demo-doctor against the running stack).");
   process.exit(1);
+}
+
+/** Las corridas de demostración ya no se inician desde el visor: el e2e las crea por la API. */
+async function startDemoAnalysis(caseId) {
+  const response = await fetch(`${backendUrl}/api/studies/${encodeURIComponent(caseId)}/product-analysis`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!response.ok) throw new Error(`E2E setup failed: product-analysis ${response.status}`);
+}
+
+async function openDemoAnalysis(page) {
+  await page.getByRole("tab", { name: "Contexto" }).click();
+  const section = page.getByTestId("section-demo-analysis");
+  if ((await section.getAttribute("open")) === null) await section.locator("summary").click();
+  await page.getByTestId("demo-analysis-notice").waitFor({ timeout: 10000 });
 }
 
 function assertTruthy(value, message) {
@@ -121,14 +139,13 @@ async function main() {
   await page.getByText(caseId, { exact: false }).first().waitFor({ timeout: 10000 });
   console.log("ok 8 - Study abierto renderiza contra el Backend real");
 
-  // 9. El pipeline multiplanar ya corrió; el análisis de producto (P10.9, /v1/product/analyze)
-  // es un paso explícito propio -- "Analizar estudio" en la pestaña Hallazgos IA (no automático
-  // tras el run multiplanar, a diferencia de las extensiones de producto de segmentación T1/T2).
-  await page.getByRole("tab", { name: "Hallazgos IA" }).click();
-  await page.waitForSelector("text=Análisis de producto", { timeout: 10000 });
-  console.log("ok 9 - pestaña Hallazgos IA / Análisis de producto visible");
-
-  await page.getByRole("button", { name: "Analizar estudio" }).click();
+  // 9. El pipeline multiplanar ya corrió; el análisis de producto (/v1/product/analyze) es otro circuito
+  // y ya no se inicia desde el visor: se crea por la API y se consulta en Contexto > "Análisis de
+  // demostración", separado de las mediciones y hallazgos reales.
+  await startDemoAnalysis(caseId);
+  await openDemoAnalysis(page);
+  assertTruthy((await page.getByRole("button", { name: "Analizar estudio" }).count()) === 0, "el visor no ofrece iniciar corridas de demostración");
+  console.log("ok 9 - Contexto / Análisis de demostración visible, sin disparador de corridas");
 
   // 10. Ver resultado (partial, L4-L5).
   await page.waitForSelector("text=Análisis parcial", { timeout: 15000 });
@@ -138,7 +155,7 @@ async function main() {
   }
   assertTruthy(findingsText.includes("L4-L5"), "no se ve el nivel L4-L5 esperado");
   assertTruthy(findingsText.toLowerCase().includes("parcial"), "no se ve el estado partial esperado");
-  console.log("ok 10 - resultado visible (L4-L5, análisis parcial) tras 'Analizar estudio'");
+  console.log("ok 10 - resultado visible (L4-L5, análisis parcial) de la corrida de demostración");
 
   // 11. Aceptar/observar review.
   await page.getByRole("button", { name: "Aceptar" }).click();
@@ -146,7 +163,7 @@ async function main() {
   console.log("ok 11 - review aceptado y persistido");
 
   // 12. Corregir measurement.
-  await page.getByRole("tab", { name: "Más" }).click();
+  await page.getByRole("tab", { name: "Contexto" }).click();
   const correctButtons = page.getByRole("button", { name: "Corregir" });
   if (await correctButtons.count()) {
     console.log("ok 12 - control de corrección disponible en la pestaña Más (wiring confirmado; valor ya corregido vía API en la evidencia curl del reporte)");
@@ -188,7 +205,7 @@ async function main() {
 
   // 16-18. Asistente: abrir, preguntar, recibir respuesta -- vuelve al Study y usa la pestaña Más.
   await page.goto(`${frontendUrl}/estudio/${caseId}`, { waitUntil: "networkidle" });
-  await page.getByRole("tab", { name: "Más" }).click();
+  await page.getByRole("tab", { name: "Contexto" }).click();
   const suggestedQuestion = page.getByRole("button", { name: "¿Qué cambió respecto del estudio anterior?" });
   if (await suggestedQuestion.count()) {
     await suggestedQuestion.click();
@@ -203,7 +220,7 @@ async function main() {
   console.log("ok 19 - legacyPatientRequests.length === 0 en toda la sesión (nunca /api/studies/{caseId}/patient)");
 
   // Core creation-path requests are asserted hard (these are what Stage 87 actually built/fixed).
-  const coreExpected = { patientSearch: /^GET .*\/api\/patients\?query=/, upload: /\/api\/ai\/inputs$/, run: /\/api\/ai\/multiplanar\/run$/, productAnalysis: /\/product-analysis$/, review: /\/review$/ };
+  const coreExpected = { patientSearch: /^GET .*\/api\/patients\?query=/, upload: /\/api\/ai\/inputs$/, run: /\/api\/ai\/multiplanar\/run$/, productAnalysisHistory: /^GET .*\/product-analyses$/, review: /\/review$/ };
   for (const [label, pattern] of Object.entries(coreExpected)) {
     assertTruthy(allApiRequests.some((entry) => pattern.test(entry)), `no se observó el request esperado: ${label}`);
   }

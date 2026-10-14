@@ -99,25 +99,7 @@ export function MeasurementPanel({
                 {displayMeasurementLabelShort(row.label)}
               </span>
               {row.source === "reviewer" && <span className="rr-measure-source">mía</span>}
-              {/*
-                El valor de una medición propia sale de la figura y no se teclea: se
-                corrige moviendo sus extremos sobre la imagen. El campo se muestra de
-                solo lectura y lo dice, en vez de aceptar lo que se escriba y
-                descartarlo en silencio, que es lo que hacía antes.
-              */}
-              <input
-                aria-label={`Valor de ${displayMeasurementLabel(row.label)}`}
-                className="rr-measure-input"
-                disabled={readonly}
-                inputMode="decimal"
-                onChange={(event) => onChangeValue(row, event.target.value)}
-                onClick={(event) => event.stopPropagation()}
-                placeholder={ai === null ? "" : String(ai)}
-                readOnly={row.source === "reviewer"}
-                title={row.source === "reviewer" ? "Se ajusta moviendo los extremos sobre la imagen." : undefined}
-                value={row.reviewerValue === null || row.reviewerValue === undefined ? "" : String(row.reviewerValue)}
-              />
-              <span className="rr-measure-unit">{displayUnit(row.unit)}</span>
+              {row.detail && <span className="rr-measure-detail">{row.detail}</span>}
               {row.source === "reviewer" && !readonly && (
                 <button
                   aria-label={`Borrar ${displayMeasurementLabel(row.label)}`}
@@ -131,16 +113,47 @@ export function MeasurementPanel({
               )}
             </div>
 
-            <div className="rr-measure-foot">
-              {/*
-                El valor de la IA queda visible cuando el revisor lo corrigió: lo que
-                el modelo propuso es parte del registro de la revisión, no algo que se
-                reemplaza y desaparece.
-              */}
-              {edited && ai !== null && (
-                <span className="rr-measure-ai">IA {ai} {displayUnit(row.unit)}</span>
+            {/*
+              Dos celdas con nombre: lo que propuso la IA (siempre visible, nunca reemplazado) y la
+              corrección profesional. Antes el valor de la IA era el placeholder gris del único
+              campo, y al corregir desaparecía. Lo que propuso el modelo es parte del registro de la
+              revisión; "sin valor" se dice como tal y nunca se muestra como cero.
+            */}
+            <div className="rr-measure-values">
+              <div className="rr-measure-cell">
+                <span className="rr-measure-cell-label">{row.source === "reviewer" ? "Medición propia" : "Valor IA"}</span>
+                <span className="rr-measure-ai" data-missing={(row.source === "reviewer" ? reviewer : ai) === null ? "true" : undefined}>
+                  {(() => {
+                    const base = row.source === "reviewer" ? reviewer : ai;
+                    return base === null ? "Sin valor" : `${base} ${displayUnit(row.unit)}`.trim();
+                  })()}
+                </span>
+              </div>
+              {row.source !== "reviewer" && (
+                <div className="rr-measure-cell">
+                  <span className="rr-measure-cell-label">Corrección profesional</span>
+                  <span className="rr-measure-correction">
+                    <input
+                      aria-label={`Valor de ${displayMeasurementLabel(row.label)}`}
+                      className="rr-measure-input"
+                      disabled={readonly}
+                      inputMode="decimal"
+                      onChange={(event) => onChangeValue(row, event.target.value)}
+                      onClick={(event) => event.stopPropagation()}
+                      placeholder="—"
+                      title="Escribí el valor corregido. El valor original de la IA se conserva."
+                      value={row.reviewerValue === null || row.reviewerValue === undefined ? "" : String(row.reviewerValue)}
+                    />
+                    <span className="rr-measure-unit">{displayUnit(row.unit)}</span>
+                  </span>
+                </div>
               )}
-              {row.detail && <span className="rr-measure-detail">{row.detail}</span>}
+            </div>
+
+            <div className="rr-measure-foot">
+              {edited && ai !== null && (
+                <span className="rr-measure-corrected">Corregido de {ai} a {reviewer} {displayUnit(row.unit)}</span>
+              )}
               {verdict && (
                 <span
                   className={`rr-range rr-range-${verdict.status}`}

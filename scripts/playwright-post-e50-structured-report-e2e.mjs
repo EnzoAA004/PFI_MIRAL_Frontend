@@ -19,6 +19,23 @@ if (!token) {
   process.exit(1);
 }
 
+/** Las corridas de demostración ya no se inician desde el visor: el e2e las crea por la API. */
+async function startDemoAnalysis(caseId) {
+  const response = await fetch(`${backendUrl}/api/studies/${encodeURIComponent(caseId)}/product-analysis`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!response.ok) throw new Error(`E2E setup failed: product-analysis ${response.status}`);
+}
+
+async function openDemoAnalysis(page) {
+  await page.getByRole("tab", { name: "Contexto" }).click();
+  const section = page.getByTestId("section-demo-analysis");
+  if ((await section.getAttribute("open")) === null) await section.locator("summary").click();
+  await page.getByTestId("demo-analysis-notice").waitFor({ timeout: 10000 });
+}
+
 function assertTruthy(value, message) {
   if (!value) throw new Error(`E2E assertion failed: ${message}`);
 }
@@ -112,9 +129,8 @@ async function main() {
   await page.getByText(caseId, { exact: false }).first().waitFor({ timeout: 10000 });
   console.log("ok 4 - Study creado y sala de lectura abierta");
 
-  await page.getByRole("tab", { name: "Hallazgos IA" }).click();
-  await page.waitForSelector("text=Análisis de producto", { timeout: 10000 });
-  await page.getByRole("button", { name: "Analizar estudio" }).click();
+  await startDemoAnalysis(caseId);
+  await openDemoAnalysis(page);
   await page.waitForSelector("text=Análisis parcial", { timeout: 15000 });
   const findingsText = await page.textContent("body");
   assertTruthy(findingsText.includes("L4-L5"), "el análisis de producto no expuso el nivel esperado L4-L5");
@@ -124,8 +140,8 @@ async function main() {
   await page.waitForSelector("text=Aceptado por el profesional", { timeout: 10000 });
   console.log("ok 6 - revisión profesional persistida");
 
-  await page.getByRole("tab", { name: "Más" }).click();
-  await page.locator("summary", { hasText: "Informe / exportación" }).click();
+  await page.getByRole("tab", { name: "Contexto" }).click();
+  await page.locator("summary", { hasText: "Informe y exportación" }).click();
   await page.getByTestId("backend-study-report").waitFor({ timeout: 15000 });
   const reportUiText = await page.getByTestId("backend-study-report").textContent();
   const fullUiText = await page.textContent("body");

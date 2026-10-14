@@ -151,7 +151,9 @@ test("H estilos semanticos de botones existen", () => {
 
 test("I confirmar estado queda disabled en Pendiente y habilitable en Finalizado", () => {
   const source = readFileSync(join(root, "src/components/StudyReviewView.tsx"), "utf8");
-  assert.match(source, /const confirmDisabled = saving \|\| reviewStatus === "pendiente"/);
+  assert.match(source, /reviewActionState\(\{ status: reviewStatus, saving, locked: reviewLocked, notes \}\)/);
+  const display = readFileSync(join(root, "src/features/reading/inspectorDisplay.ts"), "utf8");
+  assert.match(display, /confirmDisabled: saving \|\| status === "pendiente"/);
   assert.match(source, /<option value="aceptado">Finalizado<\/option>/);
 });
 

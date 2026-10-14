@@ -9,6 +9,23 @@ if (!token) {
   process.exit(1);
 }
 
+/** Las corridas de demostración ya no se inician desde el visor: el e2e las crea por la API. */
+async function startDemoAnalysis(caseId) {
+  const response = await fetch(`${backendUrl}/api/studies/${encodeURIComponent(caseId)}/product-analysis`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!response.ok) throw new Error(`E2E setup failed: product-analysis ${response.status}`);
+}
+
+async function openDemoAnalysis(page) {
+  await page.getByRole("tab", { name: "Contexto" }).click();
+  const section = page.getByTestId("section-demo-analysis");
+  if ((await section.getAttribute("open")) === null) await section.locator("summary").click();
+  await page.getByTestId("demo-analysis-notice").waitFor({ timeout: 10000 });
+}
+
 function assertTruthy(value, message) {
   if (!value) throw new Error(`Demo E2E assertion failed: ${message}`);
 }
@@ -96,13 +113,13 @@ async function main() {
   await page.getByText("DEMO-LUMBAR-2026-03", { exact: false }).first().waitFor({ timeout: 10000 });
   console.log("ok 2 - Study actual demo abre");
 
-  await page.getByRole("tab", { name: "Hallazgos IA" }).click();
+  await openDemoAnalysis(page);
   const findingsText = await page.textContent("body");
   assertTruthy(findingsText.includes("Análisis parcial") || findingsText.includes("partial"), "no se ve estado partial");
   assertTruthy(findingsText.includes("L4-L5"), "no se ve nivel L4-L5");
   console.log("ok 3 - hallazgos AI partial visibles");
 
-  await page.getByRole("tab", { name: "Más" }).click();
+  await page.getByRole("tab", { name: "Contexto" }).click();
   const historySummary = page.locator("summary", { hasText: "Historial del paciente" }).first();
   if (await historySummary.count()) await historySummary.click();
   await page.getByRole("button", { name: "Ver historial del paciente" }).click();
@@ -128,8 +145,8 @@ async function main() {
   console.log("ok 5 - evolución determinística 11.9 -> 12.3 -> 12.9 visible");
 
   await page.goto(`${frontendUrl}/estudio/DEMO-LUMBAR-2026-03`, { waitUntil: "networkidle" });
-  await page.getByRole("tab", { name: "Más" }).click();
-  await page.locator("summary", { hasText: "Informe / exportación" }).click();
+  await page.getByRole("tab", { name: "Contexto" }).click();
+  await page.locator("summary", { hasText: "Informe y exportación" }).click();
   await page.getByTestId("backend-study-report").waitFor({ timeout: 10000 });
   const reportText = await page.getByTestId("backend-study-report").textContent();
   assertTruthy(reportText.includes("pfi.study-report.v1"), "reporte estructurado no visible en UI");
@@ -159,8 +176,8 @@ async function main() {
   console.log("ok 9 - assistant determinístico y conversación persistida");
 
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("tab", { name: "Más" }).click();
-  await page.locator("summary", { hasText: "Informe / exportación" }).click();
+  await page.getByRole("tab", { name: "Contexto" }).click();
+  await page.locator("summary", { hasText: "Informe y exportación" }).click();
   await page.getByTestId("backend-study-report").waitFor({ timeout: 10000 });
   assertTruthy((await page.textContent("body")).includes("12.9"), "reload no preservó corrección/reporte");
   console.log("ok 10 - reload persistence");

@@ -130,8 +130,11 @@ test("G StudyReviewView no conserva opacidad duplicada ni aprobacion en toolbar"
 
 test("H la decision se guarda como borrador o se confirma, nunca se 'aprueba'", () => {
   const source = readFileSync(join(root, "src/components/StudyReviewView.tsx"), "utf8");
-  assert.match(source, /Guardar borrador/);
-  assert.match(source, /Confirmar/);
+  assert.match(source, /reviewActions\.draftLabel/);
+  assert.match(source, /reviewActions\.confirmLabel/);
+  const display = readFileSync(join(root, "src/features/reading/inspectorDisplay.ts"), "utf8");
+  assert.match(display, /Guardar borrador/);
+  assert.match(display, /Confirmar estado/);
   // La herramienta es asistiva: el profesional confirma un estado de revision,
   // no "aprueba" un diagnostico.
   assert.equal(source.includes("Aprobar y completar"), false);
@@ -147,10 +150,12 @@ test("I el valor de IA y el del revisor se muestran separados", () => {
   // El valor de la IA queda visible cuando el revisor lo corrige: la correccion no
   // pisa el original, lo acompana.
   assert.match(source, /rr-measure-ai/);
-  // El valor de IA se muestra como referencia y ademas como placeholder del campo,
-  // de modo que el original permanece visible mientras se corrige.
-  assert.match(source, /IA \{ai\}/);
-  assert.match(source, /placeholder=\{ai === null \? "" : String\(ai\)\}/);
+  // El valor de IA tiene su propia celda ("Valor IA"), nunca es el placeholder del campo de
+  // correccion, y al corregir se dice de donde se corrigio: el original no desaparece.
+  assert.match(source, /Valor IA/);
+  assert.match(source, /Corrección profesional/);
+  assert.match(source, /Corregido de \{ai\} a \{reviewer\}/);
+  assert.doesNotMatch(source, /placeholder=\{ai === null/);
 });
 
 test("J la geometria corregida viaja con el valor y vuelve al rehidratar", () => {

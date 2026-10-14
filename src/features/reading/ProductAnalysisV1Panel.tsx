@@ -4,8 +4,7 @@ import {
   CORRECTION_FIELD_LABELS,
   DISC_LEVEL_UNASSIGNED_TEXT,
   MORPHOMETRY_DISCLAIMER,
-  PRODUCT_ANALYSIS_EMPTY_HISTORY_TEXT,
-  PRODUCT_ANALYSIS_PROCESSING_TEXT,
+  DEMO_ANALYSIS_NOTICE,
   REVIEW_ACTION_LABELS,
   REVIEW_REJECT_CONFIRMATION_TEXT,
   displayAxialPairingStatus,
@@ -43,12 +42,8 @@ type ReviewDecision = "accepted" | "observed" | "rejected";
 export function ProductAnalysisV1Panel({ caseId }: Props) {
   const {
     state,
-    canSubmit,
-    canRetry,
     canMutate,
-    analyze,
     openAnalysis,
-    retry,
     reviewRun,
     reviewDiscLevel,
     correctMeasurement,
@@ -58,30 +53,19 @@ export function ProductAnalysisV1Panel({ caseId }: Props) {
   return (
     <section className="rr-product-analysis" aria-label="Análisis de producto Post-E50">
       <div className="rr-disc-section-head">
-        <p className="rr-section-title">Análisis de producto</p>
-        <button
-          className="rr-more-action"
-          type="button"
-          disabled={!canSubmit}
-          onClick={() => void analyze()}
-        >
-          {state.phase === "submitting" ? PRODUCT_ANALYSIS_PROCESSING_TEXT : "Analizar estudio"}
-        </button>
+        <p className="rr-section-title">Análisis de demostración</p>
       </div>
-
-      {state.phase === "submitting" && (
-        <p className="rr-note" role="status">{PRODUCT_ANALYSIS_PROCESSING_TEXT}</p>
-      )}
+      {/*
+        Procedencia comprobada (docs/VISOR_FUNCIONES_RELEVAMIENTO.md, sección 9): todas las corridas de
+        este circuito salen de POST /api/studies/{caseId}/product-analysis, que llama a /v1/product/analyze
+        del módulo de IA con el pipeline en modo "contract" (contornos fijos del contrato, nivel L4-L5
+        cableado). No depende de que el resultado esté completo o parcial. Desde acá ya no se inician
+        corridas nuevas: se conserva lo ya registrado, con su revisión y correcciones.
+      */}
+      <p className="rr-note" data-testid="demo-analysis-notice">{DEMO_ANALYSIS_NOTICE}</p>
 
       {state.phase === "error" && state.error && (
-        <p className="rr-disc-contract-error" role="alert">
-          {state.error.message}
-          {canRetry && (
-            <button className="rr-more-action" type="button" onClick={retry} style={{ marginLeft: 8 }}>
-              Reintentar
-            </button>
-          )}
-        </p>
+        <p className="rr-disc-contract-error" role="alert">{state.error.message}</p>
       )}
 
       {state.mutationError && (
@@ -93,7 +77,7 @@ export function ProductAnalysisV1Panel({ caseId }: Props) {
       )}
 
       {state.phase !== "loading_history" && !selected && state.phase !== "error" && (
-        <p className="rr-findings-empty">{PRODUCT_ANALYSIS_EMPTY_HISTORY_TEXT}</p>
+        <p className="rr-findings-empty">Este estudio no tiene corridas de demostración registradas.</p>
       )}
 
       {selected && (

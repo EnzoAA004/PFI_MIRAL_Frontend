@@ -2724,4 +2724,290 @@
     margin-top: 4px;
   }
 
+  /* ====================================================================================
+     Panel derecho, etapa 1: Resultados / Revisión / Contexto, ancho ajustable.
+     Todo con los tokens del tema: sirve igual en claro y en oscuro.
+     ==================================================================================== */
+  .rr-body {
+    grid-template-columns: minmax(0, 1fr) var(--rr-inspector-width, clamp(340px, 22vw, 420px));
+  }
+  .rr-body[data-inspector="collapsed"] { grid-template-columns: minmax(0, 1fr); }
+
+  .rr-panel {
+    position: relative;
+    font-size: var(--fs-body);
+    min-width: 0;
+  }
+
+  /* Separador para cambiar el ancho: el borde izquierdo del panel, con foco visible. */
+  .rr-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    width: 9px;
+    cursor: col-resize;
+    z-index: 6;
+    touch-action: none;
+  }
+  .rr-resize-handle::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 2px;
+    background: transparent;
+    transition: background-color .12s;
+  }
+  .rr-resize-handle:hover::after,
+  .rr-resize-handle:focus-visible::after { background: var(--primary); }
+  .rr-resize-handle:focus-visible { outline: 2px solid var(--primary); outline-offset: -1px; }
+
+  /* Un único scroll: el de este cuerpo. Las pestañas y la subnavegación quedan fijas. */
+  .rr-panel-body {
+    padding: 0;
+    gap: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .rr-panel-body > [role="tabpanel"]:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    min-height: 100%;
+    min-width: 0;
+  }
+  .rr-panel-body > [role="tabpanel"]:focus-visible { outline: none; }
+
+  .rr-tabs button {
+    font-size: var(--fs-small);
+    font-weight: var(--fw-semibold);
+    height: 34px;
+  }
+
+  /* Subnavegación fija de Resultados: queda arriba mientras el contenido se desplaza debajo. */
+  .rr-subnav {
+    display: flex;
+    gap: 6px;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    margin: calc(-1 * var(--sp-3)) calc(-1 * var(--sp-3)) 0;
+    padding: var(--sp-2) var(--sp-3);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .rr-subnav button {
+    flex: 1;
+    height: 30px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-btn);
+    background: var(--surface-subtle);
+    color: var(--text-muted);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-semibold);
+    cursor: pointer;
+  }
+  .rr-subnav button:hover { color: var(--text); }
+  .rr-subnav button.is-active {
+    background: var(--surface-soft);
+    border-color: var(--primary);
+    color: var(--text);
+  }
+  .rr-subnav button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+  .rr-pane:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    min-width: 0;
+  }
+
+  .rr-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    min-width: 0;
+  }
+  .rr-group-title {
+    margin: 0;
+    color: var(--text);
+    font-size: var(--fs-body);
+    font-weight: var(--fw-semibold);
+    line-height: 1.3;
+  }
+  .rr-panel .rr-note {
+    font-size: var(--fs-small);
+    line-height: 1.5;
+  }
+  .rr-note-warn { color: var(--text-warning-strong); }
+
+  .rr-link {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--text-primary-strong);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .rr-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 2px; }
+
+  .rr-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* Niveles: dos renglones (nombre y cantidad) para que el número diga qué cuenta. */
+  .rr-level-navigator { gap: var(--sp-2); }
+  .rr-level-list { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 4px; }
+  .rr-level-section h4 { margin-bottom: 3px; }
+  .rr-level-list .rr-level {
+    height: auto;
+    min-height: 36px;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    padding: 3px 9px;
+    text-align: left;
+    line-height: 1.25;
+  }
+  .rr-level-list .rr-level .rr-level-name { font-size: var(--fs-body); font-weight: var(--fw-semibold); }
+  .rr-level-list .rr-level .rr-level-count { font-size: var(--fs-small); opacity: 1; color: var(--text-muted); font-weight: var(--fw-regular); }
+  .rr-level-list .rr-level.is-empty .rr-level-count { opacity: .8; }
+  .rr-level-list .rr-level.is-active {
+    border-color: var(--primary);
+    background: var(--surface-soft);
+    box-shadow: inset 0 0 0 1px var(--primary);
+  }
+  .rr-level-list .rr-level.is-active .rr-level-name::after { content: "  ✓"; color: var(--primary); }
+  .rr-level-list .rr-level.is-active .rr-level-count { color: var(--text); }
+  .rr-level-section h4 { font-size: var(--fs-small); letter-spacing: .04em; }
+
+  .rr-selected-level {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding: 8px 10px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-btn);
+    color: var(--text-muted);
+    font-size: var(--fs-small);
+  }
+  .rr-selected-level[data-selected="true"] {
+    border: 1px solid var(--primary);
+    background: var(--surface-soft);
+    color: var(--text);
+  }
+
+  /* Cada medición: nombre, valor de la IA y corrección profesional, por separado. */
+  .rr-measure { gap: 6px; padding: 8px; }
+  .rr-measure-main .rr-measure-label { font-size: var(--fs-body); font-weight: var(--fw-medium); color: var(--text); }
+  .rr-measure-values { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-2); align-items: end; }
+  .rr-measure-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .rr-measure-cell-label { font-size: var(--fs-micro); color: var(--text-muted); }
+  .rr-measure-ai {
+    font-family: var(--font-mono);
+    font-size: var(--fs-body);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .rr-measure-ai[data-missing] { font-family: inherit; font-style: italic; color: var(--text-muted); }
+  .rr-measure-correction { display: flex; align-items: center; gap: 4px; }
+  .rr-panel .rr-measure input.rr-measure-input { width: 100%; max-width: 92px; }
+  .rr-measure-corrected { font-size: var(--fs-small); color: var(--text-warning-strong); font-variant-numeric: tabular-nums; }
+  .rr-measure-unit { width: auto; font-size: var(--fs-small); }
+  .rr-range { font-size: var(--fs-micro); }
+
+  .rr-measure-group h4 { font-size: var(--fs-small); letter-spacing: .04em; }
+
+  /* Hallazgos */
+  .rr-limits {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--fs-small);
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .rr-disc-research > summary { font-weight: var(--fw-medium); }
+  .rr-disc-block { padding: 6px 10px 2px; }
+  .rr-disc-block + .rr-disc-block { border-top: 1px dashed var(--border); margin-top: 4px; padding-top: 8px; }
+  .rr-disc-block-title { margin: 0 0 4px; font-size: var(--fs-small); font-weight: var(--fw-semibold); color: var(--text); }
+  .rr-disc-level > .rr-note { padding: 0 10px 10px; }
+  .rr-disc-overview-head { font-size: var(--fs-micro); }
+  .rr-disc-overview-head,
+  .rr-disc-level-summary { grid-template-columns: 50px minmax(0, 1fr) 78px; }
+  .rr-disc-level-summary { font-size: var(--fs-small); }
+
+  /* Revisión */
+  .rr-scope-list { margin: 0; padding-left: 18px; font-size: var(--fs-small); line-height: 1.5; color: var(--text); }
+  .rr-panel .rr-field > span { font-size: var(--fs-small); color: var(--text-muted); }
+  .rr-review-footer {
+    position: sticky;
+    bottom: calc(-1 * var(--sp-3));
+    margin: auto calc(-1 * var(--sp-3)) calc(-1 * var(--sp-3));
+    padding: var(--sp-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 12px -8px rgb(0 0 0 / .25);
+    z-index: 4;
+  }
+  .rr-review-action { display: flex; flex-direction: column; gap: 4px; }
+  .rr-review-action > button { width: 100%; }
+
+  /* Contexto y secciones plegables (solo las que agrupan algo pesado) */
+  .rr-facts { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  .rr-fact { display: grid; grid-template-columns: minmax(6.5rem, 34%) minmax(0, 1fr); gap: 8px; align-items: baseline; }
+  .rr-facts dt {
+    margin: 0;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: var(--fw-medium);
+    font-size: var(--fs-small);
+    color: var(--text-muted);
+  }
+  .rr-facts dd { margin: 0; font-size: var(--fs-body); color: var(--text); overflow-wrap: anywhere; }
+  .rr-not-reported { color: var(--text-muted); font-style: italic; }
+
+  .rr-disclosure {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    min-width: 0;
+  }
+  .rr-disclosure > summary {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 8px 10px;
+    cursor: pointer;
+    list-style: none;
+  }
+  .rr-disclosure > summary::-webkit-details-marker { display: none; }
+  .rr-disclosure > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: var(--radius-btn); }
+  .rr-disclosure-title { font-size: var(--fs-body); font-weight: var(--fw-medium); color: var(--text); }
+  .rr-disclosure-title::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--text-muted); }
+  .rr-disclosure[open] > summary .rr-disclosure-title::before { content: "▾"; }
+  .rr-disclosure-hint { padding-left: 1.1em; font-size: var(--fs-small); color: var(--text-muted); }
+  .rr-disclosure[open] > summary { border-bottom: 1px solid var(--border); }
+  .rr-disclosure-body { padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+  .rr-disclosure-body:empty { display: none; }
+
+  @media (max-width: 1179px) {
+    .rr-resize-handle { display: none; }
+  }
 }

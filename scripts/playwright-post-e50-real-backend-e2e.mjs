@@ -76,10 +76,10 @@ async function main() {
   console.log("ok 2 - el caseId real del Study aparece en la página");
 
   // 3. La pestaña "Más" -> abrir "Evolución" y "Asistente" (Stage 79/80/81 features).
-  const moreTab = page.locator("button", { hasText: "Más" }).first();
+  const moreTab = page.locator("button", { hasText: "Contexto" }).first();
   if (await moreTab.count()) {
     await moreTab.click();
-    const evolucion = page.locator("summary", { hasText: "Evolución" }).first();
+    const evolucion = page.locator("summary", { hasText: "Comparación entre estudios" }).first();
     const asistente = page.locator("summary", { hasText: "Asistente" }).first();
     assertTruthy((await evolucion.count()) > 0, "no se encontró la sección 'Evolución'");
     assertTruthy((await asistente.count()) > 0, "no se encontró la sección 'Asistente'");

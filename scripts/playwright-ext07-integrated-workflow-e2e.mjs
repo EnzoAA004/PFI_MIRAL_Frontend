@@ -314,8 +314,8 @@ async function seedBrowserSession(page, cycleToken) {
 }
 
 async function openBackendReportPanel(page) {
-  await page.getByRole("tab", { name: "Más" }).click();
-  await page.locator("summary", { hasText: "Informe / exportación" }).click();
+  await page.getByRole("tab", { name: "Contexto" }).click();
+  await page.locator("summary", { hasText: "Informe y exportación" }).click();
   await page.getByTestId("backend-study-report").waitFor({ timeout: 30000 });
 }
 
