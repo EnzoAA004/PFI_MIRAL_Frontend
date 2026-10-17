@@ -53,6 +53,7 @@ import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Pan
 import { InitialComparisonPanel } from "../features/reading/InitialComparisonPanel";
 import { DualComparisonView } from "../features/reading/DualComparisonView";
 import { ChatPanel } from "../features/reading/ChatPanel";
+import { PreReportEditor } from "../features/prereport/PreReportEditor";
 import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, displayReportStatus, formatReportDelta, formatReportPercent, formatReportValue, reportContractLabel, reportCorrectedMarker, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
 import { EvidenceRegionEditor } from "../features/reading/EvidenceRegionEditor";
 import { NewEvidenceRegionCreator } from "../features/reading/NewEvidenceRegionCreator";
@@ -407,6 +408,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   const [saveMessage, setSaveMessage] = useState("");
   /** El informe queda ofrecido cuando el estudio se finaliza. */
   const [reportReady, setReportReady] = useState(false);
+  /** Editor del preinforme (borrador): se monta encima del visor, que conserva su estado por debajo. */
+  const [preReportOpen, setPreReportOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<ReviewInspectorTab>("results");
   /** Dentro de Resultados: las mediciones de la corrida o sus hallazgos de IA. */
   const [resultsView, setResultsView] = useState<"measurements" | "findings">("measurements");
@@ -2606,6 +2609,21 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
               </details>
 
               <AgentSummary agentDecision={run.aiOutput?.agentDecision ?? studyReview?.aiOutput?.agentDecision ?? run.agentDecision} />
+
+              {/* El preinforme es un borrador aparte: abrirlo no cambia la revisión ni aprueba el estudio. */}
+              <section className="rr-prereport-entry" data-testid="prereport-entry">
+                <h4>Preinforme</h4>
+                <p className="rr-note">Borrador con los resultados de esta corrida y su evidencia visual. No aprueba el estudio ni modifica su revisión.</p>
+                <button
+                  data-testid="prepare-prereport"
+                  disabled={!displayRun.caseId || !run.runId || (resultRows.length === 0 && discDegenerativeSnapshot.findings.length === 0)}
+                  onClick={() => setPreReportOpen(true)}
+                  type="button"
+                >
+                  Preparar preinforme
+                </button>
+                {(resultRows.length === 0 && discDegenerativeSnapshot.findings.length === 0) && <p className="rr-note">Disponible cuando la corrida tenga resultados utilizables.</p>}
+              </section>
             </div>
 
             {/* Pie propio de la revisión: compacto, al final del contenido, sin tapar ningún campo. */}
@@ -3009,6 +3027,9 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
           onSave={() => { void saveStudyMetadata(); }}
           onSubjectRefBlur={() => setMetadataError(subjectRefLocked ? "" : validateSubjectRef(metadataDraft.subjectRef) ?? "")}
         />
+      )}
+      {preReportOpen && displayRun.caseId && run.runId && (
+        <PreReportEditor caseId={displayRun.caseId} onClose={() => setPreReportOpen(false)} runId={run.runId} />
       )}
       {dualReference !== null && displayRun.caseId && (
         <DualComparisonView
