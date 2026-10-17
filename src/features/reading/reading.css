@@ -3504,3 +3504,77 @@
   .rr-dual-seq.is-unknown { font-style: italic; font-weight: normal; }
   .rr-dual-seq-note { margin: 0; padding: 4px 12px; }
 }
+
+@layer components {
+  /* Comparación de hallazgos discales del visor dual. Resaltado moderado y neutral: sin rojo/verde ni alertas. */
+  .rr-dfc { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+  .rr-dfc .rr-note { margin: 0; }
+  .rr-dfc-filters { display: flex; flex-wrap: wrap; gap: 4px; }
+  .rr-dfc-filters button, .rr-dfc-steps button {
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--fs-small);
+    cursor: pointer;
+  }
+  .rr-dfc-filters button.is-on { border-color: var(--primary); font-weight: var(--fw-semibold); }
+  .rr-dfc-steps button:disabled { opacity: .5; cursor: default; }
+  .rr-dfc-steps { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .rr-dfc-steps span { color: var(--text-muted); font-size: var(--fs-small); margin-left: 4px; }
+  .rr-dfc-disc h5 { margin: var(--sp-2) 0 4px; font-size: var(--fs-body); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .rr-dfc-disc h5 small { color: var(--text-muted); font-weight: var(--fw-regular); font-size: var(--fs-micro); }
+  .rr-dfc-rows { display: flex; flex-direction: column; gap: 4px; }
+  .rr-dfc-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--text);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+  .rr-dfc-row.is-changed { background: var(--surface-subtle); border-left-color: var(--border-strong); }
+  .rr-dfc-row.is-noncomparable { border-style: dashed; border-left-style: dashed; color: var(--text-muted); }
+  .rr-dfc-row.is-selected { border-color: var(--primary); border-left-width: 6px; font-weight: var(--fw-semibold); }
+  .rr-dfc-name { grid-column: 1; overflow-wrap: anywhere; }
+  .rr-dfc-tag {
+    margin-left: 6px;
+    padding: 0 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    font-size: var(--fs-micro);
+    font-weight: var(--fw-regular);
+    color: var(--text-muted);
+  }
+  .rr-dfc-values { grid-column: 2; grid-row: 1; display: inline-flex; gap: 6px; align-items: baseline; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .rr-dfc-values i { font-style: normal; color: var(--text-muted); }
+  .rr-dfc-values .is-missing { font-style: italic; color: var(--text-muted); }
+  .rr-dfc-status { grid-column: 1 / -1; font-size: var(--fs-micro); font-weight: var(--fw-regular); color: var(--text-muted); }
+  .rr-dfc-reason { grid-column: 1 / -1; font-size: var(--fs-micro); font-weight: var(--fw-regular); color: var(--text-muted); }
+  .rr-dfc-selected { border: 1px solid var(--primary); border-radius: var(--radius-btn); padding: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); background: var(--surface); }
+  .rr-dfc-selected h5 { margin: 0; font-size: var(--fs-body); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .rr-dfc-selected h5 .rr-dfc-status { grid-column: auto; }
+  .rr-dfc-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+  .rr-dfc-side { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-small); }
+  .rr-dfc-side small, .rr-dfc-side .is-missing { color: var(--text-muted); font-size: var(--fs-micro); }
+  .rr-dfc-side .is-missing { font-style: italic; }
+  .rr-dfc-side-result { font-size: var(--fs-body); font-weight: var(--fw-semibold); }
+  .rr-dfc-distribution summary { cursor: pointer; font-size: var(--fs-small); }
+  .rr-dfc-dist-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); margin-top: 4px; }
+  .rr-dfc-dist-grid ul { list-style: none; margin: 4px 0 0; padding: 0; font-family: var(--font-mono); font-size: var(--fs-small); }
+  .rr-dfc-dist-grid li { display: flex; justify-content: space-between; gap: 8px; }
+  .rr-dfc-dist-grid li.is-reported { font-weight: var(--fw-semibold); }
+  .rr-dfc-research { border-top: 1px dashed var(--border-strong); padding-top: var(--sp-2); }
+  .rr-dfc-research summary { cursor: pointer; font-size: var(--fs-small); color: var(--text-muted); }
+  .rr-dual-findings-originals { border-top: 1px solid var(--border); padding-top: var(--sp-2); }
+  .rr-dual-findings-originals summary { cursor: pointer; font-size: var(--fs-small); color: var(--text-muted); }
+  .rr-dual-note-unavailable, .rr-dual-note-elsewhere { color: var(--text-muted); }
+}

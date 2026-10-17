@@ -58,6 +58,7 @@ export type PlaneViewportProps = {
   onAddLandmark: (point: { x: number; y: number }) => void;
   onLandmarkAddComplete: () => void;
   onOverlayAvailableChange: (available: boolean) => void;
+  onImageFailedChange?: (failed: boolean) => void;
   measureTool: MeasurementKind | null;
   measureDraft: { x: number; y: number }[];
   onMeasurePoint: (point: { x: number; y: number }, frame: { width: number; height: number }, pixels: RawSlicePixels | null) => void;
@@ -108,7 +109,7 @@ export function PlaneViewport({
   plane, caseLabel, seriesName, seriesRoleLabel, sequence, model, spacingLabel,
   slice, active, onActivate, selectedLandmarkId, onSelectLandmark, readonly, measurementsReadonly, addMode,
   subarticularMode, onSubarticularPoint, orientation, pixelSpacingMm,
-  onMoveLandmark, onAddLandmark, onLandmarkAddComplete, onOverlayAvailableChange,
+  onMoveLandmark, onAddLandmark, onLandmarkAddComplete, onOverlayAvailableChange, onImageFailedChange,
   measureTool, measureDraft, onMeasurePoint, onMeasureFreehand, annotations, aiMeasurements, aiMeasurableCount,
   derivedMeasurements, derivedMeasurableCount, referenceLine, referenceLineReason, findingMarker, onMoveMeasurePoint, annotatedIndices, onMoveMaskPoint,
   selectedMeasurementId, highlightedMeasurementId, onSelectMeasurement,
@@ -225,6 +226,7 @@ export function PlaneViewport({
           onLandmarkAddComplete={onLandmarkAddComplete}
           overlayEnabled
           onOverlayAvailableChange={onOverlayAvailableChange}
+          onImageFailedChange={onImageFailedChange}
           slice={slice}
           measureTool={measureTool}
           measureDraft={measureDraft}

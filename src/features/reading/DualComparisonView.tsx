@@ -3,7 +3,16 @@ import type { AiRunResponse, StudyArchiveSeries } from "../../appTypes";
 import type { ComparisonValue, InitialComparisonRow } from "../../contracts/initialAnalysisComparisonTypes";
 import { ComparisonPane } from "./ComparisonPane";
 import { DifferencesPanel } from "./DifferencesPanel";
-import { DualFindingsPanel } from "./DualFindingsPanel";
+import { DualFindingsPanel, findingsSideFor, sagittalSeriesInfoOf } from "./DualFindingsPanel";
+import {
+  compareFindings,
+  defaultFilter,
+  filterRows,
+  resolveRegionOverlay,
+  resolveRegionTarget,
+  type FindingComparisonRow,
+  type FindingsFilter,
+} from "./discFindingsComparison";
 import { useCurrentSide, useReferenceSide, type ComparisonSideState } from "./useComparisonSide";
 import { useInitialComparison } from "./useInitialComparison";
 import {
@@ -69,6 +78,9 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
   const [filter, setFilter] = useState<DifferenceFilter>(NO_FILTER);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [rightTab, setRightTab] = useState<"differences" | "findings">("differences");
+  /* Selección y filtro de la comparación de hallazgos. El filtro `null` es el inicial (cambios si los hay, si no todos). */
+  const [findingKey, setFindingKey] = useState<string | null>(null);
+  const [findingFilterChoice, setFindingFilterChoice] = useState<FindingsFilter | null>(null);
   const [panes, setPanes] = useState<Record<Side, PaneState>>({ reference: INITIAL_PANE, current: INITIAL_PANE });
 
   // La referencia pedida desde la herramienta se resuelve una sola vez al abrir.
@@ -117,6 +129,8 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
   // Cambiar de referencia descarta la selección y el estado del visor de ese lado: es otro estudio.
   useEffect(() => {
     setSelectedKey(null);
+    setFindingKey(null);
+    setFindingFilterChoice(null);
     setPanes((current) => ({ ...current, reference: INITIAL_PANE }));
   }, [referenceCaseId]);
 
@@ -124,6 +138,55 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
   const selectedRow: InitialComparisonRow | null = selectedKey ? rows.find((row) => rowKey(row) === selectedKey) ?? null : null;
 
   const sideStates: Record<Side, ComparisonSideState> = { reference: referenceSide, current: currentSide };
+
+  /*
+   * Comparación de hallazgos P10.7. Se arma solo con lo que cada lado cargó de SU corrida y solo si es el estudio y la
+   * corrida de la comparación: una respuesta tardía de otra referencia queda como «pendiente», nunca se mezcla.
+   */
+  const findingsComparison = useMemo(() => {
+    if (!comparison) return null;
+    return compareFindings(
+      findingsSideFor(referenceSide, { caseId: comparison.reference.caseId, runId: comparison.reference.runId ?? null }),
+      findingsSideFor(currentSide, { caseId: comparison.current.caseId, runId: comparison.current.runId ?? null }),
+    );
+  }, [comparison, currentSide, referenceSide]);
+  const findingFilter: FindingsFilter = findingFilterChoice ?? (findingsComparison ? defaultFilter(findingsComparison) : "all");
+  const selectedFinding: FindingComparisonRow | null = findingKey && findingsComparison
+    ? findingsComparison.rows.find((row) => row.key === findingKey) ?? null
+    : null;
+  const regionTargets = useMemo(() => ({
+    reference: selectedFinding ? resolveRegionTarget(selectedFinding.reference, sagittalSeriesInfoOf(referenceSide)) : null,
+    current: selectedFinding ? resolveRegionTarget(selectedFinding.current, sagittalSeriesInfoOf(currentSide)) : null,
+  }), [currentSide, referenceSide, selectedFinding]);
+
+  /** Abre en cada visor su propia serie y su propio corte de origen. Un lado sin región queda como está y lo dice. */
+  const openFindingRegions = useCallback((row: FindingComparisonRow, only?: Side) => {
+    for (const side of only ? [only] : (["reference", "current"] as const)) {
+      const target = resolveRegionTarget(side === "reference" ? row.reference : row.current, sagittalSeriesInfoOf(side === "reference" ? referenceSide : currentSide));
+      if (target.state !== "ready") continue;
+      setPanes((current) => ({ ...current, [side]: { plane: "sagittal", viewedSeriesId: target.viewedSeriesId, slice: target.sliceIndex } }));
+    }
+  }, [currentSide, referenceSide]);
+
+  const selectFinding = useCallback((key: string | null) => {
+    setFindingKey(key);
+    // Un solo tipo de selección a la vez: la medición y la región no se dibujan juntas.
+    setSelectedKey(null);
+    const row = key && findingsComparison ? findingsComparison.rows.find((item) => item.key === key) : null;
+    if (row) openFindingRegions(row);
+  }, [findingsComparison, openFindingRegions]);
+
+  // Si el filtro oculta el hallazgo seleccionado, la selección se suelta en vez de quedar invisible.
+  useEffect(() => {
+    if (!findingKey || !findingsComparison) return;
+    if (!filterRows(findingsComparison.rows, findingFilter).some((row) => row.key === findingKey)) setFindingKey(null);
+  }, [findingFilter, findingKey, findingsComparison]);
+
+  const regionOverlayOf = (side: Side) => {
+    if (!selectedFinding) return null;
+    const view = paneViewOf(panes[side], sideStates[side]);
+    return resolveRegionOverlay(regionTargets[side], selectedFinding.level, view ? { plane: view.plane, viewedSeriesId: view.viewedSeriesId, slice: view.slice } : null);
+  };
 
   const goTo = useCallback((side: Side, row: InitialComparisonRow) => {
     const value = side === "reference" ? row.reference : row.current;
@@ -134,6 +197,7 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
 
   const select_ = useCallback((key: string | null) => {
     setSelectedKey(key);
+    if (key) setFindingKey(null);
     const row = key ? rows.find((item) => rowKey(item) === key) : null;
     if (!row) return;
     goTo("reference", row);
@@ -232,6 +296,8 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
                 key={side}
                 onChange={(next) => setPanes((current) => ({ ...current, [side]: next }))}
                 onReturn={() => selectedRow && goTo(side, selectedRow)}
+                onReturnRegion={() => selectedFinding && openFindingRegions(selectedFinding, side)}
+                region={regionOverlayOf(side)}
                 overlay={overlayOf[side]}
                 side={side}
                 sideState={sideStates[side]}
@@ -273,8 +339,14 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
               <DualFindingsPanel
                 current={comparison.current}
                 currentState={currentSide}
+                filter={findingFilter}
+                findings={findingsComparison}
+                onFilterChange={setFindingFilterChoice}
+                onSelect={selectFinding}
                 reference={comparison.reference}
                 referenceState={referenceSide}
+                selectedKey={findingKey}
+                targets={regionTargets}
               />
             </div>
           </div>

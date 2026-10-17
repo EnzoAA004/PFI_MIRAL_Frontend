@@ -71,6 +71,12 @@ export type DiscFinding = {
   label: string;
   /** Probabilidad de la etiqueta reportada, 0..1. Ausente si la corrida no la informa. */
   confidence?: number;
+  /**
+   * Valores por clase tal como los devolvió el modelo (clave aditiva `classProbabilities`). Solo se muestran en
+   * la comparación entre estudios, para leer un cambio de clase junto a cómo se distribuyó cada resultado.
+   * Ausente si la corrida no la publica o si no pasa la validación; nunca se reconstruye.
+   */
+  classProbabilities?: Record<string, number>;
   deploymentStatus: DeploymentStatus;
   evaluationDataset: string;
   externalValidationAvailable: boolean;
@@ -103,6 +109,35 @@ function text(value: unknown): string {
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * La distribución por clase, o `undefined` si no viene o no es creíble: claves del catálogo de ese tipo, cada
+ * valor en [0, 1], suma ≈ 1 y, si hay `confidence`, igual al valor de la etiqueta reportada. No se repara nada:
+ * una distribución a medias se leería como una medición que el modelo no hizo.
+ */
+function parseClassProbabilities(
+  raw: unknown,
+  findingType: DiscFindingType,
+  label: string,
+  confidence: number | undefined,
+): Record<string, number> | undefined {
+  const record = asRecord(raw);
+  if (!record) return undefined;
+  const catalog = labelsFor(findingType);
+  const entries = Object.entries(record);
+  if (entries.length === 0) return undefined;
+  const result: Record<string, number> = {};
+  let sum = 0;
+  for (const [key, value] of entries) {
+    const number = finiteNumber(value);
+    if (!catalog.includes(key) || number === null || number < 0 || number > 1) return undefined;
+    result[key] = number;
+    sum += number;
+  }
+  if (Math.abs(sum - 1) > 0.01) return undefined;
+  if (confidence !== undefined && (result[label] === undefined || Math.abs(result[label] - confidence) > 1e-6)) return undefined;
+  return result;
 }
 
 /**
@@ -271,6 +306,7 @@ export function parseDiscFinding(value: unknown): DiscFinding | null {
     level,
     label,
     confidence,
+    classProbabilities: parseClassProbabilities(classification.classProbabilities, findingType, label, confidence),
     deploymentStatus,
     evaluationDataset: text(evidence.evaluationDataset),
     externalValidationAvailable: evidence.externalValidationAvailable,

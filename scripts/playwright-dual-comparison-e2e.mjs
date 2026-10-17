@@ -401,15 +401,17 @@ if (areaRow) {
 // A8. Hallazgos IA: los dos estudios abiertos, cada uno con su procedencia.
 await page.getByTestId("dual-tab-findings").click();
 await page.getByTestId("dual-findings").waitFor();
+// El detalle original de cada estudio queda plegado bajo la comparación: se abre para leerlo.
+await page.getByTestId("dual-findings-originals").locator("> summary").click();
 const findingsRef = await page.getByTestId("dual-findings-reference").innerText();
 const findingsCur = await page.getByTestId("dual-findings-current").innerText();
 assertTruthy(findingsRef.includes(referenceCase) && findingsCur.includes(currentCase), "cada lado muestra su estudio");
 assertTruthy(findingsRef.includes("análisis") && findingsCur.includes("análisis"), "cada lado muestra su corrida");
-assertTruthy(await page.getByTestId("dual-findings").innerText().then((text) => /no compara clasificaciones/.test(text)), "se aclara que no se comparan clasificaciones");
+assertTruthy(await page.getByTestId("dual-findings-comparison").count() === 1, "la vista principal es la comparación por disco y clasificación");
 await shot("05-hallazgos-ia-ambos-estudios");
 await page.getByTestId("dual-tab-differences").click();
 assertEqual(await selectedFigureCount("reference") + await selectedFigureCount("current") >= 0, true, "volver a Diferencias no pierde los visores");
-ok("Hallazgos IA: ambos estudios abiertos con su procedencia, sin comparador automático");
+ok("Hallazgos IA: comparación como vista principal y detalle original de ambos estudios con su procedencia");
 
 // A9. Cambio rápido de referencia con respuestas fuera de orden.
 const options = await page.locator('[data-testid="dual-reference-select"] option').evaluateAll((nodes) => nodes.map((node) => node.value).filter(Boolean));

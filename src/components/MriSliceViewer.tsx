@@ -119,6 +119,8 @@ type Props = {
   overlayEnabled?: boolean;
   overlayOpacity?: number;
   onOverlayAvailableChange?: (available: boolean) => void;
+  /** Avisa si la imagen base de la serie no se pudo cargar, para que quien la usa no ofrezca una marca sobre nada. */
+  onImageFailedChange?: (failed: boolean) => void;
   slice?: SliceNavigation;
   /** Herramienta de medición: activa el trazado de dos puntos sobre la imagen. */
   /** Herramienta de medición activa, o null. Cada tipo pide su cantidad de puntos. */
@@ -361,6 +363,7 @@ export function MriSliceViewer({
   overlayEnabled = true,
   overlayOpacity = initialOverlayOpacity,
   onOverlayAvailableChange,
+  onImageFailedChange,
   slice,
   measureTool = null,
   measureDraft = [],
@@ -644,6 +647,10 @@ export function MriSliceViewer({
   useEffect(() => {
     onOverlayAvailableChange?.(overlayLoaded);
   }, [onOverlayAvailableChange, overlayLoaded]);
+
+  useEffect(() => {
+    onImageFailedChange?.(inputState === "failed");
+  }, [inputState, onImageFailedChange]);
 
   useEffect(() => {
     setFitInitialized(false);

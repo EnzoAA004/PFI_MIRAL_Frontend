@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { API_BASE_URL } from "../../api";
 import type { StudyArchiveSeries } from "../../appTypes";
 import { sequenceOfAnalyzedPlane } from "./planeSeries";
@@ -14,6 +14,7 @@ import { parseSlicePixelsMeta } from "./pixels";
 import type { ComparisonSideState } from "./useComparisonSide";
 import { describeAnalysis, formatStudyDate } from "./initialComparisonDisplay";
 import { clamp, paneViewOf, planeLabel, type PaneState, type Side, type SideOverlay } from "./dualComparisonLogic";
+import type { RegionOverlay } from "./discFindingsComparison";
 
 /**
  * Un lado del visor de comparación: cabecera con la identidad del estudio y de la corrida, y el visor de lectura
@@ -53,9 +54,17 @@ type Props = {
   /** Mediciones de este corte para mostrar atenuadas, si el usuario lo pide. Vacío por defecto. */
   context: MeasurementFigure[];
   onReturn: () => void;
+  /** Región evaluada por el modelo del hallazgo seleccionado en este lado, o `null` si no hay un hallazgo seleccionado. */
+  region?: RegionOverlay | null;
+  onReturnRegion?: () => void;
 };
 
-export function ComparisonPane({ side, summary, sideState, state, onChange, overlay, figureLabel, context, onReturn }: Props) {
+export function ComparisonPane({ side, summary, sideState, state, onChange, overlay, figureLabel, context, onReturn, region: requestedRegion = null, onReturnRegion }: Props) {
+  /* Si la imagen base de la serie no cargó, no se anuncia una región sobre nada: se conserva la comparación textual. */
+  const [imageFailed, setImageFailed] = useState(false);
+  const region: RegionOverlay | null = requestedRegion?.state === "draw" && imageFailed
+    ? { state: "unavailable", reason: "Región no disponible: la imagen de esta serie no se pudo cargar. Se conserva la comparación textual." }
+    : requestedRegion;
   const ready = sideState.status === "ready" ? sideState.data : null;
   const view = useMemo(() => paneViewOf(state, sideState), [state, sideState]);
   const archive = ready && state.viewedSeriesId ? ready.archiveSeries.find((item) => item.inputId === state.viewedSeriesId) ?? null : null;
@@ -220,6 +229,7 @@ export function ComparisonPane({ side, summary, sideState, state, onChange, over
             onMoveLandmark={() => undefined}
             onMoveMaskPoint={() => undefined}
             onMoveMeasurePoint={() => undefined}
+            onImageFailedChange={setImageFailed}
             onOverlayAvailableChange={() => undefined}
             onSelectLandmark={() => undefined}
             onSelectMeasurement={() => undefined}
@@ -230,6 +240,7 @@ export function ComparisonPane({ side, summary, sideState, state, onChange, over
             plane={state.plane}
             readonly
             referenceLine={null}
+            findingMarker={region?.state === "draw" ? region.marker : null}
             referenceLineReason=""
             segmentation={archive ? undefined : segmentation}
             selectedLandmarkId=""
@@ -262,6 +273,25 @@ export function ComparisonPane({ side, summary, sideState, state, onChange, over
           ) : overlay.code === "no_location" && overlay.reason === "No hay una diferencia seleccionada."
             ? null
             : <>No se puede ubicar en este estudio: {overlay.reason}</>}
+        </p>
+      )}
+      {region && (
+        <p
+          className={`rr-dual-note rr-dual-note-${region.state === "draw" ? "draw" : region.state}`}
+          data-region-state={region.state}
+          data-testid={`dual-region-${side}`}
+          role="status"
+        >
+          {region.state === "draw" && "Región evaluada por el modelo (no delimita la lesión)."}
+          {region.state === "elsewhere" && (
+            <>
+              {region.reason}{" "}
+              <button className="rr-link" data-testid={`dual-region-return-${side}`} onClick={onReturnRegion} type="button">
+                Volver a la región seleccionada
+              </button>
+            </>
+          )}
+          {region.state === "unavailable" && region.reason}
         </p>
       )}
       {overlay.state === "draw" && (
