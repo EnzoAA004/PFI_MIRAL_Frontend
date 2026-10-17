@@ -181,13 +181,23 @@ function parseSources(value: unknown): DiscFindingSource[] | null {
   return sources.some((source) => source.available) ? sources : null;
 }
 
-/** Cortes que el modelo miró de una serie, ordenados, para mostrarlos como rango. */
+/**
+ * Cortes que el modelo miró de una serie, ordenados, para mostrarlos como rango.
+ *
+ * `positions` son índices del contrato (base 0, los mismos que usa el visor por dentro). Lo que se
+ * muestra va en base 1, como el contador del visor («8/15»): se convierte solo acá, en la presentación.
+ */
 export function analysedSliceRange(source: DiscFindingSource): string {
   const positions = [...source.positions].sort((a, b) => a - b);
   if (!positions.length) return "";
-  const first = positions[0];
-  const last = positions[positions.length - 1];
+  const first = positions[0] + 1;
+  const last = positions[positions.length - 1] + 1;
   return first === last ? `corte ${first}` : `cortes ${first}-${last}`;
+}
+
+/** Número de corte tal como se muestra (base 1) a partir del índice del contrato (base 0). */
+export function displaySliceNumber(sliceIndex: number): number {
+  return sliceIndex + 1;
 }
 
 /**

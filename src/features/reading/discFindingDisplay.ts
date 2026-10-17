@@ -31,10 +31,19 @@ const DISC_FINDING_VALUE_LABELS: Record<string, string> = {
   absent: "Ausente",
 };
 
-/** Traduce sólo la presentación; el valor contractual permanece intacto. */
-export function displayDiscFindingValue(value: string): string {
+/**
+ * Traduce sólo la presentación; el valor contractual permanece intacto.
+ *
+ * «none» de Modic es una clase que el modelo evaluó y devolvió (no hay cambio Modic), no un dato ausente ni
+ * un nivel sin evaluar: esos se informan aparte («Sin dato»). Por eso se nombra con el tipo de hallazgo, y
+ * un «none» de cualquier otro tipo no se traduce.
+ */
+export function displayDiscFindingValue(value: string, findingType?: DiscFindingType): string {
+  if (findingType === "modic_change" && value === "none") return MODIC_NONE_LABEL;
   return DISC_FINDING_VALUE_LABELS[value] ?? value;
 }
+
+export const MODIC_NONE_LABEL = "Sin cambios Modic detectados";
 
 /**
  * La confianza del hallazgo, con el mismo formato que ya usan las mediciones

@@ -2,6 +2,7 @@ import {
   DISC_FINDING_TYPES,
   DISC_LEVELS,
   analysedSliceRange,
+  displaySliceNumber,
   groupDiscFindingsByLevel,
   preferredRegion,
   type DeploymentStatus,
@@ -74,7 +75,7 @@ function EvaluatedRegion({
           title={DISC_REGION_NOTICE}
         >
           {marked ? "Marcado en el corte " : "Ver en el corte "}
-          {located.region.sliceIndex}
+          {displaySliceNumber(located.region.sliceIndex)}
         </button>
       )}
     </p>
@@ -122,7 +123,7 @@ function FindingRows({
                 {DEPLOYMENT_LABELS[finding.deploymentStatus]}
               </span>
             )}
-            <strong>{displayDiscFindingValue(finding.label)}</strong>
+            <strong>{displayDiscFindingValue(finding.label, finding.findingType)}</strong>
             {/*
               La confianza de la etiqueta reportada, al lado del valor y no en su
               lugar: sigue siendo una clasificación con revisión humana obligatoria,

@@ -26,6 +26,7 @@ const parser = load("src/features/reading/discDegenerativeFindings.ts", [
   "preferredRegion",
   "regionToViewerBase",
   "analysedSliceRange",
+  "displaySliceNumber",
 ]);
 const display = load("src/features/reading/discFindingDisplay.ts", [
   "DISC_FINDING_LABELS",
@@ -36,6 +37,7 @@ const display = load("src/features/reading/discFindingDisplay.ts", [
   "DISC_FINDINGS_NOTICE",
   "displayDiscFindingValue",
   "displayDiscFindingConfidence",
+  "MODIC_NONE_LABEL",
 ]);
 
 let passed = 0;
@@ -272,6 +274,15 @@ check("present y absent cambian solo en display", () => {
   assert.equal(display.displayDiscFindingValue("present"), "Presente");
   assert.equal(display.displayDiscFindingValue("absent"), "Ausente");
   assert.equal(display.displayDiscFindingValue("V"), "V");
+  assert.equal(display.displayDiscFindingValue("II", "modic_change"), "II");
+});
+
+check("Modic «none» se muestra como «Sin cambios Modic detectados» y solo para Modic", () => {
+  assert.equal(display.MODIC_NONE_LABEL, "Sin cambios Modic detectados");
+  assert.equal(display.displayDiscFindingValue("none", "modic_change"), "Sin cambios Modic detectados");
+  assert.equal(display.displayDiscFindingValue("none"), "none");
+  assert.equal(display.displayDiscFindingValue("none", "pfirrmann_grade"), "none");
+  assert.equal(display.displayDiscFindingValue("absent", "modic_change"), "Ausente");
   assert.equal(parser.parseDiscFinding(finding()).label, "present");
 });
 
@@ -457,7 +468,19 @@ check("se prefiere la serie que el visor ya está mostrando", () => {
 check("el rango nombra los tres cortes de la ventana, no uno solo", () => {
   const parsed = parser.parseDiscFinding(located());
   const t2 = parsed.sources.find((source) => source.role === "sagittal_t2");
-  assert.equal(parser.analysedSliceRange(t2), "cortes 7-9");
+  // positions [7,8,9] son índices del contrato (base 0): se muestran en base 1, como el contador del visor.
+  assert.equal(parser.analysedSliceRange(t2), "cortes 8-10");
+});
+
+check("la numeración visible de cortes es base 1 y los índices del contrato no cambian", () => {
+  const parsed = parser.parseDiscFinding(located());
+  const t2 = parsed.sources.find((source) => source.role === "sagittal_t2");
+  assert.deepEqual(t2.positions, [7, 8, 9]);
+  assert.equal(t2.region.sliceIndex, 8);
+  assert.equal(parser.displaySliceNumber(t2.region.sliceIndex), 9);
+  assert.equal(parser.displaySliceNumber(0), 1);
+  assert.equal(parser.analysedSliceRange({ ...t2, positions: [0] }), "corte 1");
+  assert.equal(parser.analysedSliceRange({ ...t2, positions: [] }), "");
 });
 
 check("la región se lleva a la base del visor con la escala de su propia serie", () => {

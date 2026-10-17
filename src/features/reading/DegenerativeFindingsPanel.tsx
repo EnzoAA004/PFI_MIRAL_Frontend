@@ -240,7 +240,7 @@ export function DegenerativeFindingsPanel({
               <span className={`rr-finding-review is-${finding.reviewStatus}`}>
                 {REVIEW_TEXT[finding.reviewStatus]}
               </span>
-              {finding.slicePosition !== null && <span>Corte {finding.slicePosition}</span>}
+              {finding.slicePosition !== null && <span>Corte {finding.slicePosition + 1}</span>}
               {finding.researchOnly && (
                 <span className="rr-finding-scope">Selección manual</span>
               )}
