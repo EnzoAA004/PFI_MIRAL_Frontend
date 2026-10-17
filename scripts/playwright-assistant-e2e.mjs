@@ -110,7 +110,7 @@ try {
   record("2. edad y contexto ausentes (modelo real)", { ok: missing.outcome === "answer", ms: missing.ms, text: missing.text });
   if (missing.outcome === "answer") {
     check("2. no inventa una edad", !/\b\d{2}\s*(años|años)\b/i.test(missing.text), missing.text.slice(0, 220));
-    check("2. dice que no está informado", /no (est[aá] )?informad|no se (informa|registr|dispone)|sin (dato|informaci)/i.test(missing.text), missing.text.slice(0, 220));
+    check("2. dice que no está informado", /no est[aá]n? informad|no se (informa|registr|dispone)|sin (dato|informaci)/i.test(missing.text), missing.text.slice(0, 220));
   }
 
   /* ------------------------------------------------------------------ 3. OSF A/B desde el visor dual */
@@ -182,7 +182,7 @@ try {
     check("5. el error permite reintentar", await page.getByTestId("assistant-error").getByRole("button", { name: "Reintentar" }).count() > 0);
     check("5. el error no expone infraestructura", !/localhost|host\.docker|:1234|http:/i.test(off.text ?? ""));
     await page.screenshot({ path: `${OUT}/06-proveedor-apagado.png` });
-    await exec("lms", ["load", MODEL, "--identifier", MODEL, "-c", "8192", "--gpu", "max", "--parallel", "1", "-y"], { timeout: 170_000 });
+    await exec("lms", ["load", MODEL, "--identifier", MODEL, "-c", "8192", "--gpu", "max", "--parallel", "1", "-y"], { timeout: 170_000 }).catch(() => {});
     await page.getByTestId("assistant-error").getByRole("button", { name: "Reintentar" }).click();
     await page.getByTestId("assistant-message-assistant").last().waitFor({ timeout: ANSWER_TIMEOUT });
     check("5. al volver el proveedor, Reintentar responde", await page.getByTestId("assistant-error").count() === 0);

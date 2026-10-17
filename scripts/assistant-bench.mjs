@@ -58,7 +58,7 @@ async function timed(label, token, path, init) {
   let status = 0;
   let body = null;
   try {
-    const res = await fetch(`${API}${path}`, { ...init, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) } });
+    const res = await fetch(`${API}${path}`, { ...init, headers: { "Content-Type": "application/json", "X-Trace-Id": `assistant-bench-${started}`, Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) } });
     status = res.status;
     body = await res.json().catch(() => null);
   } catch (error) {
