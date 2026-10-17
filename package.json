@@ -70,6 +70,8 @@
     "test:dual-comparison": "node scripts/dual-comparison-tests.mjs",
     "test:dual-findings": "node scripts/dual-findings-comparison-tests.mjs",
     "test:e2e:dual-findings": "node scripts/playwright-dual-findings-e2e.mjs",
+    "demo:dual-findings": "node demo/dual-findings/server.mjs",
+    "test:e2e:demo-dual-findings": "node scripts/playwright-demo-dual-findings-e2e.mjs",
     "test:sequence-declaration": "node scripts/sequence-declaration-tests.mjs",
     "test:viewer-panel": "node scripts/viewer-panel-logic-tests.mjs",
     "test:ux-workspace": "node scripts/ux-reading-workspace-tests.mjs",

@@ -51,6 +51,8 @@ type Props = {
   /** La corrida del análisis inicial que muestra el visor individual. */
   currentRunId: string | null;
   initialReferenceCaseId: string | null;
+  /** Pestaña con la que abre el panel derecho (la demostración de hallazgos abre directamente en «Hallazgos IA»). */
+  initialRightTab?: "differences" | "findings";
   onClose: () => void;
 };
 
@@ -71,13 +73,13 @@ function figureLabel(value: ComparisonValue, unit: string) {
   return `${formatValue(value.effectiveValue)} ${displayUnit(unit)}`.trim();
 }
 
-export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, initialReferenceCaseId, onClose }: Props) {
+export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, initialReferenceCaseId, initialRightTab = "differences", onClose }: Props) {
   const { state, select } = useInitialComparison(caseId, currentRunId);
   const { candidates, comparison } = state;
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [filter, setFilter] = useState<DifferenceFilter>(NO_FILTER);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [rightTab, setRightTab] = useState<"differences" | "findings">("differences");
+  const [rightTab, setRightTab] = useState<"differences" | "findings">(initialRightTab);
   /* Selección y filtro de la comparación de hallazgos. El filtro `null` es el inicial (cambios si los hay, si no todos). */
   const [findingKey, setFindingKey] = useState<string | null>(null);
   const [findingFilterChoice, setFindingFilterChoice] = useState<FindingsFilter | null>(null);

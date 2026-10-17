@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import crypto from "node:crypto";
-import zlib from "node:zlib";
 import { chromium } from "playwright";
+import { createFixtureFactory, finding, syntheticPng } from "./lib/dual-findings-fixtures.mjs";
 
 /**
  * Comparación de hallazgos degenerativos (P10.7) en el visor dual, contra el stack local (8288/8280).
@@ -57,81 +56,9 @@ const templateRuns = await api(`/api/studies/${TEMPLATE_CASE}/runs`, token);
 const templateCandidates = await api("/api/studies/OSF-ID10-V2-T1/initial-analysis-comparison/candidates", token);
 const templateComparison = await api("/api/studies/OSF-ID10-V2-T1/initial-analysis-comparison?referenceCaseId=OSF-ID10-V1-T1", token);
 
-const hex = (seed, length) => crypto.createHash("sha256").update(seed).digest("hex").slice(0, length);
-
-/** Un estudio de fixture: la estructura del estudio real con otros identificadores, y los hallazgos que se le pasen. */
-function makeStudy({ caseId, findings, patient = "FXDF-PACIENTE" }) {
-  const ids = {
-    runId: `multi-fx${hex(`${caseId}-run`, 18)}`,
-    sagittalRun: hex(`${caseId}-sag`, 16),
-    axialRun: hex(`${caseId}-ax`, 16),
-    t2: `inp_${hex(`${caseId}-t2`, 32)}`,
-    t1: `inp_${hex(`${caseId}-t1`, 32)}`,
-    axT2: `inp_${hex(`${caseId}-axt2`, 32)}`,
-    axT1: `inp_${hex(`${caseId}-axt1`, 32)}`,
-  };
-  const swap = (value) => {
-    let text = JSON.stringify(value);
-    const map = [
-      [TEMPLATE_CASE, caseId], ["MENDELEY-0015", patient],
-      ["multi-38f0a06917542db52358", ids.runId], ["d4ab637fe9d3146f", ids.sagittalRun], ["8d0be911b5b4a121", ids.axialRun],
-      ["inp_40733d7921bd4fbe9a544366fdedbcf7", ids.t2], ["inp_7404268627a44462976c90c0258e1bda", ids.t1],
-      ["inp_e4f4561ace8b42d7b68f9ba2fdd642dd", ids.axT2], ["inp_6151a667e9ab4e40b930db95a58c99d6", ids.axT1],
-    ];
-    for (const [from, to] of map) text = text.split(from).join(to);
-    return JSON.parse(text);
-  };
-  const setFindings = (run) => {
-    const snapshot = run.metricsSnapshot;
-    if (findings === null) {
-      delete snapshot.discDegenerativeFindings;
-      delete snapshot.discDegenerativeGovernance;
-    } else {
-      snapshot.discDegenerativeFindings = { schemaVersion: "pfi.disc-degenerative-findings.v1", findings: findings(ids) };
-    }
-  };
-  const detail = swap(templateDetail);
-  detail.runs.forEach(setFindings);
-  const runs = swap(templateRuns);
-  runs.runs.forEach(setFindings);
-  return { caseId, ids, detail, runs };
-}
-
-/** Un hallazgo con el contrato público; `ids` son los de SU estudio, así que las regiones nunca se comparten. */
-function finding(ids, {
-  level = "L4-L5", type = "disc_bulging", label = "absent", probs, region = "t2", slice = 4, status, sha, modelId, dataset, roles = ["t1", "t2"],
-}) {
-  const binary = !["pfirrmann_grade", "modic_change"].includes(type);
-  const catalog = type === "pfirrmann_grade" ? ["I", "II", "III", "IV", "V"] : type === "modic_change" ? ["none", "I", "II", "III"] : ["absent", "present"];
-  const support = { pfirrmann_grade: "experimental", modic_change: "not_product_supported", disc_herniation: "not_product_supported", spondylolisthesis: "not_product_supported" };
-  const distribution = probs ?? Object.fromEntries(catalog.map((item) => [item, item === label ? 0.7 : 0.3 / (catalog.length - 1)]));
-  const sources = roles.map((role) => {
-    const input = role === "t1" ? ids.t1 : ids.t2;
-    const space = role === "t1" ? 320 : 384;
-    const entry = { role: role === "t1" ? "sagittal_t1" : "sagittal_t2", available: true, positions: [slice - 1, slice, slice + 1] };
-    const wantsRegion = region === "both" || region === role;
-    if (wantsRegion) {
-      Object.assign(entry, {
-        inputId: input, sliceIndex: slice, pointYx: [space * 0.45, space * 0.5], bboxYx: [space * 0.38, space * 0.52, space * 0.35, space * 0.65],
-        coordinateSpaceHeight: space, coordinateSpaceWidth: space,
-      });
-    }
-    return entry;
-  });
-  return {
-    findingId: crypto.randomUUID(),
-    findingType: type,
-    anatomy: { level },
-    classification: { kind: binary ? "binary" : "categorical", label, confidence: distribution[label], classProbabilities: distribution },
-    evidence: { deploymentStatus: status ?? support[type] ?? "supported_internal", evaluationDataset: dataset ?? "SPIDER_internal_test", externalValidationAvailable: false },
-    evaluation: { status: "evaluated" },
-    localization: { source: "segmentation_derived_disc_level", researchOnly: true, automaticAnatomicalLocalizationValidated: false },
-    model: { modelId: modelId ?? "spider_degenerative_multitask_sagittal_t1_t2_2p5d", modelSha256: sha ?? "16eccff327e6794b127fe372ecd03ea619a0f69d939b84ae1aa2e904191c6293" },
-    review: { required: true, status: "pending" },
-    notClinicalDiagnosis: true,
-    sourceSeries: sources,
-  };
-}
+const { makeStudy, comparisonFor, candidatesFor } = createFixtureFactory({
+  templateCase: TEMPLATE_CASE, detail: templateDetail, runs: templateRuns, candidates: templateCandidates, comparison: templateComparison,
+});
 
 /* Escenario principal: cambios de todas las clases, una fila sin par, investigación aparte. */
 const studyA = makeStudy({
@@ -173,9 +100,13 @@ const studyNoData = makeStudy({ caseId: "FXDF-NODATA", findings: null });
 const studyInvalid = makeStudy({
   caseId: "FXDF-INVALID",
   findings: (ids) => {
-    const broken = finding(ids, { level: "L4-L5", label: "present", slice: 8 });
-    broken.sourceSeries[0].bboxYx = [999, 1, 1, 1]; // región inválida: el resultado entero se descarta
-    return [broken];
+    // Región inválida en una clasificación válida: se conserva la clasificación, sin localización.
+    const brokenRegion = finding(ids, { level: "L4-L5", label: "present", slice: 8 });
+    brokenRegion.sourceSeries[1].bboxYx = [999, 1, 1, 1];
+    // Clasificación inválida (clase que no existe): queda como no comparable.
+    const brokenClass = finding(ids, { level: "L3-L4", type: "disc_narrowing", label: "absent", slice: 8 });
+    brokenClass.classification.label = "severe";
+    return [brokenRegion, finding(ids, { level: "L5-S1", label: "absent", slice: 8 }), brokenClass];
   },
 });
 const studyC = makeStudy({
@@ -187,65 +118,6 @@ const STUDIES = new Map([studyA, studyB, studyNoRegion, studyOtherModel, studyNo
 const knownIds = new Set();
 for (const study of STUDIES.values()) for (const value of Object.values(study.ids)) knownIds.add(value);
 
-function sideSummary(study, template) {
-  const copy = JSON.parse(JSON.stringify(template));
-  copy.caseId = study.caseId;
-  copy.runId = study.ids.runId;
-  return copy;
-}
-function comparisonFor(current, reference) {
-  const body = JSON.parse(JSON.stringify(templateComparison));
-  body.current = { ...body.current, caseId: current.caseId, runId: current.ids.runId };
-  body.reference = { ...body.reference, caseId: reference.caseId, runId: reference.ids.runId };
-  body.comparisons = [];
-  body.excluded = [];
-  body.summary = { ...body.summary, comparedCount: 0, excludedCount: 0 };
-  return body;
-}
-function candidatesFor(current, references) {
-  const body = JSON.parse(JSON.stringify(templateCandidates));
-  body.current = { ...body.current, caseId: current.caseId, runId: current.ids.runId };
-  const base = templateCandidates.candidates[0];
-  body.candidates = references.map((reference) => ({ ...base, caseId: reference.caseId, runId: reference.ids.runId }));
-  return body;
-}
-
-/* ------------------------------------------------------------------------------------------ PNG sintético */
-
-function crc32(buffer) {
-  let crc = ~0;
-  for (const byte of buffer) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-  }
-  return ~crc >>> 0;
-}
-function chunk(type, data) {
-  const length = Buffer.alloc(4);
-  length.writeUInt32BE(data.length);
-  const body = Buffer.concat([Buffer.from(type), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body));
-  return Buffer.concat([length, body, crc]);
-}
-function syntheticPng(size = 128) {
-  const raw = Buffer.alloc((size * 3 + 1) * size);
-  for (let y = 0; y < size; y += 1) {
-    const row = y * (size * 3 + 1);
-    for (let x = 0; x < size; x += 1) {
-      const value = 70 + Math.round(50 * Math.sin(x / 9) * Math.cos(y / 11)) + (x === size / 2 ? 40 : 0);
-      raw[row + 1 + x * 3] = value;
-      raw[row + 2 + x * 3] = value;
-      raw[row + 3 + x * 3] = value;
-    }
-  }
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(size, 0);
-  header.writeUInt32BE(size, 4);
-  header[8] = 8;
-  header[9] = 2;
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
-}
 const PNG = syntheticPng();
 
 /* ------------------------------------------------------------------------------------------ navegador */
@@ -550,14 +422,22 @@ async function counts(page) {
   assertEqual(await page.locator('[data-testid="dual-finding-row"]:not([data-status="not_comparable"])').count(), 0, "todas no comparables");
   ok("un lado sin hallazgos persistidos hace no comparables todas las filas");
 
-  // Contrato inválido en un lado: no se muestra nada parcial.
+  // Región inválida: no elimina resultados válidos ni afecta a los demás discos. Clasificación inválida: no comparable.
   await page.getByTestId("dual-reference-select").selectOption("FXDF-INVALID");
   await page.waitForTimeout(1800);
   await page.getByTestId("dual-findings-filter-all").click();
-  const invalid = clean(await page.getByTestId("dual-findings-comparison").innerText());
-  assertTruthy(/no cumplen el contrato/.test(invalid), "contrato inválido informado");
-  assertEqual(await page.locator('[data-testid="dual-finding-row"]:not([data-status="not_comparable"])').count(), 0, "nada parcial");
-  ok("una región inválida invalida el resultado de ese lado y se informa, sin mostrar nada parcial");
+  assertEqual(await rowByKey(page, "L4-L5|disc_bulging").getAttribute("data-status"), "unchanged", "la clasificación con región inválida se compara igual (presente en ambos)");
+  assertEqual(await rowByKey(page, "L5-S1|disc_bulging").getAttribute("data-status"), "unchanged", "otro disco sigue comparable");
+  const badClass = rowByKey(page, "L3-L4|disc_narrowing");
+  assertEqual(await badClass.getAttribute("data-status"), "not_comparable", "clasificación inválida: no comparable");
+  const badValues = clean(await badClass.getByTestId("dual-finding-values").innerText());
+  assertTruthy(/Resultado inválido/.test(badValues) && !/Ausente/.test(badValues), `el valor se muestra como inválido, nunca como «Ausente» (${badValues})`);
+  await rowByKey(page, "L4-L5|disc_bulging").click();
+  const brokenRegionText = clean(await page.getByTestId("dual-finding-region-reference").innerText());
+  assertTruthy(/Región no disponible: la corrida guardó una región inválida/.test(brokenRegionText), `región inválida con su motivo (${brokenRegionText})`);
+  assertEqual(await page.getByTestId("dual-region-reference").getAttribute("data-region-state"), "unavailable", "el visor de ese lado lo dice");
+  assertTruthy(!/Región no disponible/.test(clean(await page.getByTestId("dual-finding-region-current").innerText())), "el otro lado conserva su región");
+  ok("una región inválida conserva la clasificación (sin localización y con el motivo) y no afecta a otros discos; una clasificación inválida queda como no comparable");
   await context.close();
 }
 

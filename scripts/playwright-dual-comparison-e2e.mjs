@@ -1,6 +1,13 @@
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import { chromium } from "playwright";
+import {
+  correctionCountOf,
+  createIsolatedCorrectionCase,
+  latestRunIdOf,
+  persistedAiValueOf,
+  persistedCorrectionOf,
+} from "./lib/isolated-correction-case.mjs";
 
 /**
  * Comparación visual entre estudios (visor dual) contra el stack local (8288/8280).
@@ -8,13 +15,18 @@ import { chromium } from "playwright";
  *   node scripts/playwright-dual-comparison-e2e.mjs
  *
  * Variables: VIEWER_URL, API_URL (http://localhost:8280), SIZE (1366x768), THEME (light|dark), CURRENT_CASE
- * (CMP-SYN-B), REFERENCE_CASE (CMP-SYN-A), ISO_CASE (CMPISO-3646313: caso aislado con una corrección profesional
- * persistida en la altura discal L4-L5), OTHER_PATIENT_CASE (SYN-A-058332: estudio de OTRO paciente), SHOTS_DIR.
+ * (CMP-SYN-B), REFERENCE_CASE (CMP-SYN-A), ISO_CASE (opcional: reutiliza un caso aislado ya creado; si no se da, la
+ * prueba CREA el suyo, DUALISO-<n>, con una corrección profesional en la altura discal L4-L5), OTHER_PATIENT_CASE
+ * (SYN-A-058332: estudio de OTRO paciente), ISO_ZIP (ZIP sintético), SHOTS_DIR.
  *
  * Parte A (datos reales, solo lectura): CMP-SYN-B abierto frente a CMP-SYN-A. Los dos salen del MISMO archivo, así
  * que todas sus diferencias son cero: prueba el funcionamiento técnico del visor, no evolución clínica.
- * Parte B (datos reales, solo lectura): el caso aislado frente a CMP-SYN-A. Su única diferencia distinta de cero
- * es una corrección profesional guardada, no un cambio anatómico.
+ * Parte B (caso propio de la prueba): antes de empezar, y en un contexto de navegador aparte, la prueba crea su caso
+ * aislado por «Nuevo estudio» (ZIP sintético, análisis inicial real) y guarda la corrección con «Guardar borrador».
+ * Verifica la persistencia en la base y tras recargar, y que el comparador use esa corrección en la corrida del caso.
+ * Después, ya en modo solo lectura, lo compara con CMP-SYN-A: su única diferencia distinta de cero es una corrección
+ * profesional guardada, no un cambio anatómico. La prueba no depende de ningún estudio que otra persona haya dejado
+ * en la base ni modifica estudios existentes; el caso que crea queda en 8288 (es suyo).
  * Parte C (SIMULADA en el navegador con page.route; no se escribe nada): ubicación ausente, corrida distinta,
  * fallo de carga de un estudio o de una imagen. El stack real no produce esas situaciones.
  *
@@ -27,7 +39,10 @@ const [width, height] = (process.env.SIZE ?? "1366x768").split("x").map(Number);
 const theme = process.env.THEME ?? "light";
 const currentCase = process.env.CURRENT_CASE ?? "CMP-SYN-B";
 const referenceCase = process.env.REFERENCE_CASE ?? "CMP-SYN-A";
-const isoCase = process.env.ISO_CASE ?? "CMPISO-3646313";
+const isoCaseGiven = process.env.ISO_CASE ?? null;
+const isoCase = isoCaseGiven ?? `DUALISO-${Date.now().toString().slice(-7)}`;
+const isoZip = process.env.ISO_ZIP ?? undefined;
+const ISO_CORRECTED = 7.3;
 const otherPatientCase = process.env.OTHER_PATIENT_CASE ?? "SYN-A-058332";
 const shotsDir = process.env.SHOTS_DIR;
 const dbCheck = process.env.DB_CHECK !== "0";
@@ -90,6 +105,34 @@ function persistedCorrection(caseId, measurementId) {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const browser = await chromium.launch({ headless: true });
+
+/* ---- Parte 0: caso propio con su corrección, en un contexto aparte (las escrituras no cuentan en la ejecución de solo lectura) ---- */
+let isoCreated = null;
+if (!isoCaseGiven) {
+  const setupContext = await browser.newContext({ viewport: { width, height } });
+  const setupPage = await setupContext.newPage();
+  const setupMutations = [];
+  setupContext.on("request", (request) => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) setupMutations.push(`${request.method()} ${request.url().replace(/^https?:\/\/[^/]+/, "")}`);
+  });
+  await setupPage.goto(`${viewerUrl}/`, { waitUntil: "networkidle" });
+  const setupDemo = setupPage.getByRole("button", { name: /Entrar con doctor demo/ });
+  if (await setupDemo.count()) await setupDemo.click();
+  await setupPage.getByRole("button", { name: "Nuevo estudio" }).waitFor();
+  isoCreated = await createIsolatedCorrectionCase(setupPage, { caseId: isoCase, corrected: ISO_CORRECTED, mutations: setupMutations, studyZip: isoZip });
+  assertEqual(correctionCountOf(isoCase), 1, "la corrección quedó persistida en la base (una fila)");
+  assertEqual(Number(persistedCorrectionOf(isoCase).value), ISO_CORRECTED, "la corrección persistida es el valor guardado");
+  assertEqual(persistedAiValueOf(isoCase), isoCreated.original, "el valor de la IA sigue intacto en el snapshot de la corrida");
+  // Persistencia tras recargar: la corrección vuelve a la tabla de mediciones desde la base.
+  await setupPage.goto(`${viewerUrl}/estudio/${isoCase}`, { waitUntil: "networkidle" });
+  await setupPage.locator("aside.rr-panel").waitFor({ timeout: 60000 });
+  await setupPage.waitForTimeout(3000);
+  await setupPage.locator(".rr-level", { hasText: "L4-L5" }).first().click();
+  const reloadedRow = setupPage.locator(".rr-measure", { hasText: "Altura discal" }).first();
+  assertEqual(await reloadedRow.locator(".rr-measure-input").inputValue(), String(ISO_CORRECTED), "tras recargar, la tabla muestra la corrección persistida");
+  await setupContext.close();
+  ok(`caso propio ${isoCase} creado por «Nuevo estudio» con su corrección ${ISO_CORRECTED} (IA ${isoCreated.original}): persistida en la base y restaurada tras recargar`);
+}
 const context = await browser.newContext({ viewport: { width, height } });
 await context.addInitScript((value) => { try { localStorage.setItem("pfi.theme", value); } catch { /* sin almacenamiento */ } }, theme);
 const page = await context.newPage();
@@ -470,8 +513,8 @@ ok("el Backend real rechaza otro paciente (404), estudio inexistente, comparaci�
 /* B. Datos reales: caso aislado con una corrección profesional frente a CMP-SYN-A               */
 /* =========================================================================================== */
 
-const hasIso = dbCheck ? sql(`select count(*) from domain_studies where case_id='${isoCase}'`) !== "0" : true;
-if (hasIso) {
+assertEqual(sql(`select count(*) from domain_studies where case_id='${isoCase}'`), "1", `existe el caso aislado ${isoCase}`);
+{
   await backToWorklist();
   await openStudy(isoCase);
   await openDualFromTool(referenceCase);
@@ -481,18 +524,28 @@ if (hasIso) {
   const diff = diffRows[0];
   const diffKey = rowKeyOf(diff);
   assertTruthy(diff.current.corrected && !diff.reference.corrected, "la diferencia viene de una corrección profesional del estudio actual");
+  // El comparador usa la corrección EN LA CORRIDA de este caso: la corrida comparada es la del caso y la corrección está ligada a ella.
+  assertEqual(iso.current.runId, latestRunIdOf(isoCase), "el comparador usa la corrida más reciente del caso aislado");
+  assertEqual(sql(`select count(*) from domain_review_corrections c join domain_study_runs r on r.id=c.study_run_id where r.multiplanar_run_id='${iso.current.runId}' and c.measurement_id='${diff.current.measurementId}'`), "1", "la corrección persistida pertenece a la corrida que compara");
+  assertEqual(Number(diff.current.effectiveValue), ISO_CORRECTED, "el valor efectivo del comparador es la corrección");
   await rowLocator(diffKey).click();
   await page.waitForTimeout(1500);
 
   const summary = await page.getByTestId("dual-selected").innerText();
-  assertTruthy(summary.includes("5.79") && summary.includes("7.30") && summary.includes("+1.51") && summary.includes("26.1"), `valores y diferencia exactos (${summary.replace(/\n/g, " ")})`);
+  const referenceAi = persistedAiValueOf(referenceCase, diff.reference.measurementId);
+  const expectedDelta = Math.round((ISO_CORRECTED - referenceAi) * 100) / 100;
+  const expectedPercent = ((ISO_CORRECTED - referenceAi) / referenceAi * 100).toFixed(1);
+  assertTruthy(
+    summary.includes(isoCreated?.original?.toFixed(2) ?? "") && summary.includes(ISO_CORRECTED.toFixed(2)) && summary.includes(`+${expectedDelta.toFixed(2)}`) && summary.includes(expectedPercent),
+    `valores y diferencia exactos: IA ${isoCreated?.original}, corregido ${ISO_CORRECTED}, +${expectedDelta.toFixed(2)} mm, ${expectedPercent} % (${summary.replace(/\n/g, " ")})`,
+  );
   assertTruthy(summary.includes("corregido"), "se marca la procedencia profesional");
   assertTruthy(await rowLocator(diffKey).innerText().then((text) => text.includes("corregido")), "la fila indica la corrección");
 
   if (dbCheck) {
-    assertEqual(persistedValue(isoCase, diff.current.measurementId), 5.79, "el original de la IA sigue en el snapshot");
+    assertEqual(persistedValue(isoCase, diff.current.measurementId), isoCreated?.original ?? persistedAiValueOf(isoCase, diff.current.measurementId), "el original de la IA sigue en el snapshot");
     const correction = persistedCorrection(isoCase, diff.current.measurementId);
-    assertEqual(Number(correction.value), 7.3, "la corrección persistida es 7,3");
+    assertEqual(Number(correction.value), ISO_CORRECTED, "la corrección persistida es el valor guardado");
     const aiPoints = persistedPoints(isoCase, diff.current.measurementId);
     const savedPoints = correction.points ?? null;
     const moved = savedPoints && !same(savedPoints, aiPoints);
@@ -507,7 +560,7 @@ if (hasIso) {
     assertTruthy(Math.abs(length - expectedLength) < 0.01, "el trazo no se alargó para coincidir con el valor corregido");
   }
   await shot("08-correccion-profesional-sin-nueva-geometria");
-  ok("corrección profesional: valor corregido y original consultables, mismo trazo persistido (sin geometría nueva) y diferencia +1,51 mm / +26,1 %");
+  ok("corrección profesional: valor corregido y original consultables, mismo trazo persistido (sin geometría nueva) y diferencia calculada contra la base");
 
   // Filtros con una diferencia real distinta de cero.
   await page.getByTestId("dual-filter-nonzero").check();
@@ -522,14 +575,17 @@ if (hasIso) {
   await page.getByTestId("dual-filter-minimums-toggle").click();
   const metricKey = `${diff.structure}.${diff.metric}`;
   const input = page.locator(`[data-testid="dual-filter-minimums"] input[data-metric="${metricKey}"]`);
-  await input.fill("1,51");
-  assertEqual((await visibleKeys()).length, 1, "límite exacto: 1,51 deja pasar una diferencia de exactamente 1,51");
-  await input.fill("1,52");
+  const exact = expectedDelta.toFixed(2).replace(".", ",");
+  const above = (expectedDelta + 0.01).toFixed(2).replace(".", ",");
+  await input.fill(exact);
+  assertEqual((await visibleKeys()).length, 1, `límite exacto: ${exact} deja pasar una diferencia de exactamente ${exact}`);
+  await input.fill(above);
   await page.getByTestId("dual-empty").waitFor();
-  assertTruthy((await page.getByTestId("dual-empty").innerText()).includes("No hay diferencias que cumplan el filtro"), "1,52 no la deja pasar");
+  assertTruthy((await page.getByTestId("dual-empty").innerText()).includes("No hay diferencias que cumplan el filtro"), `${above} no la deja pasar`);
   assertEqual(await selectedFigureCount("current"), 0, "al ocultarse la fila seleccionada se suelta la selección y no queda su trazo");
-  await input.fill("1,5");
-  assertEqual((await visibleKeys()).length, 1, "1,5 la deja pasar");
+  const below = (Math.floor(expectedDelta * 10) / 10).toString().replace(".", ",");
+  await input.fill(below);
+  assertEqual((await visibleKeys()).length, 1, `${below} la deja pasar`);
   // Un umbral grande en otra métrica (otra unidad) no la oculta.
   await input.fill("");
   const angleInput = page.locator('[data-testid="dual-filter-minimums"] input[data-metric*="angle"]');
@@ -540,14 +596,12 @@ if (hasIso) {
   }
   await page.getByTestId("dual-filter-reset").click();
   assertEqual((await visibleKeys()).length, iso.comparisons.length, "restablecer devuelve todas las filas");
-  ok("filtros con diferencia real: solo distintas de cero, límite inclusivo exacto (1,51/1,52), unidades independientes y restablecer");
+  ok("filtros con diferencia real: solo distintas de cero, límite inclusivo exacto, unidades independientes y restablecer");
 
   // Selección con otra referencia se limpia; inversión de roles no aplica (el actual es el abierto).
   await closeDual();
   assertEqual(nonLoginMutations().length, 0, "parte B sin escrituras");
   ok("la parte B no escribió nada");
-} else {
-  ok("(omitida) no existe el caso aislado: la parte B requiere RUN_ISOLATED de la comparación de mediciones");
 }
 
 /* =========================================================================================== */
