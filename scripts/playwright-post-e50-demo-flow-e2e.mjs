@@ -1,4 +1,6 @@
 import { chromium } from "playwright";
+import { suspendedForRetiredTools } from "./lib/retired-tools.mjs";
+suspendedForRetiredTools("playwright-post-e50-demo-flow-e2e.mjs", ["demo", "report"]);
 
 const frontendUrl = process.env.POST_E50_FRONTEND_URL ?? "http://localhost:8188";
 const backendUrl = process.env.POST_E50_BACKEND_URL ?? "http://localhost:8180";

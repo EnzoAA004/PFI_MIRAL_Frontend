@@ -1,4 +1,6 @@
 import { chromium } from "playwright";
+import { suspendedForRetiredTools } from "./lib/retired-tools.mjs";
+suspendedForRetiredTools("playwright-post-e50-real-backend-e2e.mjs", ["assistant"]);
 
 /**
  * Stage 81-F: the first Post-E50 browser E2E run against a REAL running stack -- real Frontend

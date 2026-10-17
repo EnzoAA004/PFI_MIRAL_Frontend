@@ -275,11 +275,14 @@ await page.waitForTimeout(800);
 const consulted = getRequests.slice(getsBeforeIndex).filter((path) => /report|longitudinal|chat|feedback|concordance|product-analyses|\/subjects|audit/.test(path));
 assertTruthy(consulted.length === 0, `abrir el índice no consulta herramientas: ${consulted.join(", ")}`);
 const groupTitles = await page.locator(".rr-tools-group > h3").allInnerTexts();
-assertTruthy(JSON.stringify(groupTitles) === JSON.stringify(["Seguimiento del paciente", "Informe y consulta", "Evidencia y trazabilidad", "Inspección técnica", "Análisis de demostración"]), `grupos: ${groupTitles}`);
+assertTruthy(JSON.stringify(groupTitles) === JSON.stringify(["Seguimiento del paciente"]), `solo el grupo de seguimiento, sin encabezados vacíos: ${groupTitles}`);
 const itemTitles = await page.locator(".rr-tool-item-title").allInnerTexts();
-assertTruthy(itemTitles.length === 10, `diez herramientas: ${itemTitles.length}`);
+assertTruthy(JSON.stringify(itemTitles) === JSON.stringify(["Historial del paciente", "Comparación entre estudios"]), `solo historial y comparación: ${itemTitles}`);
+for (const retired of ["report", "assistant", "concordance", "feedback", "audit", "three-d", "technical", "demo"]) {
+  assertTruthy((await page.locator(`[data-tool-id="${retired}"]`).count()) === 0, `la herramienta retirada ${retired} no tiene acceso`);
+}
+assertTruthy(!/Informe|Asistente|Evidencia y trazabilidad|Inspección técnica|Análisis de demostración|Concordancia|Feedback|Auditoría|Reconstrucción 3D|Detalles técnicos/.test(await page.getByTestId("tools-index").innerText()), "el índice no menciona las herramientas retiradas");
 assertTruthy((await page.locator(".rr-tool-view").count()) === 0, "ninguna herramienta está montada al abrir el índice");
-assertTruthy(await page.locator('[data-tool-id="report"] .rr-tool-item-provenance').isVisible(), "la procedencia se ve en el índice");
 assertTruthy((await page.locator('[data-tool-id="comparison"] .rr-tool-item-provenance').count()) === 0, "la comparación ya no advierte que usa el análisis de demostración");
 assertTruthy((await page.getByRole("tab", { selected: true }).count()) === 0, "con las herramientas abiertas ninguna pestaña figura activa");
 await checkLayout("índice de herramientas");
@@ -292,36 +295,14 @@ assertTruthy(await historyView.getByRole("heading", { name: "Historial del pacie
 await historyView.getByRole("button", { name: /Herramientas del estudio/ }).click();
 assertTruthy(await page.getByTestId("tools-index").isVisible(), "regreso al índice");
 assertTruthy(await page.evaluate(() => document.activeElement?.getAttribute("data-tool-id") === "history"), "el foco vuelve al elemento que se abrió");
-const getsBeforeReport = getRequests.length;
-await page.locator('[data-tool-id="report"]').click();
-await page.getByTestId("report-source-note").waitFor();
-await page.waitForTimeout(1200);
-assertTruthy(getRequests.slice(getsBeforeReport).some((path) => /\/report$/.test(path)), "recién al elegir el informe se consulta");
-assertTruthy(/análisis de demostración registrado/.test(await page.getByTestId("report-source-note").innerText()), "declara su fuente");
-await shot("10-herramienta-informe");
-await page.locator('.rr-tool-view[data-tool="report"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
 await page.locator('[data-tool-id="comparison"]').click();
 assertTruthy(/análisis inicial real/.test(await page.getByTestId("comparison-source-note").innerText()) && /No usa el análisis de demostración/.test(await page.getByTestId("comparison-source-note").innerText()), "la comparación declara que usa el análisis inicial real");
 await page.locator('.rr-tool-view[data-tool="comparison"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
-await page.locator('[data-tool-id="assistant"]').click();
-assertTruthy(/No recibe las mediciones del visor ni el contexto clínico/.test(await page.getByTestId("assistant-source-note").innerText()), "el asistente declara su fuente");
-await page.locator('.rr-tool-view[data-tool="assistant"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
-await page.locator('[data-tool-id="demo"]').click();
-await page.getByTestId("demo-analysis-notice").waitFor();
-assertTruthy(/No corresponden al análisis real/.test(await page.getByTestId("demo-analysis-notice").innerText()), "demostración identificada");
-assertTruthy((await page.locator('.rr-tool-view[data-tool="demo"]').getByRole("button", { name: /Analizar estudio|Reanalizar|Reintentar/ }).count()) === 0, "sin disparador de corridas");
-await shot("11-herramienta-demostracion");
-await page.locator('.rr-tool-view[data-tool="demo"]').getByRole("button", { name: /Herramientas del estudio/ }).click();
-for (const id of ["concordance", "feedback", "audit", "three-d", "technical"]) {
-  await page.locator(`[data-tool-id="${id}"]`).click();
-  assertTruthy(await page.locator(`.rr-tool-view[data-tool="${id}"]`).isVisible(), `herramienta ${id}`);
-  await page.locator(`.rr-tool-view[data-tool="${id}"]`).getByRole("button", { name: /Herramientas del estudio/ }).click();
-}
 await page.waitForTimeout(600);
 assertTruthy(analysisPosts().length === 0 && nonLoginMutations().length === 0, `ningún POST al navegar herramientas: ${nonLoginMutations().join(", ")}`);
 await page.getByRole("tab", { name: "Resultados" }).click();
 assertTruthy(await page.getByTestId("tools-index").isHidden() && await page.getByRole("tab", { name: "Resultados", selected: true }).isVisible(), "elegir una pestaña cierra las herramientas");
-ok("índice de herramientas: 10 funciones agrupadas, una por vez, regreso al índice con foco, sin consultas al abrirlo y sin POST");
+ok("índice de herramientas: solo historial y comparación, sin accesos a las retiradas ni encabezados vacíos, una por vez, regreso al índice con foco, sin consultas al abrirlo y sin POST");
 
 // A10. cambiar pestaña, vista, herramienta y ancho no pierde estado ni recarga imágenes
 await page.getByRole("tab", { name: "Revisión" }).click();
@@ -333,7 +314,7 @@ if ((await page.getByTestId("level-header").count()) === 0) await page.locator("
 const sliceKept = await sliceReadout();
 const imagesBeforeResize = imageRequests.length;
 await toolsButton.click();
-await page.locator('[data-tool-id="audit"]').click();
+await page.locator('[data-tool-id="history"]').click();
 const handle = page.getByRole("separator", { name: "Ancho del panel" });
 await handle.focus();
 const widthBefore = Number(await handle.getAttribute("aria-valuenow"));

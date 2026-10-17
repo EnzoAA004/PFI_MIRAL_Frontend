@@ -28,6 +28,7 @@ const display = loadModule("src/features/reading/inspectorDisplay.ts", [
 ]);
 const tools = loadModule("src/features/reading/inspectorToolsIndex.ts", [
   "INSPECTOR_TOOLS", "INSPECTOR_TOOL_GROUPS", "inspectorToolById", "inspectorToolsInGroup",
+  "ALL_INSPECTOR_TOOLS", "ALL_INSPECTOR_TOOL_GROUPS", "RETIRED_INSPECTOR_TOOLS",
 ]);
 
 // Los módulos corren en otro contexto de vm: se compara por contenido, no por prototipo.
@@ -290,39 +291,50 @@ check("el aviso de anotaciones dice dónde se guardan y qué falta, solo cuando 
 /* --------------------------------------------------------------------- herramientas del estudio */
 
 const EXPECTED_TOOLS = ["history", "comparison", "report", "assistant", "concordance", "feedback", "audit", "three-d", "technical", "demo"];
+const EXPECTED_RETIRED = ["report", "assistant", "concordance", "feedback", "audit", "three-d", "technical", "demo"];
 
-check("el índice contiene todas las funciones inventariadas, una sola vez cada una", () => {
-  const ids = tools.INSPECTOR_TOOLS.map((tool) => tool.id);
+check("las funciones inventariadas siguen definidas, una sola vez cada una (nada se borró: solo se retiró el acceso)", () => {
+  const ids = tools.ALL_INSPECTOR_TOOLS.map((tool) => tool.id);
   deepEqual([...ids].sort(), [...EXPECTED_TOOLS].sort());
   assert.equal(new Set(ids).size, ids.length);
-  for (const tool of tools.INSPECTOR_TOOLS) {
+  for (const tool of tools.ALL_INSPECTOR_TOOLS) {
     assert.ok(tool.title && tool.hint, `título y descripción de ${tool.id}`);
+    assert.ok(tools.ALL_INSPECTOR_TOOL_GROUPS.some((group) => group.id === tool.group), `grupo de ${tool.id}`);
+  }
+});
+
+check("el índice ofrece solo Historial del paciente y Comparación entre estudios", () => {
+  deepEqual(tools.INSPECTOR_TOOLS.map((tool) => tool.id), ["history", "comparison"]);
+  deepEqual([...tools.RETIRED_INSPECTOR_TOOLS].sort(), [...EXPECTED_RETIRED].sort());
+  for (const tool of tools.INSPECTOR_TOOLS) {
     assert.ok(tools.INSPECTOR_TOOL_GROUPS.some((group) => group.id === tool.group), `grupo de ${tool.id}`);
     assert.equal(tools.inspectorToolById(tool.id), tool);
   }
+  // Una herramienta retirada no se puede resolver por el índice: no hay acceso por esa vía.
+  for (const id of EXPECTED_RETIRED) assert.throws(() => tools.inspectorToolById(id), /Herramienta desconocida/, id);
 });
 
-check("las herramientas se agrupan por propósito y el análisis de demostración queda solo y separado", () => {
+check("no quedan encabezados vacíos ni los grupos retirados", () => {
   for (const group of tools.INSPECTOR_TOOL_GROUPS) {
     assert.ok(tools.inspectorToolsInGroup(group.id).length > 0, `el grupo ${group.id} no está vacío`);
   }
-  deepEqual(tools.inspectorToolsInGroup("demo").map((tool) => tool.id), ["demo"]);
-  assert.match(tools.INSPECTOR_TOOL_GROUPS.find((group) => group.id === "demo").description, /No es el análisis real/);
+  deepEqual(tools.INSPECTOR_TOOL_GROUPS.map((group) => group.id), ["follow-up"]);
+  for (const retired of ["delivery", "evidence", "inspection", "demo"]) {
+    assert.equal(tools.INSPECTOR_TOOL_GROUPS.some((group) => group.id === retired), false, retired);
+    deepEqual(tools.inspectorToolsInGroup(retired), []);
+  }
   deepEqual(tools.inspectorToolsInGroup("follow-up").map((tool) => tool.id), ["history", "comparison"]);
-  deepEqual(tools.inspectorToolsInGroup("delivery").map((tool) => tool.id), ["report", "assistant"]);
 });
 
-check("los consumidores del circuito de producto declaran su procedencia ya en el índice", () => {
-  for (const id of ["report", "assistant"]) {
-    assert.match(tools.inspectorToolById(id).provenance ?? "", /análisis de demostración/, id);
-  }
-  assert.match(tools.inspectorToolById("assistant").provenance, /no recibe contexto clínico/);
-  // La comparación ya lee el análisis inicial real: no debe seguir advirtiendo que usa la demostración.
+check("la comparación ya lee el análisis inicial real: no advierte que usa la demostración", () => {
   assert.equal(tools.inspectorToolById("comparison").provenance, undefined);
+  // Los consumidores del circuito de demostración conservan su aviso de procedencia (por si se reintegran).
+  const all = (id) => tools.ALL_INSPECTOR_TOOLS.find((tool) => tool.id === id);
+  for (const id of ["report", "assistant"]) assert.match(all(id).provenance ?? "", /análisis de demostración/, id);
 });
 
 check("ninguna herramienta ofrece iniciar un análisis nuevo", () => {
-  const demo = tools.inspectorToolById("demo");
+  const demo = tools.ALL_INSPECTOR_TOOLS.find((tool) => tool.id === "demo");
   assert.doesNotMatch(`${demo.title} ${demo.hint}`, /analizar|reanalizar|iniciar/i);
 });
 

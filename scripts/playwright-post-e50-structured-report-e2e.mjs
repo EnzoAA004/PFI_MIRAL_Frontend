@@ -1,4 +1,6 @@
 import { chromium } from "playwright";
+import { suspendedForRetiredTools } from "./lib/retired-tools.mjs";
+suspendedForRetiredTools("playwright-post-e50-structured-report-e2e.mjs", ["demo", "report"]);
 
 /**
  * Stage 88: real Docker browser/API E2E for the backend-authoritative structured

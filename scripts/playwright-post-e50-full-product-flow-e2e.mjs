@@ -1,4 +1,6 @@
 import { chromium } from "playwright";
+import { suspendedForRetiredTools } from "./lib/retired-tools.mjs";
+suspendedForRetiredTools("playwright-post-e50-full-product-flow-e2e.mjs", ["assistant", "demo"]);
 
 /**
  * Stage 87: full real-backend browser E2E of "Nuevo análisis" through the entire product flow --

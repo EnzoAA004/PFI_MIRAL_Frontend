@@ -12,6 +12,8 @@ import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { suspendedForRetiredTools } from "./lib/retired-tools.mjs";
+suspendedForRetiredTools("playwright-ext07-integrated-workflow-e2e.mjs", ["report"]);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const frontendRoot = resolve(__dirname, "..");

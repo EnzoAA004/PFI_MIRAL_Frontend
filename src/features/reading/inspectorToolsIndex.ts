@@ -28,7 +28,8 @@ export type InspectorTool = {
   provenance?: string;
 };
 
-export const INSPECTOR_TOOL_GROUPS: readonly { id: InspectorToolGroupId; title: string; description?: string }[] = [
+/** Todos los grupos definidos, incluidos los retirados de la interfaz. La interfaz usa INSPECTOR_TOOL_GROUPS. */
+export const ALL_INSPECTOR_TOOL_GROUPS: readonly { id: InspectorToolGroupId; title: string; description?: string }[] = [
   { id: "follow-up", title: "Seguimiento del paciente" },
   { id: "delivery", title: "Informe y consulta" },
   { id: "evidence", title: "Evidencia y trazabilidad" },
@@ -40,7 +41,8 @@ export const INSPECTOR_TOOL_GROUPS: readonly { id: InspectorToolGroupId; title: 
   },
 ];
 
-export const INSPECTOR_TOOLS: readonly InspectorTool[] = [
+/** Todas las herramientas definidas, incluidas las retiradas de la interfaz. La interfaz usa INSPECTOR_TOOLS. */
+export const ALL_INSPECTOR_TOOLS: readonly InspectorTool[] = [
   { id: "history", group: "follow-up", title: "Historial del paciente", hint: "Línea de tiempo de los estudios del paciente" },
   {
     id: "comparison",
@@ -74,6 +76,35 @@ export const INSPECTOR_TOOLS: readonly InspectorTool[] = [
     hint: "Historial, correcciones y revisión propios de esta corrida",
   },
 ];
+
+/**
+ * Herramientas retiradas de la interfaz del visor (simplificación de «Herramientas del estudio»). Solo se ocultó el
+ * acceso: sus implementaciones, endpoints, datos, revisiones y el registro de auditoría siguen como estaban. Al no
+ * estar en el índice no se montan, así que abrir el menú no consulta nada de ellas.
+ *
+ * - report: Informe y exportación.
+ * - concordance, feedback, audit: grupo «Evidencia y trazabilidad».
+ * - three-d, technical: grupo «Inspección técnica».
+ * - demo: grupo «Análisis de demostración».
+ * - assistant: oculto mientras dependa del análisis de demostración; se integra en la etapa siguiente.
+ */
+export const RETIRED_INSPECTOR_TOOLS: readonly InspectorToolId[] = [
+  "report",
+  "assistant",
+  "concordance",
+  "feedback",
+  "audit",
+  "three-d",
+  "technical",
+  "demo",
+];
+
+/** Lo que el índice ofrece hoy: historial del paciente y comparación entre estudios (con datos reales). */
+export const INSPECTOR_TOOLS: readonly InspectorTool[] = ALL_INSPECTOR_TOOLS.filter((tool) => !RETIRED_INSPECTOR_TOOLS.includes(tool.id));
+
+/** Solo los grupos que tienen alguna herramienta visible: no quedan encabezados vacíos. */
+export const INSPECTOR_TOOL_GROUPS: readonly { id: InspectorToolGroupId; title: string; description?: string }[] =
+  ALL_INSPECTOR_TOOL_GROUPS.filter((group) => INSPECTOR_TOOLS.some((tool) => tool.group === group.id));
 
 export function inspectorToolById(id: InspectorToolId): InspectorTool {
   const tool = INSPECTOR_TOOLS.find((item) => item.id === id);
