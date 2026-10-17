@@ -1,4 +1,4 @@
-import type { DiscEvaluatedRegion, DiscFinding, DiscFindingType, DiscLevel, DiscSeriesRole } from "./discDegenerativeFindings";
+import type { DiscEvaluatedRegion, DiscFinding, DiscFindingType, DiscLevel, DiscSeriesRole, RejectedDiscFinding } from "./discDegenerativeFindings";
 import { DISC_FINDING_TYPES, DISC_LEVELS, labelsFor, preferredRegion, regionToViewerBase } from "./discDegenerativeFindings";
 
 /**
@@ -19,7 +19,7 @@ export type ComparisonSide = "reference" | "current";
 
 /** Lo que se sabe de los hallazgos de un lado, distinguiendo cada forma de no tenerlos. */
 export type FindingsSide =
-  | { status: "ready"; caseId: string; runId: string | null; findings: DiscFinding[] }
+  | { status: "ready"; caseId: string; runId: string | null; findings: DiscFinding[]; rejected?: RejectedDiscFinding[] }
   /** Todavía no hay una corrida cargada que sea la de la comparación (cargando, o llegó una distinta). */
   | { status: "pending"; reason: string }
   /** La corrida no tiene hallazgos discales persistidos. */
@@ -51,6 +51,7 @@ export type NotComparableCode =
   | "side_no_data"
   | "side_invalid"
   | "side_failed"
+  | "classification_invalid"
   | "missing_reference"
   | "missing_current"
   | "duplicate_result"
@@ -71,6 +72,8 @@ export type FindingComparisonRow = {
   current: DiscFinding | null;
   status: FindingComparisonStatus;
   reason: { code: NotComparableCode; text: string } | null;
+  /** Lado cuyo resultado para esta fila no cumple el contrato: se muestra como inválido, nunca como «Ausente» ni como «Sin dato». */
+  rejected: Partial<Record<ComparisonSide, string>>;
 };
 
 export type SectionCounts = { all: number; changes: number; unchanged: number; notComparable: number };
@@ -79,6 +82,8 @@ export type FindingsComparison = {
   rows: FindingComparisonRow[];
   counts: Record<"main" | "research", SectionCounts>;
   sides: Record<ComparisonSide, FindingsSide>;
+  /** Resultados inválidos de los que ni el nivel ni el tipo se pudieron identificar: no caben en ninguna fila, pero se cuentan. */
+  unreadable: Record<ComparisonSide, number>;
 };
 
 export type FindingsFilter = "changes" | "all" | "noncomparable";
@@ -108,7 +113,7 @@ export function sectionOf(finding: DiscFinding): "main" | "research" {
 export function sideFromSnapshot(
   loaded: { caseId: string; runId: string | null } | null,
   expected: { caseId: string; runId: string | null },
-  snapshot: { findings: DiscFinding[]; unavailable?: string; contractError?: string } | null,
+  snapshot: { findings: DiscFinding[]; rejected?: RejectedDiscFinding[]; unavailable?: string; contractError?: string } | null,
 ): FindingsSide {
   if (!loaded || !snapshot) return { status: "pending", reason: "El estudio de este lado todavía no está cargado." };
   if (loaded.caseId !== expected.caseId || (expected.runId && loaded.runId !== expected.runId)) {
@@ -116,7 +121,7 @@ export function sideFromSnapshot(
   }
   if (snapshot.contractError) return { status: "invalid", reason: snapshot.contractError };
   if (snapshot.unavailable) return { status: "no_data", reason: snapshot.unavailable };
-  return { status: "ready", caseId: loaded.caseId, runId: loaded.runId, findings: snapshot.findings };
+  return { status: "ready", caseId: loaded.caseId, runId: loaded.runId, findings: snapshot.findings, rejected: snapshot.rejected ?? [] };
 }
 
 function sideReason(side: ComparisonSide, state: FindingsSide): { code: NotComparableCode; text: string } | null {
@@ -186,6 +191,18 @@ function indexByKey(state: FindingsSide): { byKey: Map<string, DiscFinding>; dup
   return { byKey, duplicates };
 }
 
+/** Resultados inválidos de un lado, por fila. Si hay varios para la misma fila se conserva el primer motivo. */
+function indexRejected(state: FindingsSide): { byKey: Map<string, RejectedDiscFinding>; unreadable: number } {
+  const byKey = new Map<string, RejectedDiscFinding>();
+  let unreadable = 0;
+  if (state.status !== "ready") return { byKey, unreadable };
+  for (const item of state.rejected ?? []) {
+    if (!item.level || !item.findingType) unreadable += 1;
+    else if (!byKey.has(rowKeyOf(item.level, item.findingType))) byKey.set(rowKeyOf(item.level, item.findingType), item);
+  }
+  return { byKey, unreadable };
+}
+
 function emptyCounts(): SectionCounts {
   return { all: 0, changes: 0, unchanged: 0, notComparable: 0 };
 }
@@ -193,6 +210,8 @@ function emptyCounts(): SectionCounts {
 export function compareFindings(reference: FindingsSide, current: FindingsSide): FindingsComparison {
   const ref = indexByKey(reference);
   const cur = indexByKey(current);
+  const refRejected = indexRejected(reference);
+  const curRejected = indexRejected(current);
   const referenceBlock = sideReason("reference", reference);
   const currentBlock = sideReason("current", current);
   const rows: FindingComparisonRow[] = [];
@@ -200,16 +219,31 @@ export function compareFindings(reference: FindingsSide, current: FindingsSide):
   for (const level of DISC_LEVELS) {
     for (const findingType of DISC_FINDING_TYPES) {
       const key = rowKeyOf(level, findingType);
-      const a = ref.byKey.get(key) ?? null;
-      const b = cur.byKey.get(key) ?? null;
-      if (!a && !b) continue;
-      const section = sectionOf((a ?? b) as DiscFinding);
+      const ra = refRejected.byKey.get(key) ?? null;
+      const rb = curRejected.byKey.get(key) ?? null;
+      // Un resultado inválido en un lado manda sobre uno válido del mismo nivel y tipo: no se elige cuál creerle.
+      const a = ra ? null : ref.byKey.get(key) ?? null;
+      const b = rb ? null : cur.byKey.get(key) ?? null;
+      if (!a && !b && !ra && !rb) continue;
+      const rejected: FindingComparisonRow["rejected"] = {};
+      if (ra) rejected.reference = ra.reason;
+      if (rb) rejected.current = rb.reason;
+      const section = a || b
+        ? sectionOf((a ?? b) as DiscFinding)
+        : (ra ?? rb)?.deploymentStatus === "not_product_supported" ? "research" : "main";
       let status: FindingComparisonStatus;
       let reason: FindingComparisonRow["reason"] = null;
 
       if (referenceBlock || currentBlock) {
         status = "not_comparable";
         reason = referenceBlock ?? currentBlock;
+      } else if (ra || rb) {
+        status = "not_comparable";
+        const names = [ra ? "la referencia" : null, rb ? "el estudio actual" : null].filter(Boolean).join(" y ");
+        reason = {
+          code: "classification_invalid",
+          text: `El resultado de ${names} para este nivel y clasificación no cumple el contrato y no se compara (${(ra ?? rb)?.reason}). No se interpreta como «Ausente».`,
+        };
       } else if (ref.duplicates.has(key) || cur.duplicates.has(key)) {
         status = "not_comparable";
         reason = { code: "duplicate_result", text: "Hay más de un resultado para este nivel y clasificación en una de las corridas: no se elige uno." };
@@ -228,7 +262,7 @@ export function compareFindings(reference: FindingsSide, current: FindingsSide):
           status = statusOf(a, b);
         }
       }
-      rows.push({ key, level, findingType, section, reference: a, current: b, status, reason });
+      rows.push({ key, level, findingType, section, reference: a, current: b, status, reason, rejected });
     }
   }
 
@@ -240,7 +274,7 @@ export function compareFindings(reference: FindingsSide, current: FindingsSide):
     else if (row.status === "unchanged") bucket.unchanged += 1;
     else bucket.changes += 1;
   }
-  return { rows, counts, sides: { reference, current } };
+  return { rows, counts, sides: { reference, current }, unreadable: { reference: refRejected.unreadable, current: curRejected.unreadable } };
 }
 
 export function filterRows(rows: FindingComparisonRow[], filter: FindingsFilter): FindingComparisonRow[] {
@@ -276,6 +310,10 @@ export function noRowsMessage(comparison: FindingsComparison): string | null {
   if (comparison.rows.length > 0) return null;
   const { reference, current } = comparison.sides;
   if (reference.status === "ready" && current.status === "ready") {
+    const unreadable = comparison.unreadable.reference + comparison.unreadable.current;
+    if (unreadable > 0) {
+      return `No hay resultados que se puedan comparar: ${unreadable} no cumplen el contrato y no se pudieron identificar. No se interpreta como «Ausente».`;
+    }
     return "Ninguna de las dos corridas tiene resultados de hallazgos discales para este nivel y clasificación.";
   }
   const parts = (["reference", "current"] as const).map((side) => {
@@ -341,7 +379,13 @@ export function resolveRegionTarget(finding: DiscFinding | null, series: SideSer
   if (!finding) return { state: "unavailable", reason: `${UNAVAILABLE}: este lado no tiene el resultado.` };
   if (!series) return { state: "unavailable", reason: `${UNAVAILABLE}: el estudio de este lado no está cargado.` };
   const located = preferredRegion(finding, viewedInputId);
-  if (!located) return { state: "unavailable", reason: `${UNAVAILABLE}: la corrida no guardó la región evaluada de este nivel.` };
+  if (!located) {
+    const issue = finding.sources.map((source) => source.regionIssue).find(Boolean);
+    if (issue) {
+      return { state: "unavailable", reason: `${UNAVAILABLE}: la corrida guardó una región inválida (${issue}). Se conserva la clasificación sin localización.` };
+    }
+    return { state: "unavailable", reason: `${UNAVAILABLE}: la corrida no guardó la región evaluada de este nivel.` };
+  }
   const { region, role } = located;
 
   let viewedSeriesId: string | null;

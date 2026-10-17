@@ -44,7 +44,8 @@ const DISTRIBUTION_NOTICE =
   "Son los valores que el modelo asignó a cada clase. No son una segunda opinión ni hay un umbral validado para leerlos; "
   + "la revisión profesional es obligatoria.";
 
-function resultText(finding: DiscFinding | null): string {
+function resultText(finding: DiscFinding | null, rejected?: string): string {
+  if (rejected) return "Resultado inválido";
   return finding ? displayDiscFindingValue(finding.label, finding.findingType) : "Sin dato";
 }
 
@@ -87,9 +88,9 @@ function RowButton({ row, selected, onSelect }: { row: FindingComparisonRow; sel
         {experimental && <small className="rr-dfc-tag">{DEPLOYMENT_LABELS.experimental}</small>}
       </span>
       <span className="rr-dfc-values" data-testid="dual-finding-values">
-        <span aria-label="Resultado de la referencia" className={row.reference ? "" : "is-missing"}>{resultText(row.reference)}</span>
+        <span aria-label="Resultado de la referencia" className={row.reference ? "" : "is-missing"}>{resultText(row.reference, row.rejected.reference)}</span>
         <i aria-hidden="true">→</i>
-        <span aria-label="Resultado del estudio actual" className={row.current ? "" : "is-missing"}>{resultText(row.current)}</span>
+        <span aria-label="Resultado del estudio actual" className={row.current ? "" : "is-missing"}>{resultText(row.current, row.rejected.current)}</span>
       </span>
       <span className="rr-dfc-status" data-testid="dual-finding-status">{STATUS_LABEL[row.status]}</span>
       {row.reason && <span className="rr-dfc-reason">{row.reason.text}</span>}
@@ -120,12 +121,12 @@ function Groups({ rows, selectedKey, onSelect }: { rows: FindingComparisonRow[];
   );
 }
 
-function SideResult({ side, finding, summary, target }: { side: ComparisonSide; finding: DiscFinding | null; summary: ComparisonStudySide; target: RegionTarget | null }) {
+function SideResult({ side, finding, rejected, summary, target }: { side: ComparisonSide; finding: DiscFinding | null; rejected?: string; summary: ComparisonStudySide; target: RegionTarget | null }) {
   return (
     <div className="rr-dfc-side" data-side={side} data-testid={`dual-finding-selected-${side}`}>
       <strong>{SIDE_TITLE[side]} · {summary.caseId}</strong>
       <span className="rr-dfc-side-result">
-        {resultText(finding)}
+        {resultText(finding, rejected)}
         {confidenceText(finding) && <small> · {confidenceText(finding)}</small>}
       </span>
       {finding ? (
@@ -143,7 +144,9 @@ function SideResult({ side, finding, summary, target }: { side: ComparisonSide; 
           <small>{finding.modelId} · checkpoint {finding.modelSha256.slice(0, 8)}</small>
         </>
       ) : (
-        <span className="is-missing" data-testid={`dual-finding-region-${side}`}>Región no disponible: este lado no tiene el resultado.</span>
+        <span className="is-missing" data-testid={`dual-finding-region-${side}`}>
+          {rejected ? `Región no disponible: el resultado de este lado no cumple el contrato (${rejected}).` : "Región no disponible: este lado no tiene el resultado."}
+        </span>
       )}
       <small>{describeSide(summary)}</small>
     </div>
@@ -216,6 +219,12 @@ export function DualFindingsComparison({ comparison, reference, current, filter,
       </p>
 
       {empty && <p className="rr-note rr-note-warn" data-testid="dual-findings-empty" role="status">{empty}</p>}
+      {(comparison.unreadable.reference > 0 || comparison.unreadable.current > 0) && (
+        <p className="rr-note rr-note-warn" data-testid="dual-findings-unreadable" role="status">
+          Hay resultados que no cumplen el contrato y no se pudieron identificar (referencia: {comparison.unreadable.reference}; actual:{" "}
+          {comparison.unreadable.current}). No entran en la comparación ni se interpretan como «Ausente».
+        </p>
+      )}
 
       {!empty && (
         <>
@@ -268,8 +277,8 @@ export function DualFindingsComparison({ comparison, reference, current, filter,
               </h5>
               {selected.reason && <p className="rr-note" data-testid="dual-finding-reason">{selected.reason.text}</p>}
               <div className="rr-dfc-sides">
-                <SideResult finding={selected.reference} side="reference" summary={reference} target={targets.reference} />
-                <SideResult finding={selected.current} side="current" summary={current} target={targets.current} />
+                <SideResult finding={selected.reference} rejected={selected.rejected.reference} side="reference" summary={reference} target={targets.reference} />
+                <SideResult finding={selected.current} rejected={selected.rejected.current} side="current" summary={current} target={targets.current} />
               </div>
               <Distribution row={selected} />
               <p className="rr-note" data-testid="dual-finding-region-notice">{REGION_NOTICE}</p>

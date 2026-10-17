@@ -19,6 +19,8 @@ const parser = load("src/features/reading/discDegenerativeFindings.ts", [
   "parseDiscDegenerativeFindingsResponse",
   "parsePersistedDiscDegenerativeFindings",
   "parseDiscFinding",
+  "parseDiscDegenerativeFindingsLenient",
+  "parsePersistedDiscDegenerativeFindingsLenient",
   "sortDiscFindings",
   "groupDiscFindingsByLevel",
   "labelsFor",
@@ -422,33 +424,82 @@ check("un finding sin sourceSeries sigue siendo válido pero no localiza", () =>
   assert.equal(parser.preferredRegion(parsed), null);
 });
 
-check("una geometría incompleta invalida el finding en vez de marcar a medias", () => {
+const t2Of = (parsed) => parsed.sources.find((source) => source.role === "sagittal_t2");
+
+check("una geometría incompleta conserva la clasificación, sin región y con el motivo", () => {
   const partial = region();
   delete partial.coordinateSpaceWidth;
   const parsed = parser.parseDiscFinding(finding({
     sourceSeries: [{ role: "sagittal_t2", available: true, positions: [7, 8, 9], ...partial }],
   }));
-  assert.equal(parsed, null);
+  assert.equal(parsed.label, "present");
+  assert.equal(t2Of(parsed).region, null);
+  assert.match(t2Of(parsed).regionIssue, /incompleta/);
+  assert.equal(parser.preferredRegion(parsed), null);
 });
 
-check("el corte marcado tiene que ser uno de los que el modelo miró", () => {
+check("el corte marcado tiene que ser uno de los que el modelo miró; si no, no hay región pero sí clasificación", () => {
   const parsed = parser.parseDiscFinding(located({ sliceIndex: 40 }));
-  assert.equal(parsed, null);
+  assert.equal(parsed.label, "present");
+  assert.equal(t2Of(parsed).region, null);
+  assert.match(t2Of(parsed).regionIssue, /cortes analizados/);
 });
 
-check("un punto fuera de su propia ventana invalida el finding", () => {
-  assert.equal(parser.parseDiscFinding(located({ pointYx: [10, 96] })), null);
-  assert.equal(parser.parseDiscFinding(located({ pointYx: [120, 900] })), null);
+check("un punto fuera de su propia ventana descarta la región, no la clasificación", () => {
+  for (const overrides of [{ pointYx: [10, 96] }, { pointYx: [120, 900] }]) {
+    const parsed = parser.parseDiscFinding(located(overrides));
+    assert.equal(parsed.label, "present");
+    assert.equal(t2Of(parsed).region, null);
+    assert.ok(t2Of(parsed).regionIssue);
+  }
 });
 
-check("una modalidad que no entró al modelo no puede localizar nada", () => {
+check("una modalidad que no entró al modelo no puede localizar nada: se descarta la región, no el finding", () => {
   const parsed = parser.parseDiscFinding(finding({
     sourceSeries: [
       { role: "sagittal_t2", available: true, positions: [7, 8, 9] },
       { role: "sagittal_t1", available: false, positions: [], ...region({ inputId: "inp-t1" }) },
     ],
   }));
-  assert.equal(parsed, null);
+  assert.equal(parsed.label, "present");
+  const t1 = parsed.sources.find((source) => source.role === "sagittal_t1");
+  assert.equal(t1.region, null);
+  assert.match(t1.regionIssue, /no entró al modelo/);
+});
+
+check("una región válida no deja motivo de error", () => {
+  const parsed = parser.parseDiscFinding(located());
+  assert.equal(t2Of(parsed).regionIssue, null);
+  assert.equal(parser.parseDiscFinding(finding()).sources.length, 0);
+});
+
+check("estructura de modalidades rota SÍ invalida el finding: de ella depende la comparabilidad", () => {
+  assert.equal(parser.parseDiscFinding(finding({ sourceSeries: [{ role: "otra", available: true, positions: [1] }] })), null);
+  assert.equal(parser.parseDiscFinding(finding({ sourceSeries: [{ role: "sagittal_t2", available: "si", positions: [1] }] })), null);
+  assert.equal(parser.parseDiscFinding(finding({ sourceSeries: [{ role: "sagittal_t2", available: true, positions: [1.5] }] })), null);
+  assert.equal(parser.parseDiscFinding(finding({ sourceSeries: [{ role: "sagittal_t2", available: false, positions: [] }] })), null);
+});
+
+check("el parser por resultado conserva los válidos y deja aparte, identificados, los que no cumplen", () => {
+  const out = parser.parseDiscDegenerativeFindingsLenient(disc([
+    finding({ findingId: "ok-1" }),
+    finding({ findingId: "bad-1", anatomy: { level: "L3-L4" }, findingType: "disc_narrowing", classification: { kind: "binary", label: "severe" } }),
+    finding({ findingId: "bad-2", anatomy: { level: "T12-L1" } }),
+    located({ sliceIndex: 40 }),
+  ]));
+  assert.equal(out.findings.length, 2);
+  assert.equal(out.rejected.length, 2);
+  const identified = out.rejected.find((item) => item.findingId === "bad-1");
+  assert.equal(identified.level, "L3-L4");
+  assert.equal(identified.findingType, "disc_narrowing");
+  assert.match(identified.reason, /clase/);
+  const unreadable = out.rejected.find((item) => item.findingId === "bad-2");
+  assert.equal(unreadable.level, null);
+  // El envoltorio sigue siendo todo o nada.
+  assert.throws(() => parser.parseDiscDegenerativeFindingsLenient({ schemaVersion: "otro", findings: [finding()] }), /schemaVersion/);
+  assert.throws(() => parser.parseDiscDegenerativeFindingsLenient(disc([])), /vacío/);
+  // El parser estricto (revisión de un estudio) no cambió.
+  assert.throws(() => parser.parseDiscDegenerativeFindings(disc([finding(), finding({ anatomy: { level: "T12-L1" } })])), /incompletos/);
 });
 
 check("se prefiere la serie que el visor ya está mostrando", () => {

@@ -21,7 +21,7 @@ function loadModules(paths, exportNames) {
 const m = loadModules(
   ["src/features/reading/discDegenerativeFindings.ts", "src/features/reading/discFindingsComparison.ts"],
   [
-    "parseDiscFinding", "compareFindings", "filterRows", "defaultFilter", "emptyGroupMessage", "noRowsMessage", "stepRows", "statusOf",
+    "parseDiscFinding", "parseDiscDegenerativeFindingsLenient", "compareFindings", "filterRows", "defaultFilter", "emptyGroupMessage", "noRowsMessage", "stepRows", "statusOf",
     "incompatibility", "sideFromSnapshot", "resolveRegionTarget", "resolveRegionOverlay", "orderedDistribution", "STATUS_LABEL",
     "FILTER_LABEL", "rowKeyOf", "sectionOf", "labelsFor",
   ],
@@ -253,13 +253,124 @@ check("región ausente, serie no disponible, corte fuera de la serie o resultado
   assert.match(unavailable(m.resolveRegionTarget(parsed(), null)), /no está cargado/);
 });
 
-check("una región inválida invalida el resultado entero (todo o nada), no se dibuja a medias", () => {
-  assert.equal(m.parseDiscFinding(raw({ region: { bboxYx: [132, 108, 84, 108] } })), null);
-  assert.equal(m.parseDiscFinding(raw({ region: { pointYx: [500, 96] } })), null);
-  assert.equal(m.parseDiscFinding(raw({ region: { sliceIndex: 9 } })), null);
-  const finding = raw();
-  delete finding.sourceSeries[0].bboxYx;
-  assert.equal(m.parseDiscFinding(finding), null);
+check("una región inválida no se dibuja a medias: se descarta la región y se conserva la clasificación con el motivo", () => {
+  const cases = [
+    raw({ region: { bboxYx: [132, 108, 84, 108] } }),
+    raw({ region: { pointYx: [500, 96] } }),
+    raw({ region: { sliceIndex: 9 } }),
+  ];
+  const broken = raw();
+  delete broken.sourceSeries[0].bboxYx;
+  cases.push(broken);
+  for (const value of cases) {
+    const finding = m.parseDiscFinding(value);
+    assert.equal(finding.label, "absent", "la clasificación sigue válida");
+    assert.ok(finding.sources.some((source) => source.available));
+    assert.ok(finding.sources.every((source) => source.region === null || source.regionIssue === null));
+    const target = m.resolveRegionTarget(finding, SERIES);
+    // T1 conserva su región válida; la que falló no se inventa ni se copia de la otra.
+    assert.ok(finding.sources.some((source) => source.regionIssue), "queda el motivo");
+    assert.ok(target.state === "ready" ? target.role === "sagittal_t2" || target.role === "sagittal_t1" : /^Región no disponible/.test(target.reason));
+  }
+  // Con todas las regiones rotas: sin localización y con el motivo en el texto.
+  const none = m.parseDiscFinding(raw({ region: { sliceIndex: 9 }, roles: ["sagittal_t2"] }));
+  const target = m.resolveRegionTarget(none, SERIES);
+  assert.equal(target.state, "unavailable");
+  assert.match(target.reason, /^Región no disponible: la corrida guardó una región inválida \(el corte de la región no está entre los cortes analizados\)/);
+  assert.match(target.reason, /Se conserva la clasificación sin localización/);
+});
+
+function lenient(findings) {
+  return m.parseDiscDegenerativeFindingsLenient({ schemaVersion: "pfi.disc-degenerative-findings.v1", findings });
+}
+const sideOf = (out, caseId = "A", runId = "run-a") => ({ status: "ready", caseId, runId, findings: out.findings, rejected: out.rejected });
+
+check("una región inválida NO elimina resultados válidos ni afecta a otras regiones, y la clasificación sigue siendo comparable", () => {
+  const referenceOut = lenient([
+    raw({ level: "L3-L4", label: "absent", tag: "ref" }),
+    raw({ level: "L4-L5", label: "absent", tag: "ref", region: { pointYx: [500, 96] }, roles: ["sagittal_t2"] }),
+    raw({ level: "L5-S1", label: "absent", tag: "ref" }),
+  ]);
+  const currentOut = lenient([
+    raw({ level: "L3-L4", label: "absent", tag: "cur" }),
+    raw({ level: "L4-L5", label: "present", tag: "cur", roles: ["sagittal_t2"] }),
+    raw({ level: "L5-S1", label: "present", tag: "cur" }),
+  ]);
+  assert.equal(referenceOut.findings.length, 3, "los tres discos de la referencia siguen ahí");
+  assert.equal(referenceOut.rejected.length, 0);
+  const comparison = m.compareFindings(sideOf(referenceOut), sideOf(currentOut, "B", "run-b"));
+  // El disco con región defectuosa se compara igual por su clasificación.
+  assert.equal(rowOf(comparison, "L4-L5", "disc_bulging").status, "absent_to_present");
+  assert.equal(rowOf(comparison, "L5-S1", "disc_bulging").status, "absent_to_present");
+  assert.equal(rowOf(comparison, "L3-L4", "disc_bulging").status, "unchanged");
+  assert.equal(comparison.counts.main.all, 3);
+  assert.equal(comparison.counts.main.changes, 2);
+  // Su región se informa como no disponible, con el motivo; las demás conservan la suya.
+  const broken = rowOf(comparison, "L4-L5", "disc_bulging");
+  const brokenTarget = m.resolveRegionTarget(broken.reference, { ...SERIES, analyzedInputId: "inp-sagittal_t2-ref" });
+  assert.equal(brokenTarget.state, "unavailable");
+  assert.match(brokenTarget.reason, /región inválida/);
+  const intact = rowOf(comparison, "L5-S1", "disc_bulging");
+  const intactTarget = m.resolveRegionTarget(intact.reference, { ...SERIES, analyzedInputId: "inp-sagittal_t2-ref" });
+  assert.equal(intactTarget.state, "ready");
+  assert.equal(intactTarget.sliceIndex, 4);
+  // La región defectuosa tampoco contamina al otro lado.
+  const otherTarget = m.resolveRegionTarget(broken.current, { ...SERIES, analyzedInputId: "inp-sagittal_t2-cur" });
+  assert.equal(otherTarget.state, "ready");
+});
+
+check("una clasificación inválida queda como no comparable, sin interpretarse como «Ausente» y sin arrastrar a los demás discos", () => {
+  const referenceOut = lenient([
+    raw({ level: "L3-L4", label: "absent", tag: "ref" }),
+    raw({ level: "L4-L5", label: "absent", tag: "ref", classificationLabel: "x" }),
+    raw({ level: "L5-S1", label: "present", tag: "ref" }),
+  ].map((value, index) => {
+    if (index === 1) value.classification.label = "severe";
+    return value;
+  }));
+  assert.equal(referenceOut.findings.length, 2);
+  assert.equal(referenceOut.rejected.length, 1);
+  const currentOut = lenient([
+    raw({ level: "L3-L4", label: "present", tag: "cur" }),
+    raw({ level: "L4-L5", label: "present", tag: "cur" }),
+    raw({ level: "L5-S1", label: "absent", tag: "cur" }),
+  ]);
+  const comparison = m.compareFindings(sideOf(referenceOut), sideOf(currentOut, "B", "run-b"));
+  const bad = rowOf(comparison, "L4-L5", "disc_bulging");
+  assert.equal(bad.status, "not_comparable");
+  assert.equal(bad.reason.code, "classification_invalid");
+  assert.equal(bad.reference, null);
+  assert.ok(bad.rejected.reference);
+  assert.equal(bad.rejected.current, undefined);
+  assert.notEqual(bad.status, "absent_to_present");
+  // Los demás discos siguen comparándose.
+  assert.equal(rowOf(comparison, "L3-L4", "disc_bulging").status, "absent_to_present");
+  assert.equal(rowOf(comparison, "L5-S1", "disc_bulging").status, "present_to_absent");
+  assert.equal(comparison.counts.main.notComparable, 1);
+  assert.equal(comparison.unreadable.reference, 0);
+});
+
+check("un resultado inválido sin nivel o tipo legible no entra en ninguna fila pero se cuenta", () => {
+  const bad = raw({ level: "L4-L5", label: "absent" });
+  bad.anatomy.level = "T12-L1";
+  const out = lenient([raw({ level: "L3-L4", label: "absent", tag: "ref" }), bad]);
+  const comparison = m.compareFindings(sideOf(out), sideOf(lenient([raw({ level: "L3-L4", label: "absent", tag: "cur" })]), "B", "run-b"));
+  assert.equal(comparison.rows.length, 1);
+  assert.equal(comparison.unreadable.reference, 1);
+  assert.equal(comparison.unreadable.current, 0);
+  assert.equal(comparison.rows[0].status, "unchanged");
+});
+
+check("un lado con TODOS los resultados inválidos no es «sin datos» ni «Ausente»", () => {
+  const bad = raw({ level: "L4-L5", label: "absent" });
+  bad.classification.label = "severe";
+  const referenceOut = lenient([bad]);
+  assert.equal(referenceOut.findings.length, 0);
+  const comparison = m.compareFindings(sideOf(referenceOut), sideOf(lenient([raw({ level: "L4-L5", label: "present", tag: "cur" })]), "B", "run-b"));
+  const row = rowOf(comparison, "L4-L5", "disc_bulging");
+  assert.equal(row.status, "not_comparable");
+  assert.equal(row.reason.code, "classification_invalid");
+  assert.equal(row.current.label, "present");
 });
 
 check("la marca solo se dibuja en la serie y el corte exactos; si no, se ofrece volver", () => {

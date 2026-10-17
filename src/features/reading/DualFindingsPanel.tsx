@@ -14,8 +14,9 @@ import {
 } from "./discFindingsComparison";
 import {
   DiscDegenerativeContractError,
-  parsePersistedDiscDegenerativeFindings,
+  parsePersistedDiscDegenerativeFindingsLenient,
   type DiscFinding,
+  type RejectedDiscFinding,
 } from "./discDegenerativeFindings";
 import { describeAnalysis, describeSide } from "./initialComparisonDisplay";
 import { SIDE_TITLE } from "./ComparisonPane";
@@ -30,7 +31,7 @@ import type { Side } from "./dualComparisonLogic";
  * hallazgos": nunca se presenta una falta de dato como ausencia de hallazgo.
  */
 
-type Snapshot = { findings: DiscFinding[]; unavailable?: string; contractError?: string };
+type Snapshot = { findings: DiscFinding[]; rejected?: RejectedDiscFinding[]; unavailable?: string; contractError?: string };
 
 export function discSnapshotOf(run: AiRunResponse): Snapshot {
   const snapshot = run.metricsSnapshot as Record<string, unknown> | undefined;
@@ -38,7 +39,7 @@ export function discSnapshotOf(run: AiRunResponse): Snapshot {
     return { findings: [], unavailable: "Esta corrida no tiene hallazgos discales persistidos: no hay datos para este estudio." };
   }
   try {
-    return { findings: parsePersistedDiscDegenerativeFindings(snapshot) };
+    return parsePersistedDiscDegenerativeFindingsLenient(snapshot);
   } catch (error) {
     return {
       findings: [],
@@ -98,6 +99,7 @@ function SideFindings({ side, summary, sideState }: { side: Side; summary: Compa
         <DiscDegenerativeFindingsPanel
           contractError={snapshot.contractError}
           findings={snapshot.findings}
+          rejectedCount={snapshot.rejected?.length ?? 0}
           unavailableReason={snapshot.unavailable}
         />
       )}

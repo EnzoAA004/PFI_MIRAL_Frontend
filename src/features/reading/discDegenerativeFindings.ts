@@ -62,6 +62,11 @@ export type DiscFindingSource = {
   /** Los cortes que el modelo miró: la ventana 2.5D, nunca la serie entera. */
   positions: number[];
   region: DiscEvaluatedRegion | null;
+  /**
+   * Por qué la corrida declaró una región y no se pudo usar (incompleta, fuera de su espacio, etc.). `null` si la región es
+   * válida o simplemente no se publicó. Una región inválida no invalida la clasificación: se conserva sin localización.
+   */
+  regionIssue: string | null;
 };
 
 export type DiscFinding = {
@@ -140,51 +145,60 @@ function parseClassProbabilities(
   return result;
 }
 
+type RegionParse = { region: DiscEvaluatedRegion | null } | { issue: string };
+
 /**
- * La región evaluada de una serie, o `null` si esa serie no publica ninguna.
+ * La región evaluada de una serie. `{ region: null }` si esa serie no publica ninguna.
  *
- * Todo o nada, igual que el resto del contrato: con media geometría no se puede
- * dibujar nada, y una marca puesta con la mitad de los datos cae en un lugar
- * arbitrario del corte. Ante un dato incompleto devuelve `undefined`, que el
- * llamador convierte en finding inválido en vez de en una marca aproximada.
+ * La región es válida entera o no se usa: con media geometría no se puede dibujar nada, y una marca puesta con la mitad
+ * de los datos cae en un lugar arbitrario del corte. Ante un dato incompleto o incoherente devuelve el motivo, y el
+ * llamador conserva la clasificación SIN localización: lo que no se puede ubicar no invalida lo que se clasificó.
  */
 function parseEvaluatedRegion(
   raw: Record<string, unknown>,
   positions: number[],
-): DiscEvaluatedRegion | null | undefined {
+): RegionParse {
   const keys = ["inputId", "sliceIndex", "pointYx", "bboxYx", "coordinateSpaceHeight", "coordinateSpaceWidth"];
   const present = keys.filter((key) => Object.prototype.hasOwnProperty.call(raw, key));
-  if (present.length === 0) return null;
-  if (present.length !== keys.length) return undefined;
+  if (present.length === 0) return { region: null };
+  if (present.length !== keys.length) return { issue: "la región vino incompleta" };
 
   const inputId = text(raw.inputId);
   const height = finiteNumber(raw.coordinateSpaceHeight);
   const width = finiteNumber(raw.coordinateSpaceWidth);
   const sliceIndex = finiteNumber(raw.sliceIndex);
-  if (!inputId || height === null || width === null || height <= 0 || width <= 0) return undefined;
-  if (sliceIndex === null || !Number.isInteger(sliceIndex) || sliceIndex < 0) return undefined;
+  if (!inputId || height === null || width === null || height <= 0 || width <= 0) {
+    return { issue: "la serie o el espacio de coordenadas de la región no son válidos" };
+  }
+  if (sliceIndex === null || !Number.isInteger(sliceIndex) || sliceIndex < 0) {
+    return { issue: "el corte de la región no es un índice válido" };
+  }
   // El centro tiene que ser uno de los cortes analizados: si no lo es, geometría y
   // predicción no vienen de la misma preparación.
-  if (positions.length > 0 && !positions.includes(sliceIndex)) return undefined;
+  if (positions.length > 0 && !positions.includes(sliceIndex)) {
+    return { issue: "el corte de la región no está entre los cortes analizados" };
+  }
 
   const pointRaw = Array.isArray(raw.pointYx) ? raw.pointYx.map(finiteNumber) : [];
   const bboxRaw = Array.isArray(raw.bboxYx) ? raw.bboxYx.map(finiteNumber) : [];
-  if (pointRaw.length !== 2 || pointRaw.some((value) => value === null)) return undefined;
-  if (bboxRaw.length !== 4 || bboxRaw.some((value) => value === null)) return undefined;
+  if (pointRaw.length !== 2 || pointRaw.some((value) => value === null)) return { issue: "el punto de la región no es válido" };
+  if (bboxRaw.length !== 4 || bboxRaw.some((value) => value === null)) return { issue: "el recuadro de la región no es válido" };
 
   const [pointY, pointX] = pointRaw as number[];
   const [y0, y1, x0, x1] = bboxRaw as number[];
-  if (y1 <= y0 || x1 <= x0) return undefined;
-  if (y0 < 0 || x0 < 0 || y1 > height || x1 > width) return undefined;
-  if (pointY < y0 || pointY > y1 || pointX < x0 || pointX > x1) return undefined;
+  if (y1 <= y0 || x1 <= x0) return { issue: "el recuadro de la región no tiene área" };
+  if (y0 < 0 || x0 < 0 || y1 > height || x1 > width) return { issue: "el recuadro de la región cae fuera de su espacio de coordenadas" };
+  if (pointY < y0 || pointY > y1 || pointX < x0 || pointX > x1) return { issue: "el punto de la región cae fuera de su recuadro" };
 
   return {
-    inputId,
-    sliceIndex,
-    point: { x: pointX, y: pointY },
-    bbox: { x0, y0, x1, y1 },
-    height,
-    width,
+    region: {
+      inputId,
+      sliceIndex,
+      point: { x: pointX, y: pointY },
+      bbox: { x0, y0, x1, y1 },
+      height,
+      width,
+    },
   };
 }
 
@@ -192,9 +206,11 @@ function parseEvaluatedRegion(
  * Las series de origen, cuando el emisor las declara.
  *
  * Ausentes no invalidan el finding: una corrida vieja las omitía y su clasificación
- * sigue siendo la que el médico revisó. Lo que se pierde es la marca, no el
- * hallazgo. Declaradas y rotas sí invalidan: ahí hay un emisor que cree estar
- * localizando algo.
+ * sigue siendo la que el médico revisó. Lo que se pierde es la marca, no el hallazgo.
+ * Lo mismo vale para una REGIÓN declarada y rota: se conserva la clasificación, sin
+ * localización y con el motivo (`regionIssue`). Lo que sí invalida es la estructura que
+ * define con qué modalidades se calculó (rol, disponibilidad, cortes), porque de ella
+ * depende que dos resultados sean comparables.
  */
 function parseSources(value: unknown): DiscFindingSource[] | null {
   if (value === undefined || value === null) return [];
@@ -207,11 +223,13 @@ function parseSources(value: unknown): DiscFindingSource[] | null {
     const positionsRaw = Array.isArray(raw.positions) ? raw.positions : [];
     if (positionsRaw.some((item) => typeof item !== "number" || !Number.isInteger(item) || item < 0)) return null;
     const positions = positionsRaw as number[];
-    const region = parseEvaluatedRegion(raw, positions);
-    if (region === undefined) return null;
-    // Una modalidad que no entró al modelo no localiza nada.
-    if (region && !raw.available) return null;
-    sources.push({ role, available: raw.available, positions, region });
+    const parsedRegion = parseEvaluatedRegion(raw, positions);
+    let region: DiscEvaluatedRegion | null = null;
+    let regionIssue: string | null = null;
+    if ("issue" in parsedRegion) regionIssue = parsedRegion.issue;
+    else if (parsedRegion.region && !raw.available) regionIssue = "una modalidad que no entró al modelo no puede localizar nada";
+    else region = parsedRegion.region;
+    sources.push({ role, available: raw.available, positions, region, regionIssue });
   }
   return sources.some((source) => source.available) ? sources : null;
 }
@@ -235,31 +253,37 @@ export function displaySliceNumber(sliceIndex: number): number {
   return sliceIndex + 1;
 }
 
-/**
- * Parses one finding from the Backend public projection. The probability vector is
- * not part of that contract: its presence invalidates the item instead of letting
- * the panel reconstruct a score or read the runner-up class as a second opinion.
- * The confidence of the reported label does travel, already reduced by the Backend.
- */
-export function parseDiscFinding(value: unknown): DiscFinding | null {
+/** Un resultado que no cumple el contrato, con lo que se pudo identificar de él para no perderlo de vista. */
+export type RejectedDiscFinding = {
+  index: number;
+  findingId: string | null;
+  level: DiscLevel | null;
+  findingType: DiscFindingType | null;
+  deploymentStatus: DeploymentStatus | null;
+  reason: string;
+};
+
+type Validation = { finding: DiscFinding } | { reason: string };
+
+function validateDiscFinding(value: unknown): Validation {
   const raw = asRecord(value);
-  if (!raw) return null;
+  if (!raw) return { reason: "el resultado no es un objeto" };
 
   const findingId = text(raw.findingId);
   const findingType = text(raw.findingType) as DiscFindingType;
-  if (!findingId || !DISC_FINDING_TYPES.includes(findingType)) return null;
+  if (!findingId || !DISC_FINDING_TYPES.includes(findingType)) return { reason: "identificador o tipo de clasificación desconocido" };
 
   const anatomy = asRecord(raw.anatomy);
   const level = text(anatomy?.level) as DiscLevel;
-  if (!DISC_LEVELS.includes(level)) return null;
+  if (!DISC_LEVELS.includes(level)) return { reason: "nivel anatómico desconocido" };
 
   const classification = asRecord(raw.classification);
   const label = text(classification?.label);
-  if (!classification || !labelsFor(findingType).includes(label)) return null;
+  if (!classification || !labelsFor(findingType).includes(label)) return { reason: "la clase no pertenece a la definición de esta clasificación" };
   const expectedKind = findingType === "pfirrmann_grade" || findingType === "modic_change"
     ? "categorical"
     : "binary";
-  if (classification.kind !== expectedKind) return null;
+  if (classification.kind !== expectedKind) return { reason: "el tipo de clasificación no coincide con su definición" };
   /*
    * La distribución completa sigue sin poder llegar: su presencia invalida el
    * hallazgo. Lo que sí viaja es `confidence`, la probabilidad de la etiqueta que
@@ -268,7 +292,7 @@ export function parseDiscFinding(value: unknown): DiscFinding | null {
    * contra la imagen. Fuera de [0,1] no se muestra en vez de recortarse: un valor
    * así significa que el productor cambió de escala, no que la confianza sea 1.
    */
-  if (Object.prototype.hasOwnProperty.call(classification, "probabilities")) return null;
+  if (Object.prototype.hasOwnProperty.call(classification, "probabilities")) return { reason: "incluye el vector de probabilidades crudo, que no forma parte del contrato público" };
   const rawConfidence = classification.confidence;
   const confidence = typeof rawConfidence === "number"
     && Number.isFinite(rawConfidence)
@@ -281,42 +305,70 @@ export function parseDiscFinding(value: unknown): DiscFinding | null {
   const deploymentStatus = text(evidence?.deploymentStatus) as DeploymentStatus;
   if (!evidence
     || !DEPLOYMENT_STATUSES.includes(deploymentStatus)
-    || typeof evidence.externalValidationAvailable !== "boolean") return null;
+    || typeof evidence.externalValidationAvailable !== "boolean") return { reason: "la evidencia del modelo está incompleta" };
 
   const localization = asRecord(raw.localization);
   if (!localization
     || localization.source !== "segmentation_derived_disc_level"
     || localization.researchOnly !== true
-    || localization.automaticAnatomicalLocalizationValidated !== false) return null;
+    || localization.automaticAnatomicalLocalizationValidated !== false) return { reason: "la localización no declara que es de investigación y sin validar" };
 
   const model = asRecord(raw.model);
   const modelId = text(model?.modelId);
   const modelSha256 = text(model?.modelSha256);
-  if (!modelId || !/^[a-f0-9]{64}$/i.test(modelSha256)) return null;
+  if (!modelId || !/^[a-f0-9]{64}$/i.test(modelSha256)) return { reason: "falta la identidad del modelo o del checkpoint" };
 
   const review = asRecord(raw.review);
-  if (!review || review.required !== true || review.status !== "pending" || raw.notClinicalDiagnosis !== true) return null;
+  if (!review || review.required !== true || review.status !== "pending" || raw.notClinicalDiagnosis !== true) return { reason: "faltan las marcas de revisión profesional obligatoria" };
 
   const sources = parseSources(raw.sourceSeries);
-  if (!sources) return null;
+  if (!sources) return { reason: "las series de origen declaradas no son válidas" };
 
   return {
-    findingId,
-    findingType,
-    level,
-    label,
-    confidence,
-    classProbabilities: parseClassProbabilities(classification.classProbabilities, findingType, label, confidence),
-    deploymentStatus,
-    evaluationDataset: text(evidence.evaluationDataset),
-    externalValidationAvailable: evidence.externalValidationAvailable,
-    researchOnly: true,
-    localizationValidated: false,
-    modelId,
-    modelSha256,
-    reviewRequired: true,
-    reviewStatus: "pending",
-    sources,
+    finding: {
+      findingId,
+      findingType,
+      level,
+      label,
+      confidence,
+      classProbabilities: parseClassProbabilities(classification.classProbabilities, findingType, label, confidence),
+      deploymentStatus,
+      evaluationDataset: text(evidence.evaluationDataset),
+      externalValidationAvailable: evidence.externalValidationAvailable,
+      researchOnly: true,
+      localizationValidated: false,
+      modelId,
+      modelSha256,
+      reviewRequired: true,
+      reviewStatus: "pending",
+      sources,
+    },
+  };
+}
+
+/**
+ * Parses one finding from the Backend public projection. The probability vector is
+ * not part of that contract: its presence invalidates the item instead of letting
+ * the panel reconstruct a score or read the runner-up class as a second opinion.
+ * The confidence of the reported label does travel, already reduced by the Backend.
+ */
+export function parseDiscFinding(value: unknown): DiscFinding | null {
+  const result = validateDiscFinding(value);
+  return "finding" in result ? result.finding : null;
+}
+
+function rejectedFrom(value: unknown, index: number, reason: string): RejectedDiscFinding {
+  const raw = asRecord(value);
+  const findingType = text(raw?.findingType) as DiscFindingType;
+  const level = text(asRecord(raw?.anatomy)?.level) as DiscLevel;
+  const status = text(asRecord(raw?.evidence)?.deploymentStatus) as DeploymentStatus;
+  return {
+    index,
+    findingId: text(raw?.findingId) || null,
+    level: DISC_LEVELS.includes(level) ? level : null,
+    findingType: DISC_FINDING_TYPES.includes(findingType) ? findingType : null,
+    deploymentStatus: DEPLOYMENT_STATUSES.includes(status) ? status : null,
+    reason,
   };
 }
 
@@ -372,6 +424,42 @@ export function parseDiscDegenerativeFindings(value: unknown): DiscFinding[] {
     throw new DiscDegenerativeContractError("Contrato P10.7 inválido: contiene findings incompletos.");
   }
   return findings as DiscFinding[];
+}
+
+/**
+ * Variante por resultado, para la comparación entre estudios: los resultados válidos se conservan y cada uno que no
+ * cumple el contrato queda aparte, identificado y con su motivo, para mostrarse como no comparable. El envoltorio
+ * (schemaVersion, lista vacía, governance) sigue siendo todo o nada: sin él no hay nada que conservar.
+ */
+export function parseDiscDegenerativeFindingsLenient(value: unknown): { findings: DiscFinding[]; rejected: RejectedDiscFinding[] } {
+  const raw = asRecord(value);
+  if (!raw || text(raw.schemaVersion) !== SCHEMA_VERSION) {
+    throw new DiscDegenerativeContractError("Contrato P10.7 inválido: schemaVersion inesperado.");
+  }
+  if (!Array.isArray(raw.findings) || raw.findings.length === 0) {
+    throw new DiscDegenerativeContractError("Contrato P10.7 inválido: findings ausente o vacío.");
+  }
+  const findings: DiscFinding[] = [];
+  const rejected: RejectedDiscFinding[] = [];
+  raw.findings.forEach((entry, index) => {
+    const result = validateDiscFinding(entry);
+    if ("finding" in result) findings.push(result.finding);
+    else rejected.push(rejectedFrom(entry, index, result.reason));
+  });
+  return { findings, rejected };
+}
+
+/** Igual que `parsePersistedDiscDegenerativeFindings` pero conservando los resultados válidos si alguno no cumple. */
+export function parsePersistedDiscDegenerativeFindingsLenient(value: unknown): { findings: DiscFinding[]; rejected: RejectedDiscFinding[] } {
+  const snapshot = asRecord(value);
+  if (!snapshot) throw new DiscDegenerativeContractError("Snapshot P10.7 inválido.");
+  const governance = asRecord(snapshot.discDegenerativeGovernance);
+  if (!governance) throw new DiscDegenerativeContractError("Snapshot P10.7 sin governance.");
+  requireSafetyFlags(governance, "Snapshot P10.7 inválido");
+  if (governance.predictionImmutable !== true || governance.reviewStoredSeparately !== true) {
+    throw new DiscDegenerativeContractError("Snapshot P10.7 no separa predicción y revisión.");
+  }
+  return parseDiscDegenerativeFindingsLenient(snapshot.discDegenerativeFindings);
 }
 
 function requireSafetyFlags(raw: Record<string, unknown>, context: string) {

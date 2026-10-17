@@ -24,6 +24,8 @@ type Props = {
   findings: DiscFinding[];
   contractError?: string;
   unavailableReason?: string;
+  /** Resultados que no cumplieron el contrato y no se muestran (el resto sí). */
+  rejectedCount?: number;
   /** Serie que el visor sagital tiene a la vista, para preferirla al localizar. */
   viewedInputId?: string | null;
   /** Lleva el visor a la serie y al corte donde se evaluó el nivel. */
@@ -56,7 +58,12 @@ function EvaluatedRegion({
   marked: boolean;
 }) {
   const located = findings.map((finding) => preferredRegion(finding, viewedInputId)).find(Boolean);
-  if (!located) return null;
+  if (!located) {
+    const issue = findings.flatMap((finding) => finding.sources).map((source) => source.regionIssue).find(Boolean);
+    return issue
+      ? <p className="rr-disc-region rr-not-reported" data-testid="disc-region-issue">Región no disponible: la corrida guardó una región inválida ({issue}). Se conserva la clasificación sin localización.</p>
+      : null;
+  }
   const source = findings
     .flatMap((finding) => finding.sources)
     .find((item) => item.role === located.role);
@@ -184,6 +191,7 @@ export function DiscDegenerativeFindingsPanel({
   findings,
   contractError,
   unavailableReason,
+  rejectedCount = 0,
   viewedInputId,
   onGoToRegion,
   markedLevel,
@@ -211,6 +219,12 @@ export function DiscDegenerativeFindingsPanel({
 
       {!contractError && findings.length > 0 && (
         <>
+          {rejectedCount > 0 && (
+            <p className="rr-findings-warning" data-testid="disc-rejected-note" role="status">
+              {rejectedCount === 1 ? "1 resultado no cumple" : `${rejectedCount} resultados no cumplen`} el contrato y no se muestra
+              {rejectedCount === 1 ? "" : "n"}; el resto sí. Su falta no equivale a «Ausente».
+            </p>
+          )}
           {regionNotice && <p className="rr-findings-warning" role="status">{regionNotice}</p>}
 
           <div className="rr-disc-overview" role="group" aria-label="Resumen de hallazgos discales por disco">
