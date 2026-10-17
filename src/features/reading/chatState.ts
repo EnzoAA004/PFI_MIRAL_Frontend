@@ -1,37 +1,69 @@
-import type { ChatConversationDetail, ChatMessageRole, ChatResponse } from "../../contracts/chatTypes";
-import type { ProductAnalysisError } from "./productAnalysisV1State";
+import type {
+  ChatContextInfo,
+  ChatConversationDetail,
+  ChatMessageRole,
+  ChatReference,
+  ChatResponse,
+  ChatScope,
+} from "../../contracts/chatTypes";
 
 /**
- * Estado puro (stage 80) del asistente contextual. Ningún llamado de red vive acá — mismo patrón
- * que `productAnalysisV1State.ts`/`longitudinalComparisonState.ts` en las etapas 77-79.
+ * Estado puro del asistente. Ningún llamado de red vive acá: se puede probar sin React ni fetch.
+ *
+ * Una conversación pertenece a UN ámbito (una corrida, o el par de corridas del visor dual). `chatScopeKey` es la
+ * identidad de ese ámbito y la usan el hook (para descartar respuestas tardías de otro estudio o de otra referencia) y
+ * el panel (para volver a empezar al cambiarlo).
  */
 
-export type ChatPhase = "idle" | "sending" | "success" | "error";
+export type ChatPhase = "idle" | "sending" | "error";
+
+export type ChatErrorKind = "disabled" | "unavailable" | "timeout" | "scope" | "forbidden" | "network" | "other";
+
+export type ChatError = {
+  kind: ChatErrorKind;
+  message: string;
+  /** Reintentar tiene sentido salvo que el asistente esté apagado, el ámbito no exista o no haya permiso. */
+  retryable: boolean;
+};
 
 export type ChatDisplayMessage = {
   id: string;
   role: ChatMessageRole;
   content: string;
-  contextSources?: string[];
+  /** Huella de los datos con que se respondió (solo respuestas del asistente). */
+  fingerprint?: string | null;
+  references?: ChatReference[];
+  warnings?: string[];
 };
 
 export type ChatUiState = {
   phase: ChatPhase;
   conversationId?: string;
   messages: ChatDisplayMessage[];
-  error?: ProductAnalysisError;
+  error?: ChatError;
+  /** La última pregunta enviada: es la que se reintenta si falla. */
+  lastQuestion?: string;
 };
+
+export function chatScopeKey(scope: ChatScope): string {
+  return [scope.caseId, scope.runId, scope.referenceCaseId ?? "", scope.referenceRunId ?? ""].join("|");
+}
+
+export function isPairScope(scope: ChatScope): boolean {
+  return Boolean(scope.referenceCaseId && scope.referenceRunId);
+}
 
 export function initialChatUiState(): ChatUiState {
   return { phase: "idle", messages: [] };
 }
 
-/** El mensaje del usuario se agrega de inmediato (optimista) — se ve mientras se espera la respuesta. */
+/** La pregunta del usuario se agrega de inmediato (optimista) y se conserva aunque la consulta falle. */
 export function questionSent(state: ChatUiState, question: string): ChatUiState {
   return {
     ...state,
     phase: "sending",
     error: undefined,
+    lastQuestion: question,
     messages: [...state.messages, { id: `pending-${state.messages.length}`, role: "USER", content: question }],
   };
 }
@@ -39,50 +71,97 @@ export function questionSent(state: ChatUiState, question: string): ChatUiState 
 export function answerReceived(state: ChatUiState, response: ChatResponse): ChatUiState {
   return {
     ...state,
-    phase: "success",
+    phase: "idle",
     conversationId: response.conversationId,
     error: undefined,
     messages: [
       ...state.messages,
-      { id: response.messageId, role: "ASSISTANT", content: response.answer, contextSources: response.contextSources },
+      {
+        id: response.messageId,
+        role: "ASSISTANT",
+        content: response.answer,
+        fingerprint: response.contextFingerprint,
+        references: response.references,
+        warnings: response.warnings,
+      },
     ],
   };
 }
 
-/** El mensaje optimista del usuario NUNCA se borra tras un error -- sigue visible lo que preguntó. */
-export function requestFailed(state: ChatUiState, error: ProductAnalysisError): ChatUiState {
+/** La pregunta optimista NO se borra tras un error: sigue visible lo que se preguntó y se puede reintentar. */
+export function requestFailed(state: ChatUiState, error: ChatError): ChatUiState {
   return { ...state, phase: "error", error };
+}
+
+/**
+ * Reintento: la pregunta fallida ya está en pantalla, así que se saca antes de volver a enviarla (no se duplica).
+ */
+export function retryPrepared(state: ChatUiState): { state: ChatUiState; question: string } | null {
+  if (state.phase !== "error" || !state.lastQuestion) return null;
+  const last = state.messages[state.messages.length - 1];
+  const messages = last && last.role === "USER" && last.content === state.lastQuestion ? state.messages.slice(0, -1) : state.messages;
+  return { state: { ...state, messages, error: undefined, phase: "idle" }, question: state.lastQuestion };
 }
 
 export function conversationLoaded(state: ChatUiState, detail: ChatConversationDetail): ChatUiState {
   return {
     ...state,
-    phase: "success",
+    phase: "idle",
     conversationId: detail.conversationId,
     error: undefined,
-    messages: detail.messages.map((message) => ({ id: message.id, role: message.role, content: message.content })),
+    messages: detail.messages.map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      fingerprint: message.role === "ASSISTANT" ? message.contextFingerprint : undefined,
+      references: message.references,
+    })),
   };
 }
 
-/** Stage 80-Y: doble submit bloqueado mientras hay una consulta en curso. */
+/** Doble submit bloqueado mientras hay una consulta en curso. */
 export function canSend(state: ChatUiState): boolean {
   return state.phase !== "sending";
 }
 
-/**
- * Stage 81-D: "Nueva conversación" -- vuelve al estado inicial (sin `conversationId`), de forma
- * que la próxima pregunta enviada inicie una conversación nueva en el Backend en vez de continuar
- * la actual.
- */
 export function newConversationStarted(): ChatUiState {
   return initialChatUiState();
 }
 
-/**
- * Sólo rechaza una pregunta en blanco client-side (80-M ya valida longitud server-side, y el
- * Frontend no le agrega un segundo límite arbitrario -- una pregunta larga se envía igual y, si
- * excede el máximo del Backend, vuelve como un 400 controlado).
- */
+/** Solo rechaza una pregunta en blanco; el largo máximo lo valida el Backend (400 controlado). */
 export function shouldSubmitQuestion(question: string): boolean {
   return question.trim().length > 0;
+}
+
+/**
+ * Una respuesta del asistente es «basada en datos anteriores» cuando su huella no es la del contexto actual (cambiaron
+ * correcciones o contexto clínico desde entonces). Sin huella actual conocida no se afirma nada.
+ */
+export function isStaleAnswer(message: ChatDisplayMessage, currentFingerprint: string | null | undefined): boolean {
+  if (message.role !== "ASSISTANT" || !currentFingerprint) return false;
+  return message.fingerprint !== currentFingerprint;
+}
+
+/** Estado de la conexión con el modelo, a partir de lo que informó el Backend (o de por qué no pudo informar). */
+export type ConnectionState =
+  | { kind: "checking" }
+  | { kind: "ready"; model: string }
+  | { kind: "disabled" }
+  | { kind: "offline"; model: string }
+  | { kind: "scope_error"; message: string };
+
+export function connectionState(info: ChatContextInfo | null, infoError: ChatError | null): ConnectionState {
+  if (infoError) {
+    return infoError.kind === "scope" || infoError.kind === "forbidden"
+      ? { kind: "scope_error", message: infoError.message }
+      : { kind: "offline", model: "" };
+  }
+  if (!info) return { kind: "checking" };
+  if (!info.provider.enabled) return { kind: "disabled" };
+  return info.provider.available ? { kind: "ready", model: info.provider.model } : { kind: "offline", model: info.provider.model };
+}
+
+/** ¿Se puede prometer una comparación de hallazgos P10.7 para este ámbito? Solo en un par que las tenga de los dos lados. */
+export function promisesFindingsComparison(scope: ChatScope, info: ChatContextInfo | null): boolean {
+  return isPairScope(scope) && Boolean(info?.scope.findingsComparable);
 }

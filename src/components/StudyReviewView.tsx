@@ -2854,12 +2854,12 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                       </>
                     );
                   case "assistant":
-                    return caseId ? (
+                    return caseId && run.runId ? (
                       <>
                         <p className="rr-note" data-testid="assistant-source-note">{ASSISTANT_SOURCE_NOTE}</p>
-                        <ChatPanel caseId={caseId} />
+                        <ChatPanel scope={{ caseId, runId: run.runId }} />
                       </>
-                    ) : <p className="rr-note">No disponible: el estudio no tiene identificador.</p>;
+                    ) : <p className="rr-note">No disponible: el estudio no tiene un análisis identificado.</p>;
                   case "concordance":
                     return <EvidenceConcordancePanel caseId={displayRun.caseId ?? ""} batchFindings={degenerativeFindings} roiFindings={roiFindings} />;
                   case "feedback":

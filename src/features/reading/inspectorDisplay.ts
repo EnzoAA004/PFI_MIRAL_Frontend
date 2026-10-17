@@ -259,4 +259,4 @@ export function hasAnyClinicalContext(rows: readonly ContextRow[]): boolean {
 export const REPORT_SOURCE_NOTE =
   "Fuente: el análisis de demostración registrado para el estudio, no las mediciones del visor. Sus niveles y mediciones pueden estar vacíos aunque el visor muestre valores.";
 export const ASSISTANT_SOURCE_NOTE =
-  "Fuente: el análisis de demostración y la revisión registrada. No recibe las mediciones del visor ni el contexto clínico del estudio. Puede estar deshabilitado en este entorno.";
+  "Fuente: el análisis que muestra el visor (mediciones originales, correcciones profesionales y hallazgos P10.7) y el contexto clínico del estudio. Recibe datos, no imágenes. Puede estar deshabilitado en este entorno.";

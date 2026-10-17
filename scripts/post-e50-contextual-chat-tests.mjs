@@ -4,53 +4,32 @@ import vm from "node:vm";
 import ts from "typescript";
 
 /**
- * Stage 80: contextual chat / self-hosted LLM module. Same pattern as the other post-e50 test
- * scripts: transpile the pure .ts modules to CommonJS and run them in a vm sandbox — no
- * DOM/React renderer, so all the logic worth testing (parsing, presentation, state transitions)
- * lives in plain .ts files with no React import.
+ * Asistente sobre los resultados REALES: contrato con el Backend, estado, ámbito (corrida o par A/B), respuestas anteriores,
+ * errores y qué se promete en la interfaz. Se ejecuta el código real transpilado, sin React ni red. Son pruebas de contrato
+ * y de lógica de la interfaz: NO evalúan la calidad de ningún modelo de lenguaje (eso se mide con el modelo real, aparte).
  */
 
-function load(path, exportNames) {
-  const source = readFileSync(path, "utf8")
-    .replace(/^import[\s\S]*?from\s+["'][^"']+["'];?\s*$/gm, "")
-    .replace(/export /g, "");
-  const js = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
+function load(paths, exportNames) {
+  const source = paths
+    .map((path) => readFileSync(path, "utf8").replace(/^import[\s\S]*?from\s+["'][^"']+["'];?\s*$/gm, "").replace(/export /g, ""))
+    .join("\n");
+  const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const sandbox = { exports: {}, console };
   vm.runInNewContext(`${js}\n${exportNames.map((name) => `exports.${name} = ${name};`).join("\n")}`, sandbox);
   return sandbox.exports;
 }
 
-const api = load("src/chatApi.ts", [
-  "parseChatResponse",
-  "parseChatConversationHistory",
-  "parseChatConversationDetail",
+const api = load(["src/chatApi.ts"], [
+  "parseChatResponse", "parseChatContextInfo", "parseChatConversationHistory", "parseChatConversationDetail", "chatRequestFor", "ChatContractError",
 ]);
-
-const display = load("src/features/reading/chatDisplay.ts", [
-  "CHAT_DISCLAIMER",
-  "CHAT_EMPTY_STATE_TEXT",
-  "CHAT_SENDING_TEXT",
-  "SUGGESTED_QUESTIONS",
-  "displayContextSource",
-  "CHAT_NEW_CONVERSATION_LABEL",
-  "CHAT_CONVERSATIONS_EMPTY_TEXT",
-  "displayConversationLabel",
+const state = load(["src/features/reading/chatState.ts"], [
+  "chatScopeKey", "isPairScope", "initialChatUiState", "questionSent", "answerReceived", "requestFailed", "retryPrepared", "conversationLoaded",
+  "canSend", "newConversationStarted", "shouldSubmitQuestion", "isStaleAnswer", "connectionState", "promisesFindingsComparison",
 ]);
-
-const state = load("src/features/reading/chatState.ts", [
-  "initialChatUiState",
-  "questionSent",
-  "answerReceived",
-  "requestFailed",
-  "conversationLoaded",
-  "canSend",
-  "shouldSubmitQuestion",
-  "newConversationStarted",
+const display = load(["src/features/reading/chatState.ts", "src/features/reading/chatDisplay.ts"], [
+  "CHAT_DISCLAIMER", "CHAT_NO_FINDINGS_COMPARISON_TEXT", "suggestedQuestions", "classifyChatError", "displayContextSource", "displayConversationLabel",
+  "displayElapsed", "connectionLabel",
 ]);
-
-const errorState = load("src/features/reading/productAnalysisV1State.ts", ["classifyProductAnalysisError"]);
 
 let passed = 0;
 function check(name, fn) {
@@ -59,251 +38,219 @@ function check(name, fn) {
   console.log(`ok ${passed} - ${name}`);
 }
 
-function backendApiError(status, message = "error") {
-  return { name: "BackendApiError", status, message, path: "/api/studies/x/chat", traceId: "trace-1" };
-}
+const backendError = (status, code, message = "error") => ({ name: "BackendApiError", status, code, message, path: "/api/studies/x/chat" });
+const STUDY = { caseId: "CASO-1", runId: "run-1" };
+const PAIR = { caseId: "CASO-1", runId: "run-1", referenceCaseId: "REF-1", referenceRunId: "run-ref" };
+const scope = (kind, comparable) => ({ kind, runId: "run-1", referenceCaseId: kind === "pair" ? "REF-1" : null, referenceRunId: kind === "pair" ? "run-ref" : null, findingsComparable: comparable });
 
 function chatResponse(overrides = {}) {
   return {
-    answer: "Hay 1 medicion disponible en L4-L5.",
+    answer: "La altura del disco L4-L5 es 5.79 mm [M1].",
     conversationId: "conv-1",
     messageId: "msg-1",
-    model: "Qwen2.5-7B-Instruct",
+    model: "qwen3-4b-instruct-2507",
     provider: "self-hosted",
-    promptVersion: "pfi.chat-system-prompt.v1",
-    generatedAt: "2026-08-25T12:00:00Z",
+    promptVersion: "pfi.chat-system-prompt.v2",
+    generatedAt: "2026-10-17T12:00:00Z",
     warnings: [],
     humanReviewRequired: true,
     notClinicalDiagnosis: true,
     contextSources: ["current_analysis"],
+    references: [{ ref: "M1", label: "altura del disco L4-L5" }],
+    removedReferences: 0,
+    contextFingerprint: "ctx-aaaa",
+    scope: scope("study", false),
+    elapsedMs: 4200,
+    promptTokens: 3000,
+    completionTokens: 40,
     ...overrides,
   };
 }
 
-// ---- 1: chat empty state ----
-check("1. chat empty state: sin mensajes al inicio", () => {
-  const initial = state.initialChatUiState();
-  assert.equal(initial.messages.length, 0);
-  assert.ok(display.CHAT_EMPTY_STATE_TEXT.length > 0);
+function contextInfo(overrides = {}) {
+  return {
+    scope: scope("study", false),
+    contextFingerprint: "ctx-aaaa",
+    promptVersion: "pfi.chat-system-prompt.v2",
+    contextSources: ["current_analysis"],
+    missing: ["Edad al estudio"],
+    elementCount: 12,
+    contextText: "ÁMBITO: un único estudio",
+    provider: { enabled: true, available: true, model: "qwen3-4b-instruct-2507" },
+    ...overrides,
+  };
+}
+
+/* ------------------------------------------------------------------ contrato */
+
+check("la petición identifica la corrida y no envía datos: solo pregunta y ámbito", () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(api.chatRequestFor(STUDY, "hola"))), { question: "hola", runId: "run-1" });
+  assert.deepEqual(JSON.parse(JSON.stringify(api.chatRequestFor(PAIR, "hola", "conv-9"))), {
+    question: "hola", runId: "run-1", referenceCaseId: "REF-1", referenceRunId: "run-ref", conversationId: "conv-9",
+  });
+  // Una referencia a medias no se envía: el ámbito es una corrida o el par completo, nunca algo intermedio.
+  assert.deepEqual(JSON.parse(JSON.stringify(api.chatRequestFor({ ...STUDY, referenceCaseId: "REF-1" }, "hola"))), { question: "hola", runId: "run-1" });
+  const keys = Object.keys(api.chatRequestFor(PAIR, "hola", "c"));
+  for (const forbidden of ["measurements", "findings", "context", "analysisId", "baselineCaseId"]) assert.equal(keys.includes(forbidden), false, forbidden);
 });
 
-// ---- 2: suggested questions ----
-check("2. suggested questions: existen al menos 4 sugerencias", () => {
-  assert.ok(display.SUGGESTED_QUESTIONS.length >= 4);
+check("la respuesta se parsea estricta: faltan flags de seguridad o huella y falla", () => {
+  const parsed = api.parseChatResponse(chatResponse());
+  assert.equal(parsed.humanReviewRequired, true);
+  assert.equal(parsed.contextFingerprint, "ctx-aaaa");
+  assert.equal(parsed.references[0].ref, "M1");
+  assert.equal(parsed.scope.kind, "study");
+  for (const missing of ["humanReviewRequired", "notClinicalDiagnosis", "contextFingerprint", "answer", "scope"]) {
+    const broken = chatResponse();
+    delete broken[missing];
+    assert.throws(() => api.parseChatResponse(broken), /Contrato de chat inválido/, missing);
+  }
+  assert.throws(() => api.parseChatResponse(chatResponse({ scope: { kind: "otro" } })), /ámbito desconocido/);
 });
 
-// ---- 3-4: send question / loading ----
-check("3-4. send question deja phase=sending con el mensaje del usuario visible", () => {
+check("el contexto describe el modelo, lo ausente y lo que recibiría el proveedor", () => {
+  const info = api.parseChatContextInfo(contextInfo());
+  assert.equal(info.provider.available, true);
+  assert.deepEqual(Array.from(info.missing), ["Edad al estudio"]);
+  assert.throws(() => api.parseChatContextInfo({ ...contextInfo(), provider: undefined }), /estado del proveedor/);
+});
+
+check("el historial y la conversación traen su ámbito, la huella y las referencias de cada mensaje", () => {
+  const history = api.parseChatConversationHistory({ caseId: "CASO-1", scopeKey: "run:run-1", conversations: [{ conversationId: "c1", createdAt: "2026-10-17T12:00:00Z", messageCount: 2 }] });
+  assert.equal(history.scopeKey, "run:run-1");
+  const detail = api.parseChatConversationDetail({
+    conversationId: "c1", caseId: "CASO-1", createdAt: "2026-10-17T12:00:00Z", scopeKey: "run:run-1", runId: "run-1", referenceRunId: null,
+    messages: [{ id: "m1", role: "ASSISTANT", content: "x", createdAt: "2026-10-17T12:00:00Z", model: "m", provider: "p", promptVersion: "v2", contextFingerprint: "ctx-aaaa", references: [{ ref: "M1", label: "l" }, { malformada: true }] }],
+  });
+  assert.equal(detail.messages[0].contextFingerprint, "ctx-aaaa");
+  assert.equal(detail.messages[0].references.length, 1, "una referencia mal formada se descarta, no se inventa");
+});
+
+/* ------------------------------------------------------------------ ámbito y estado */
+
+check("el ámbito distingue estudio, otra corrida y otra referencia", () => {
+  const keys = new Set([
+    state.chatScopeKey(STUDY), state.chatScopeKey({ ...STUDY, runId: "run-2" }), state.chatScopeKey(PAIR),
+    state.chatScopeKey({ ...PAIR, referenceRunId: "run-otra" }), state.chatScopeKey({ ...PAIR, referenceCaseId: "REF-2" }), state.chatScopeKey({ ...STUDY, caseId: "OTRO" }),
+  ]);
+  assert.equal(keys.size, 6);
+  assert.equal(state.isPairScope(STUDY), false);
+  assert.equal(state.isPairScope(PAIR), true);
+  assert.equal(state.isPairScope({ ...STUDY, referenceCaseId: "REF-1" }), false);
+});
+
+check("la pregunta queda visible y bloquea el doble envío; la respuesta suma el mensaje con su huella y fuentes", () => {
   const sent = state.questionSent(state.initialChatUiState(), "hola");
   assert.equal(sent.phase, "sending");
-  assert.equal(sent.messages[0].role, "USER");
-  assert.equal(sent.messages[0].content, "hola");
+  assert.equal(state.canSend(sent), false);
+  const answered = state.answerReceived(sent, api.parseChatResponse(chatResponse()));
+  assert.equal(answered.phase, "idle");
+  assert.equal(answered.messages[1].role, "ASSISTANT");
+  assert.equal(answered.messages[1].fingerprint, "ctx-aaaa");
+  assert.equal(answered.messages[1].references[0].ref, "M1");
+  assert.equal(answered.conversationId, "conv-1");
 });
 
-// ---- 5: double submit blocked ----
-check("5. double submit: canSend=false mientras phase=sending", () => {
-  const sending = state.questionSent(state.initialChatUiState(), "hola");
-  assert.equal(state.canSend(sending), false);
-});
-
-// ---- 6: response displayed ----
-check("6. la respuesta se agrega como mensaje ASSISTANT", () => {
+check("tras un error la pregunta sigue visible y el reintento no la duplica", () => {
   const sent = state.questionSent(state.initialChatUiState(), "hola");
-  const withAnswer = state.answerReceived(sent, chatResponse());
-  assert.equal(withAnswer.phase, "success");
-  assert.equal(withAnswer.messages[1].role, "ASSISTANT");
-  assert.equal(withAnswer.messages[1].content, "Hay 1 medicion disponible en L4-L5.");
+  const failed = state.requestFailed(sent, { kind: "timeout", message: "tardó", retryable: true });
+  assert.equal(failed.phase, "error");
+  assert.equal(failed.messages.length, 1);
+  assert.equal(failed.messages[0].content, "hola");
+  const prepared = state.retryPrepared(failed);
+  assert.equal(prepared.question, "hola");
+  assert.equal(prepared.state.messages.length, 0, "se saca la pregunta fallida antes de reenviarla");
+  assert.equal(state.retryPrepared(state.initialChatUiState()), null);
 });
 
-// ---- 7-11: error classification ----
-check("7. provider unavailable (502) se clasifica como upstream", () => {
-  assert.equal(errorState.classifyProductAnalysisError(backendApiError(502)).kind, "upstream");
+check("una respuesta es «de datos anteriores» si su huella no es la actual", () => {
+  const assistant = { role: "ASSISTANT", fingerprint: "ctx-viejo" };
+  assert.equal(state.isStaleAnswer(assistant, "ctx-nuevo"), true);
+  assert.equal(state.isStaleAnswer(assistant, "ctx-viejo"), false);
+  assert.equal(state.isStaleAnswer(assistant, null), false, "sin huella actual conocida no se afirma nada");
+  assert.equal(state.isStaleAnswer({ role: "USER", fingerprint: "ctx-viejo" }, "ctx-nuevo"), false);
+  assert.equal(state.isStaleAnswer({ role: "ASSISTANT", fingerprint: null }, "ctx-nuevo"), true);
 });
 
-check("8. 400 se clasifica como functional", () => {
-  assert.equal(errorState.classifyProductAnalysisError(backendApiError(400)).kind, "functional");
-});
-
-check("9. 404 se clasifica como not_found", () => {
-  assert.equal(errorState.classifyProductAnalysisError(backendApiError(404)).kind, "not_found");
-});
-
-check("10. 503 (LLM deshabilitado) se clasifica como upstream, nunca oculto", () => {
-  assert.equal(errorState.classifyProductAnalysisError(backendApiError(503)).kind, "upstream");
-});
-
-check("11. network error se clasifica como network", () => {
-  assert.equal(errorState.classifyProductAnalysisError(new TypeError("Failed to fetch")).kind, "network");
-});
-
-// ---- 12-14: conversation history ----
-check("12. GET history se parsea con la lista de conversaciones", () => {
-  const parsed = api.parseChatConversationHistory({ caseId: "case-1", conversations: [{ conversationId: "c1", createdAt: "2026-08-25T12:00:00Z", messageCount: 2 }] });
-  assert.equal(parsed.conversations.length, 1);
-});
-
-check("13. reload conversation: conversationLoaded repone los mensajes persistidos", () => {
-  const detail = { conversationId: "c1", caseId: "case-1", createdAt: "2026-08-25T12:00:00Z", messages: [
-    { id: "m1", role: "USER", content: "hola", createdAt: "t", model: null, provider: null, promptVersion: null },
-    { id: "m2", role: "ASSISTANT", content: "respuesta", createdAt: "t", model: "Qwen2.5-7B-Instruct", provider: "self-hosted", promptVersion: "pfi.chat-system-prompt.v1" },
-  ] };
-  const parsed = api.parseChatConversationDetail(detail);
-  const loaded = state.conversationLoaded(state.initialChatUiState(), parsed);
-  assert.equal(loaded.messages.length, 2);
-  assert.equal(loaded.conversationId, "c1");
-});
-
-check("14. multiple conversations: el historial preserva cada una por separado", () => {
-  const parsed = api.parseChatConversationHistory({
-    caseId: "case-1",
-    conversations: [
-      { conversationId: "c1", createdAt: "2026-08-25T10:00:00Z", messageCount: 2 },
-      { conversationId: "c2", createdAt: "2026-08-25T11:00:00Z", messageCount: 2 },
+check("cargar una conversación guarda la huella de cada respuesta", () => {
+  const detail = api.parseChatConversationDetail({
+    conversationId: "c1", caseId: "CASO-1", createdAt: "2026-10-17T12:00:00Z", scopeKey: "run:run-1", runId: "run-1", referenceRunId: null,
+    messages: [
+      { id: "m1", role: "USER", content: "hola", createdAt: "2026-10-17T12:00:00Z", model: null, provider: null, promptVersion: "v2", contextFingerprint: "ctx-aaaa", references: [] },
+      { id: "m2", role: "ASSISTANT", content: "x", createdAt: "2026-10-17T12:00:00Z", model: "m", provider: "p", promptVersion: "v2", contextFingerprint: "ctx-aaaa", references: [] },
     ],
   });
-  assert.equal(parsed.conversations.length, 2);
-  assert.notEqual(parsed.conversations[0].conversationId, parsed.conversations[1].conversationId);
-});
-
-// ---- 15: disclaimer ----
-check("15. el disclaimer existe y no es texto clínico", () => {
-  assert.ok(display.CHAT_DISCLAIMER.includes("no reemplaza"));
-});
-
-// ---- 16-17: safe rendering ----
-check("16. el contenido de la respuesta se preserva literal, nunca se reescribe", () => {
-  const withAnswer = state.answerReceived(state.initialChatUiState(), chatResponse({ answer: "<b>no deberia interpretarse</b>" }));
-  assert.equal(withAnswer.messages[0].content, "<b>no deberia interpretarse</b>");
-});
-
-check("17. el panel nunca usa dangerouslySetInnerHTML", () => {
-  // Se busca el uso real como atributo JSX (`dangerouslySetInnerHTML={`), no la mención en un
-  // comentario que explica por qué no se usa.
-  const panelSource = readFileSync("src/features/reading/ChatPanel.tsx", "utf8");
-  assert.equal(panelSource.includes("dangerouslySetInnerHTML={"), false);
-});
-
-// ---- 18: Enter submits ----
-check("18. el panel envía con Enter (sin Shift) y agrega salto de línea con Shift+Enter", () => {
-  const panelSource = readFileSync("src/features/reading/ChatPanel.tsx", "utf8");
-  assert.match(panelSource, /event\.key === "Enter" && !event\.shiftKey/);
-});
-
-// ---- 19: blank rejected ----
-check("19. una pregunta en blanco nunca se envía", () => {
+  const loaded = state.conversationLoaded(state.initialChatUiState(), detail);
+  assert.equal(loaded.messages[1].fingerprint, "ctx-aaaa");
+  assert.equal(loaded.messages[0].fingerprint, undefined);
+  assert.equal(state.newConversationStarted().messages.length, 0);
   assert.equal(state.shouldSubmitQuestion("   "), false);
-  assert.equal(state.shouldSubmitQuestion(""), false);
 });
 
-// ---- 20: long question handled ----
-check("20. una pregunta larga no se bloquea client-side (el límite lo valida el Backend)", () => {
-  assert.equal(state.shouldSubmitQuestion("a".repeat(3000)), true);
+/* ------------------------------------------------------------------ qué se promete y cómo se conecta */
+
+check("no se promete comparación de hallazgos si el par no tiene P10.7 en los dos lados", () => {
+  const withFindings = api.parseChatContextInfo(contextInfo({ scope: scope("pair", true) }));
+  const without = api.parseChatContextInfo(contextInfo({ scope: scope("pair", false) }));
+  assert.equal(state.promisesFindingsComparison(PAIR, withFindings), true);
+  assert.equal(state.promisesFindingsComparison(PAIR, without), false);
+  assert.equal(state.promisesFindingsComparison(PAIR, null), false);
+  assert.equal(state.promisesFindingsComparison(STUDY, withFindings), false);
+  assert.equal(display.suggestedQuestions(PAIR, without).some((q) => /clasificaci/i.test(q)), false);
+  assert.equal(display.suggestedQuestions(PAIR, withFindings).some((q) => /clasificaci/i.test(q)), true);
+  assert.match(display.CHAT_NO_FINDINGS_COMPARISON_TEXT, /no hay comparación de hallazgos/);
 });
 
-// ---- 21: context source badges ----
-check("21. displayContextSource traduce fuentes conocidas y no rompe con una desconocida", () => {
-  assert.equal(display.displayContextSource("current_analysis"), "Análisis actual");
-  assert.equal(display.displayContextSource("professional_correction"), "Corrección profesional");
-  assert.equal(display.displayContextSource("unknown_source_xyz"), "unknown_source_xyz");
+check("las preguntas sugeridas son las acordadas, para el estudio y para el par", () => {
+  assert.deepEqual(Array.from(display.suggestedQuestions(STUDY, null)), ["Resumí los resultados de este estudio", "¿Qué resultados faltan o requieren especial revisión?"]);
+  assert.equal(display.suggestedQuestions(PAIR, null)[0], "¿Qué diferencias se registraron entre A y B?");
 });
 
-// ---- 22: longitudinal suggestion ----
-check("22. existe una sugerencia sobre qué cambió respecto del estudio anterior", () => {
-  assert.ok(display.SUGGESTED_QUESTIONS.includes("¿Qué cambió respecto del estudio anterior?"));
+check("el estado de conexión distingue conectado, apagado, sin modelo y error de contexto", () => {
+  assert.equal(state.connectionState(null, null).kind, "checking");
+  assert.equal(state.connectionState(api.parseChatContextInfo(contextInfo()), null).kind, "ready");
+  assert.equal(state.connectionState(api.parseChatContextInfo(contextInfo({ provider: { enabled: false, available: false, model: "m" } })), null).kind, "disabled");
+  assert.equal(state.connectionState(api.parseChatContextInfo(contextInfo({ provider: { enabled: true, available: false, model: "m" } })), null).kind, "offline");
+  assert.equal(state.connectionState(null, { kind: "scope", message: "no existe", retryable: false }).kind, "scope_error");
+  assert.equal(state.connectionState(null, { kind: "network", message: "x", retryable: true }).kind, "offline");
+  assert.match(display.connectionLabel("ready", "qwen"), /conectado \(qwen\)/);
 });
 
-// ---- 23: corrected measurement question ----
-check("23. existe una sugerencia sobre mediciones corregidas profesionalmente", () => {
-  assert.ok(display.SUGGESTED_QUESTIONS.includes("¿Qué mediciones fueron corregidas profesionalmente?"));
+/* ------------------------------------------------------------------ errores */
+
+check("cada falla tiene un mensaje claro y dice si tiene sentido reintentar", () => {
+  const disabled = display.classifyChatError(backendError(503, "LLM_PROVIDER_DISABLED"));
+  assert.equal(disabled.kind, "disabled");
+  assert.equal(disabled.retryable, false);
+  const timeout = display.classifyChatError(backendError(504, "LLM_PROVIDER_TIMEOUT"));
+  assert.equal(timeout.kind, "timeout");
+  assert.equal(timeout.retryable, true);
+  const down = display.classifyChatError(backendError(502, "LLM_PROVIDER_UNAVAILABLE"));
+  assert.equal(down.kind, "unavailable");
+  assert.equal(down.retryable, true);
+  assert.equal(display.classifyChatError(backendError(403, "")).kind, "forbidden");
+  assert.equal(display.classifyChatError(backendError(401, "")).kind, "forbidden");
+  const gone = display.classifyChatError(backendError(404, "CHAT_RUN_NOT_FOUND"));
+  assert.equal(gone.kind, "scope");
+  assert.equal(gone.retryable, false);
+  assert.match(gone.message, /No se usó ningún otro/);
+  assert.equal(display.classifyChatError(new Error("Failed to fetch")).kind, "network");
+  // Nunca se filtra infraestructura del servidor.
+  for (const error of [disabled, timeout, down, gone]) assert.doesNotMatch(error.message, /localhost|host\.docker|:1234|http/i);
 });
 
-// ---- 24: P10.7 unavailable semantics (frontend never invents its own claim) ----
-check("24. ningún texto estático del chat afirma 'normal'/'sin hallazgos' por su cuenta", () => {
-  const forbidden = /\bnormal\b|sin hallazgos|no se detect/i;
-  const texts = [display.CHAT_DISCLAIMER, display.CHAT_EMPTY_STATE_TEXT, display.CHAT_SENDING_TEXT, ...display.SUGGESTED_QUESTIONS];
-  for (const text of texts) assert.equal(forbidden.test(text), false, `texto indebido: "${text}"`);
+check("el aviso de revisión profesional y de que no ve imágenes está siempre", () => {
+  assert.match(display.CHAT_DISCLAIMER, /no ve las imágenes/);
+  assert.match(display.CHAT_DISCLAIMER, /revisión profesional/);
+  assert.match(display.CHAT_DISCLAIMER, /no es un diagnóstico/);
 });
 
-// ---- 25: no diagnosis language hardcoded by frontend ----
-check("25. ningún texto estático del chat afirma un diagnóstico o tratamiento", () => {
-  const forbidden = /diagn[oó]stic|tratamiento|pron[oó]stico|mejor[oó]|empeor[oó]/i;
-  const texts = [display.CHAT_DISCLAIMER, display.CHAT_EMPTY_STATE_TEXT, display.CHAT_SENDING_TEXT, ...display.SUGGESTED_QUESTIONS];
-  for (const text of texts) assert.equal(forbidden.test(text), false, `texto indebido: "${text}"`);
+check("etiquetas: fuentes desconocidas no rompen y las latencias se leen bien", () => {
+  assert.equal(display.displayContextSource("numeric_comparison"), "Comparación de mediciones");
+  assert.equal(display.displayContextSource("algo_nuevo"), "algo_nuevo");
+  assert.equal(display.displayElapsed(850), "850 ms");
+  assert.equal(display.displayElapsed(4200), "4,2 s");
+  assert.equal(display.displayConversationLabel("no-es-fecha"), "no-es-fecha");
 });
 
-// ---- extra: fail-closed parsing ----
-check("extra. una respuesta de chat sin humanReviewRequired es rechazada", () => {
-  const invalid = chatResponse();
-  delete invalid.humanReviewRequired;
-  assert.throws(() => api.parseChatResponse(invalid));
-});
-
-check("extra. requestFailed conserva el mensaje del usuario ya enviado", () => {
-  const sent = state.questionSent(state.initialChatUiState(), "hola");
-  const failed = state.requestFailed(sent, errorState.classifyProductAnalysisError(backendApiError(502)));
-  assert.equal(failed.messages.length, 1, "la pregunta del usuario no debe desaparecer tras un error");
-  assert.equal(failed.phase, "error");
-});
-
-// ---- Stage 81-C/81-D: multi-turn chat + history selector ----
-
-check("26. multi-turno: conversationId se conserva entre preguntas sucesivas", () => {
-  const afterFirst = state.answerReceived(state.initialChatUiState(), chatResponse({ conversationId: "conv-1" }));
-  const secondSent = state.questionSent(afterFirst, "segunda pregunta");
-  assert.equal(secondSent.conversationId, "conv-1", "el conversationId no debe perderse al enviar el siguiente turno");
-});
-
-check("27. multi-turno: una segunda respuesta se agrega a la misma lista de mensajes, no la reemplaza", () => {
-  const firstSent = state.questionSent(state.initialChatUiState(), "primera pregunta");
-  const afterFirst = state.answerReceived(firstSent, chatResponse({ conversationId: "conv-1" }));
-  const secondSent = state.questionSent(afterFirst, "segunda pregunta");
-  const afterSecond = state.answerReceived(secondSent, chatResponse({ conversationId: "conv-1", messageId: "msg-2", answer: "segunda respuesta" }));
-  assert.equal(afterSecond.messages.length, 4);
-  assert.equal(afterSecond.messages[3].content, "segunda respuesta");
-});
-
-check("28. Nueva conversación: newConversationStarted vuelve al estado inicial (sin conversationId)", () => {
-  const afterFirst = state.answerReceived(state.initialChatUiState(), chatResponse({ conversationId: "conv-1" }));
-  const reset = state.newConversationStarted();
-  assert.equal(reset.conversationId, undefined);
-  assert.equal(reset.messages.length, 0);
-  assert.notEqual(afterFirst.conversationId, reset.conversationId);
-});
-
-check("29. displayConversationLabel: una conversación de hoy se etiqueta 'Hoy HH:MM'", () => {
-  const now = new Date(2026, 7, 25, 18, 10);
-  const label = display.displayConversationLabel(new Date(2026, 7, 25, 18, 10).toISOString(), now);
-  assert.match(label, /^Hoy \d{2}:\d{2}$/);
-});
-
-check("30. displayConversationLabel: una conversación de otro día incluye la fecha", () => {
-  const now = new Date(2026, 7, 25, 12, 0);
-  const label = display.displayConversationLabel(new Date(2026, 7, 24, 22, 15).toISOString(), now);
-  assert.match(label, /^24\/08 \d{2}:\d{2}$/);
-});
-
-check("31. displayConversationLabel: una fecha inválida nunca rompe -- devuelve el string original", () => {
-  assert.equal(display.displayConversationLabel("no-es-una-fecha"), "no-es-una-fecha");
-});
-
-check("32. CHAT_NEW_CONVERSATION_LABEL y CHAT_CONVERSATIONS_EMPTY_TEXT existen y no son texto clínico", () => {
-  assert.ok(display.CHAT_NEW_CONVERSATION_LABEL.length > 0);
-  assert.ok(display.CHAT_CONVERSATIONS_EMPTY_TEXT.length > 0);
-  const forbidden = /diagn[oó]stic|tratamiento|normal\b/i;
-  assert.equal(forbidden.test(display.CHAT_NEW_CONVERSATION_LABEL), false);
-  assert.equal(forbidden.test(display.CHAT_CONVERSATIONS_EMPTY_TEXT), false);
-});
-
-check("33. reload de una conversación distinta reemplaza conversationId y mensajes, no los combina", () => {
-  const afterFirst = state.answerReceived(state.initialChatUiState(), chatResponse({ conversationId: "conv-1" }));
-  const reloaded = state.conversationLoaded(afterFirst, {
-    conversationId: "conv-2",
-    caseId: "case-1",
-    createdAt: "2026-08-25T10:00:00Z",
-    messages: [{ id: "m1", role: "USER", content: "otra conversacion", createdAt: "t", model: null, provider: null, promptVersion: null }],
-  });
-  assert.equal(reloaded.conversationId, "conv-2");
-  assert.equal(reloaded.messages.length, 1);
-});
-
-console.log(`Post-E50 contextual chat (stages 80-81): ${passed} tests OK`);
+console.log(`Asistente (contrato y lógica de la interfaz): ${passed} pruebas pasaron`);

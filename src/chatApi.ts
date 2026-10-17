@@ -1,18 +1,21 @@
 import { multiplanarRequest } from "./multiplanarApi";
 import type {
+  ChatContextInfo,
   ChatConversationDetail,
   ChatConversationHistory,
   ChatConversationSummary,
   ChatMessage,
+  ChatReference,
   ChatRequest,
   ChatResponse,
+  ChatResponseScope,
+  ChatScope,
 } from "./contracts/chatTypes";
 
 /**
- * Cliente para `POST /api/studies/{caseId}/chat` y `GET .../chat-conversations(/{id})` (Backend
- * Post-E50, stage 80). Nunca envía mediciones/contexto — sólo la pregunta y, si corresponde,
- * `analysisId`/`baselineCaseId` — y nunca llama al LLM directamente: siempre pasa por Spring, que
- * es quien habla con el proveedor self-hosted.
+ * Cliente del asistente sobre los resultados reales. Nunca envía mediciones ni contexto: solo la pregunta y el ámbito
+ * (corrida o par de corridas). Nunca llama al modelo directamente: siempre pasa por el Backend, que valida el estudio, la
+ * corrida y el rol, arma el contexto y habla con el proveedor local.
  */
 
 export class ChatContractError extends Error {
@@ -48,8 +51,33 @@ function requiredBoolean(value: unknown, field: string): boolean {
   return value;
 }
 
-function requiredStringArray(value: unknown): string[] {
+function stringArray(value: unknown): string[] {
   return asArray(value).filter((item): item is string => typeof item === "string");
+}
+
+function nullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function parseReferences(value: unknown): ChatReference[] {
+  const references: ChatReference[] = [];
+  for (const item of asArray(value)) {
+    const raw = asRecord(item);
+    if (raw && typeof raw.ref === "string" && typeof raw.label === "string") references.push({ ref: raw.ref, label: raw.label });
+  }
+  return references;
+}
+
+function parseScope(value: unknown): ChatResponseScope {
+  const raw = asRecord(value);
+  if (!raw || (raw.kind !== "study" && raw.kind !== "pair")) throw new ChatContractError("Contrato de chat inválido: ámbito desconocido.");
+  return {
+    kind: raw.kind,
+    runId: requiredText(raw.runId, "scope.runId"),
+    referenceCaseId: nullableText(raw.referenceCaseId),
+    referenceRunId: nullableText(raw.referenceRunId),
+    findingsComparable: requiredBoolean(raw.findingsComparable, "scope.findingsComparable"),
+  };
 }
 
 /** Parseo estricto, fail-closed: los safety flags faltantes nunca se completan con un default. */
@@ -64,10 +92,39 @@ export function parseChatResponse(value: unknown): ChatResponse {
     provider: requiredText(raw.provider, "provider"),
     promptVersion: requiredText(raw.promptVersion, "promptVersion"),
     generatedAt: requiredText(raw.generatedAt, "generatedAt"),
-    warnings: requiredStringArray(raw.warnings),
+    warnings: stringArray(raw.warnings),
     humanReviewRequired: requiredBoolean(raw.humanReviewRequired, "humanReviewRequired"),
     notClinicalDiagnosis: requiredBoolean(raw.notClinicalDiagnosis, "notClinicalDiagnosis"),
-    contextSources: requiredStringArray(raw.contextSources),
+    contextSources: stringArray(raw.contextSources),
+    references: parseReferences(raw.references),
+    removedReferences: typeof raw.removedReferences === "number" ? raw.removedReferences : 0,
+    contextFingerprint: requiredText(raw.contextFingerprint, "contextFingerprint"),
+    scope: parseScope(raw.scope),
+    elapsedMs: typeof raw.elapsedMs === "number" ? raw.elapsedMs : 0,
+    promptTokens: nullableNumber(raw.promptTokens),
+    completionTokens: nullableNumber(raw.completionTokens),
+    truncated: raw.truncated === true,
+  };
+}
+
+export function parseChatContextInfo(value: unknown): ChatContextInfo {
+  const raw = asRecord(value);
+  if (!raw) throw new ChatContractError("Contrato de contexto inválido: respuesta vacía.");
+  const provider = asRecord(raw.provider);
+  if (!provider) throw new ChatContractError("Contrato de contexto inválido: falta el estado del proveedor.");
+  return {
+    scope: parseScope(raw.scope),
+    contextFingerprint: requiredText(raw.contextFingerprint, "contextFingerprint"),
+    promptVersion: requiredText(raw.promptVersion, "promptVersion"),
+    contextSources: stringArray(raw.contextSources),
+    missing: stringArray(raw.missing),
+    elementCount: typeof raw.elementCount === "number" ? raw.elementCount : 0,
+    contextText: requiredText(raw.contextText, "contextText"),
+    provider: {
+      enabled: requiredBoolean(provider.enabled, "provider.enabled"),
+      available: requiredBoolean(provider.available, "provider.available"),
+      model: typeof provider.model === "string" ? provider.model : "",
+    },
   };
 }
 
@@ -82,6 +139,8 @@ function parseChatMessage(value: unknown): ChatMessage {
     model: nullableText(raw.model),
     provider: nullableText(raw.provider),
     promptVersion: nullableText(raw.promptVersion),
+    contextFingerprint: nullableText(raw.contextFingerprint),
+    references: parseReferences(raw.references),
   };
 }
 
@@ -100,6 +159,7 @@ export function parseChatConversationHistory(value: unknown): ChatConversationHi
   if (!raw) throw new ChatContractError("Contrato de historial de chat inválido: respuesta vacía.");
   return {
     caseId: requiredText(raw.caseId, "caseId"),
+    scopeKey: requiredText(raw.scopeKey, "scopeKey"),
     conversations: asArray(raw.conversations).map(parseConversationSummary),
   };
 }
@@ -111,20 +171,47 @@ export function parseChatConversationDetail(value: unknown): ChatConversationDet
     conversationId: requiredText(raw.conversationId, "conversationId"),
     caseId: requiredText(raw.caseId, "caseId"),
     createdAt: requiredText(raw.createdAt, "createdAt"),
+    scopeKey: requiredText(raw.scopeKey, "scopeKey"),
+    runId: nullableText(raw.runId),
+    referenceRunId: nullableText(raw.referenceRunId),
     messages: asArray(raw.messages).map(parseChatMessage),
   };
 }
 
-export async function sendChatMessage(caseId: string, request: ChatRequest): Promise<ChatResponse> {
-  const raw = await multiplanarRequest<unknown>(`/api/studies/${encodeURIComponent(caseId)}/chat`, {
+/** Parámetros de consulta del ámbito. La corrida es siempre explícita: el servidor no elige otra en silencio. */
+function scopeQuery(scope: ChatScope, includeReferenceCase: boolean): string {
+  const params = new URLSearchParams();
+  params.set("runId", scope.runId);
+  if (scope.referenceRunId) params.set("referenceRunId", scope.referenceRunId);
+  if (includeReferenceCase && scope.referenceCaseId) params.set("referenceCaseId", scope.referenceCaseId);
+  return params.toString();
+}
+
+export function chatRequestFor(scope: ChatScope, question: string, conversationId?: string): ChatRequest {
+  const request: ChatRequest = { question, runId: scope.runId };
+  if (scope.referenceCaseId && scope.referenceRunId) {
+    request.referenceCaseId = scope.referenceCaseId;
+    request.referenceRunId = scope.referenceRunId;
+  }
+  if (conversationId) request.conversationId = conversationId;
+  return request;
+}
+
+export async function sendChatMessage(scope: ChatScope, question: string, conversationId?: string): Promise<ChatResponse> {
+  const raw = await multiplanarRequest<unknown>(`/api/studies/${encodeURIComponent(scope.caseId)}/chat`, {
     method: "POST",
-    body: JSON.stringify(request),
+    body: JSON.stringify(chatRequestFor(scope, question, conversationId)),
   });
   return parseChatResponse(raw);
 }
 
-export async function getChatConversations(caseId: string): Promise<ChatConversationHistory> {
-  const raw = await multiplanarRequest<unknown>(`/api/studies/${encodeURIComponent(caseId)}/chat-conversations`);
+export async function getChatContext(scope: ChatScope): Promise<ChatContextInfo> {
+  const raw = await multiplanarRequest<unknown>(`/api/studies/${encodeURIComponent(scope.caseId)}/chat-context?${scopeQuery(scope, true)}`);
+  return parseChatContextInfo(raw);
+}
+
+export async function getChatConversations(scope: ChatScope): Promise<ChatConversationHistory> {
+  const raw = await multiplanarRequest<unknown>(`/api/studies/${encodeURIComponent(scope.caseId)}/chat-conversations?${scopeQuery(scope, false)}`);
   return parseChatConversationHistory(raw);
 }
 

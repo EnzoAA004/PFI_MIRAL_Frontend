@@ -1,50 +1,45 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import type { ChatScope } from "../../contracts/chatTypes";
 import { useChat } from "./useChat";
-import { shouldSubmitQuestion } from "./chatState";
-import type { ChatConversationSummary } from "../../contracts/chatTypes";
+import { chatScopeKey, connectionState, isPairScope, isStaleAnswer, shouldSubmitQuestion } from "./chatState";
 import {
   CHAT_CONVERSATIONS_EMPTY_TEXT,
   CHAT_DISCLAIMER,
   CHAT_EMPTY_STATE_TEXT,
   CHAT_NEW_CONVERSATION_LABEL,
+  CHAT_NO_FINDINGS_COMPARISON_TEXT,
   CHAT_SENDING_TEXT,
-  SUGGESTED_QUESTIONS,
+  CHAT_STALE_TEXT,
+  connectionLabel,
   displayContextSource,
   displayConversationLabel,
+  suggestedQuestions,
 } from "./chatDisplay";
 
 type Props = {
-  caseId: string;
+  scope: ChatScope;
 };
 
 /**
- * "Asistente" (stage 80) — chat contextual sobre el Study actualmente abierto. Vive dentro de la
- * pestaña "Más" de `StudyReviewView`, junto a "Evolución" (stage 79) — no se agregó como una
- * quinta pestaña de `ReviewInspector` para no romper su convención de exactamente cuatro
- * pestañas fijas (80-X: "NO hacer chatbot flotante global").
+ * «Asistente»: preguntas sobre los resultados REALES del estudio abierto o, desde el visor dual, sobre las diferencias
+ * entre A (referencia) y B (actual). El Backend arma el contexto con la corrida exacta; acá solo se muestra qué datos se
+ * están usando, el estado del modelo, la respuesta con sus fuentes y los errores con posibilidad de reintentar.
  *
- * El texto del asistente se renderiza siempre como texto plano de React (nunca
- * `dangerouslySetInnerHTML`) — ver 80-AB: "preferir texto plano inicialmente".
+ * Se monta con `key` = ámbito: otro estudio, otra corrida u otra referencia empieza con una conversación limpia (nunca se
+ * mezclan mensajes). El texto del asistente se renderiza siempre como texto plano de React.
  */
-export function ChatPanel({ caseId }: Props) {
-  const { state, canSend, ask, loadConversation, startNewConversation, listConversations } = useChat(caseId);
-  const [draft, setDraft] = useState("");
-  const [conversations, setConversations] = useState<ChatConversationSummary[]>([]);
+export function ChatPanel({ scope }: Props) {
+  return <ChatPanelBody key={chatScopeKey(scope)} scope={scope} />;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    listConversations()
-      .then((result) => {
-        if (!cancelled) setConversations(result);
-      })
-      .catch(() => {
-        // 81-D: un historial de conversaciones que no carga no debe romper el chat -- el
-        // selector simplemente queda vacío, la conversación actual sigue funcionando.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [listConversations, state.conversationId]);
+function ChatPanelBody({ scope }: Props) {
+  const { state, info, infoError, conversations, canSend, ask, retry, loadConversation, startNewConversation } = useChat(scope);
+  const [draft, setDraft] = useState("");
+  const pair = isPairScope(scope);
+  const connection = connectionState(info, infoError);
+  const modelReady = connection.kind === "ready";
+  const currentFingerprint = info?.contextFingerprint ?? null;
+  const questions = suggestedQuestions(scope, info);
 
   function submit() {
     if (!shouldSubmitQuestion(draft)) return;
@@ -53,64 +48,94 @@ export function ChatPanel({ caseId }: Props) {
   }
 
   return (
-    <div className="chat-panel">
-      <p className="rr-note">{CHAT_DISCLAIMER}</p>
+    <div className="chat-panel" data-testid="assistant-panel" data-scope={pair ? "pair" : "study"}>
+      <div className="chat-scope" data-testid="assistant-scope">
+        {pair ? (
+          <>
+            <strong>Comparación A / B</strong>
+            <span>A = Referencia ({scope.referenceCaseId}) · B = Actual ({scope.caseId})</span>
+          </>
+        ) : (
+          <>
+            <strong>Estudio abierto</strong>
+            <span>{scope.caseId} · análisis que muestra el visor</span>
+          </>
+        )}
+        {info && info.contextSources.length > 0 && (
+          <span className="rr-note">Datos usados: {info.contextSources.map(displayContextSource).join(", ")}</span>
+        )}
+      </div>
+
+      <p className={`chat-connection chat-connection-${connection.kind}`} data-testid="assistant-connection" role="status">
+        {connectionLabel(connection.kind, connection.kind === "ready" || connection.kind === "offline" ? connection.model : "")}
+        {connection.kind === "scope_error" && `: ${connection.message}`}
+      </p>
+
+      {pair && info && !info.scope.findingsComparable && (
+        <p className="rr-note" data-testid="assistant-no-findings-note">{CHAT_NO_FINDINGS_COMPARISON_TEXT}</p>
+      )}
+      {info && info.missing.length > 0 && (
+        <p className="rr-note" data-testid="assistant-missing">Datos ausentes que el asistente no puede inventar: {info.missing.join("; ")}.</p>
+      )}
+      <p className="rr-note" data-testid="assistant-disclaimer">{CHAT_DISCLAIMER}</p>
+
+      {info && (
+        <details className="chat-context" data-testid="assistant-context-details">
+          <summary>Ver los datos que recibe el modelo ({info.elementCount} elementos citables)</summary>
+          <pre className="chat-context-text">{info.contextText}</pre>
+        </details>
+      )}
 
       <div className="chat-conversations-bar">
-        <label htmlFor={`chat-conversation-select-${caseId}`} className="rr-note">
-          Conversaciones
-        </label>
+        <label htmlFor="chat-conversation-select" className="rr-note">Conversaciones de este {pair ? "par" : "análisis"}</label>
         <select
-          id={`chat-conversation-select-${caseId}`}
+          id="chat-conversation-select"
           aria-label="Conversaciones"
           value={state.conversationId ?? ""}
           onChange={(event) => {
             if (event.target.value) void loadConversation(event.target.value);
           }}
         >
-          <option value="">
-            {conversations.length === 0 ? CHAT_CONVERSATIONS_EMPTY_TEXT : "Seleccionar conversación"}
-          </option>
+          <option value="">{conversations.length === 0 ? CHAT_CONVERSATIONS_EMPTY_TEXT : "Seleccionar conversación"}</option>
           {conversations.map((conversation) => (
             <option key={conversation.conversationId} value={conversation.conversationId}>
               {displayConversationLabel(conversation.createdAt)}
             </option>
           ))}
         </select>
-        <button className="rr-more-action" type="button" onClick={startNewConversation}>
-          {CHAT_NEW_CONVERSATION_LABEL}
-        </button>
+        <button className="rr-more-action" type="button" onClick={startNewConversation}>{CHAT_NEW_CONVERSATION_LABEL}</button>
       </div>
 
-      <div className="chat-messages" role="log" aria-live="polite">
+      <div className="chat-messages" role="log" aria-live="polite" data-testid="assistant-messages">
         {state.messages.length === 0 && <p className="rr-findings-empty">{CHAT_EMPTY_STATE_TEXT}</p>}
         {state.messages.map((message) => (
-          <article key={message.id} className={`chat-message chat-message-${message.role.toLowerCase()}`}>
+          <article key={message.id} className={`chat-message chat-message-${message.role.toLowerCase()}`} data-testid={`assistant-message-${message.role.toLowerCase()}`}>
             <p>{message.content}</p>
-            {message.contextSources && message.contextSources.length > 0 && (
-              <p className="rr-note">
-                Fuentes: {message.contextSources.map(displayContextSource).join(", ")}
-              </p>
+            {isStaleAnswer(message, currentFingerprint) && <p className="rr-note chat-stale" data-testid="assistant-stale">{CHAT_STALE_TEXT}</p>}
+            {message.references && message.references.length > 0 && (
+              <ul className="chat-references" data-testid="assistant-references">
+                {message.references.map((reference) => (
+                  <li key={reference.ref}><code>[{reference.ref}]</code> {reference.label}</li>
+                ))}
+              </ul>
             )}
+            {message.warnings?.map((warning) => <p key={warning} className="rr-note">{warning}</p>)}
           </article>
         ))}
-        {state.phase === "sending" && <p className="rr-note" role="status">{CHAT_SENDING_TEXT}</p>}
+        {state.phase === "sending" && <p className="rr-note" role="status" data-testid="assistant-sending">{CHAT_SENDING_TEXT}</p>}
       </div>
 
       {state.phase === "error" && state.error && (
-        <p className="rr-disc-contract-error" role="alert">{state.error.message}</p>
+        <div className="rr-disc-contract-error" role="alert" data-testid="assistant-error">
+          <p>{state.error.message}</p>
+          {state.error.retryable && <button className="rr-more-action" type="button" onClick={() => void retry()}>Reintentar</button>}
+        </div>
       )}
 
       {state.messages.length === 0 && (
-        <div className="chat-suggested-questions">
-          {SUGGESTED_QUESTIONS.map((question) => (
-            <button
-              key={question}
-              className="rr-more-action"
-              type="button"
-              disabled={!canSend}
-              onClick={() => void ask(question)}
-            >
+        <div className="chat-suggested-questions" data-testid="assistant-suggestions">
+          {questions.map((question) => (
+            <button key={question} className="rr-more-action" type="button" disabled={!canSend || !modelReady} onClick={() => void ask(question)}>
               {question}
             </button>
           ))}
@@ -130,9 +155,7 @@ export function ChatPanel({ caseId }: Props) {
             }
           }}
         />
-        <button className="rr-more-action" type="button" disabled={!canSend || !shouldSubmitQuestion(draft)} onClick={submit}>
-          Enviar
-        </button>
+        <button className="rr-more-action" type="button" disabled={!canSend || !shouldSubmitQuestion(draft)} onClick={submit}>Enviar</button>
       </div>
     </div>
   );

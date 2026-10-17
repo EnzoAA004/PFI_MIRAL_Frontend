@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AiRunResponse, StudyArchiveSeries } from "../../appTypes";
 import type { ComparisonValue, InitialComparisonRow } from "../../contracts/initialAnalysisComparisonTypes";
+import { ChatPanel } from "./ChatPanel";
 import { ComparisonPane } from "./ComparisonPane";
 import { DifferencesPanel } from "./DifferencesPanel";
 import { DualFindingsPanel, findingsSideFor, sagittalSeriesInfoOf } from "./DualFindingsPanel";
@@ -52,7 +53,7 @@ type Props = {
   currentRunId: string | null;
   initialReferenceCaseId: string | null;
   /** Pestaña con la que abre el panel derecho (la demostración de hallazgos abre directamente en «Hallazgos IA»). */
-  initialRightTab?: "differences" | "findings";
+  initialRightTab?: "differences" | "findings" | "assistant";
   onClose: () => void;
 };
 
@@ -79,7 +80,10 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [filter, setFilter] = useState<DifferenceFilter>(NO_FILTER);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [rightTab, setRightTab] = useState<"differences" | "findings">(initialRightTab);
+  const [rightTab, setRightTab] = useState<"differences" | "findings" | "assistant">(initialRightTab);
+  // El asistente se monta la primera vez que se abre (no consulta nada antes) y después se conserva oculto: cambiar de pestaña
+  // no pierde la conversación ni el borrador, y tampoco toca el corte, el zoom ni el W/L de los visores.
+  const [assistantOpened, setAssistantOpened] = useState(initialRightTab === "assistant");
   /* Selección y filtro de la comparación de hallazgos. El filtro `null` es el inicial (cambios si los hay, si no todos). */
   const [findingKey, setFindingKey] = useState<string | null>(null);
   const [findingFilterChoice, setFindingFilterChoice] = useState<FindingsFilter | null>(null);
@@ -312,7 +316,7 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
         {comparison && (
           <div className="rr-dual-side">
             <div aria-label="Panel de la comparación" className="rr-dual-tabs" role="tablist">
-              {([["differences", "Diferencias"], ["findings", "Hallazgos IA"]] as const).map(([id, label]) => (
+              {([["differences", "Diferencias"], ["findings", "Hallazgos IA"], ["assistant", "Asistente"]] as const).map(([id, label]) => (
                 <button
                   aria-controls={`rr-dual-panel-${id}`}
                   aria-selected={rightTab === id}
@@ -320,7 +324,7 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
                   data-testid={`dual-tab-${id}`}
                   id={`rr-dual-tab-${id}`}
                   key={id}
-                  onClick={() => setRightTab(id)}
+                  onClick={() => { setRightTab(id); if (id === "assistant") setAssistantOpened(true); }}
                   role="tab"
                   type="button"
                 >
@@ -350,6 +354,20 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
                 selectedKey={findingKey}
                 targets={regionTargets}
               />
+            </div>
+            <div aria-labelledby="rr-dual-tab-assistant" hidden={rightTab !== "assistant"} id="rr-dual-panel-assistant" role="tabpanel">
+              {assistantOpened && (comparison.current.runId && comparison.reference.runId ? (
+                <ChatPanel
+                  scope={{
+                    caseId: comparison.current.caseId,
+                    runId: comparison.current.runId,
+                    referenceCaseId: comparison.reference.caseId,
+                    referenceRunId: comparison.reference.runId,
+                  }}
+                />
+              ) : (
+                <p className="rr-note" data-testid="assistant-no-run">El asistente necesita el análisis exacto de A y de B; esta comparación no lo identifica.</p>
+              ))}
             </div>
           </div>
         )}

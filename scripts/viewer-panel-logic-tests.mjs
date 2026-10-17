@@ -291,7 +291,7 @@ check("el aviso de anotaciones dice dónde se guardan y qué falta, solo cuando 
 /* --------------------------------------------------------------------- herramientas del estudio */
 
 const EXPECTED_TOOLS = ["history", "comparison", "report", "assistant", "concordance", "feedback", "audit", "three-d", "technical", "demo"];
-const EXPECTED_RETIRED = ["report", "assistant", "concordance", "feedback", "audit", "three-d", "technical", "demo"];
+const EXPECTED_RETIRED = ["report", "concordance", "feedback", "audit", "three-d", "technical", "demo"];
 
 check("las funciones inventariadas siguen definidas, una sola vez cada una (nada se borró: solo se retiró el acceso)", () => {
   const ids = tools.ALL_INSPECTOR_TOOLS.map((tool) => tool.id);
@@ -303,8 +303,8 @@ check("las funciones inventariadas siguen definidas, una sola vez cada una (nada
   }
 });
 
-check("el índice ofrece solo Historial del paciente y Comparación entre estudios", () => {
-  deepEqual(tools.INSPECTOR_TOOLS.map((tool) => tool.id), ["history", "comparison"]);
+check("el índice ofrece Historial del paciente, Comparación entre estudios y Asistente", () => {
+  deepEqual(tools.INSPECTOR_TOOLS.map((tool) => tool.id), ["history", "comparison", "assistant"]);
   deepEqual([...tools.RETIRED_INSPECTOR_TOOLS].sort(), [...EXPECTED_RETIRED].sort());
   for (const tool of tools.INSPECTOR_TOOLS) {
     assert.ok(tools.INSPECTOR_TOOL_GROUPS.some((group) => group.id === tool.group), `grupo de ${tool.id}`);
@@ -318,19 +318,21 @@ check("no quedan encabezados vacíos ni los grupos retirados", () => {
   for (const group of tools.INSPECTOR_TOOL_GROUPS) {
     assert.ok(tools.inspectorToolsInGroup(group.id).length > 0, `el grupo ${group.id} no está vacío`);
   }
-  deepEqual(tools.INSPECTOR_TOOL_GROUPS.map((group) => group.id), ["follow-up"]);
-  for (const retired of ["delivery", "evidence", "inspection", "demo"]) {
+  deepEqual(tools.INSPECTOR_TOOL_GROUPS.map((group) => group.id), ["follow-up", "delivery"]);
+  for (const retired of ["evidence", "inspection", "demo"]) {
     assert.equal(tools.INSPECTOR_TOOL_GROUPS.some((group) => group.id === retired), false, retired);
     deepEqual(tools.inspectorToolsInGroup(retired), []);
   }
   deepEqual(tools.inspectorToolsInGroup("follow-up").map((tool) => tool.id), ["history", "comparison"]);
+  deepEqual(tools.inspectorToolsInGroup("delivery").map((tool) => tool.id), ["assistant"]);
 });
 
-check("la comparación ya lee el análisis inicial real: no advierte que usa la demostración", () => {
+check("la comparación y el asistente leen el análisis real del visor: no advierten que usan la demostración", () => {
   assert.equal(tools.inspectorToolById("comparison").provenance, undefined);
+  assert.equal(tools.inspectorToolById("assistant").provenance, undefined);
   // Los consumidores del circuito de demostración conservan su aviso de procedencia (por si se reintegran).
   const all = (id) => tools.ALL_INSPECTOR_TOOLS.find((tool) => tool.id === id);
-  for (const id of ["report", "assistant"]) assert.match(all(id).provenance ?? "", /análisis de demostración/, id);
+  assert.match(all("report").provenance ?? "", /análisis de demostración/, "report");
 });
 
 check("ninguna herramienta ofrece iniciar un análisis nuevo", () => {

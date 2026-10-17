@@ -3578,3 +3578,13 @@
   .rr-dual-findings-originals summary { cursor: pointer; font-size: var(--fs-small); color: var(--text-muted); }
   .rr-dual-note-unavailable, .rr-dual-note-elsewhere { color: var(--text-muted); }
 }
+
+  /* Asistente sobre los resultados reales: ámbito, conexión, fuentes y respuestas anteriores. */
+  .chat-scope { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle); }
+  .chat-connection { margin: 0; font-size: var(--fs-small); }
+  .chat-connection-ready { color: var(--ok, #1b7f4b); }
+  .chat-connection-disabled, .chat-connection-offline, .chat-connection-scope_error { color: var(--danger, #b3261e); }
+  .chat-context summary { cursor: pointer; font-size: var(--fs-small); }
+  .chat-context-text { max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 11px; margin: 4px 0 0; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
+  .chat-references { margin: 6px 0 0; padding-left: 16px; font-size: var(--fs-small); }
+  .chat-stale { color: var(--danger, #b3261e); }

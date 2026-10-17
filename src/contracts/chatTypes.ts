@@ -1,10 +1,20 @@
 /**
- * Contrato de `POST /api/studies/{caseId}/chat` y `GET .../chat-conversations(/{id})` — Backend
- * Post-E50, stage 80. El Frontend nunca envía contexto/mediciones — sólo la pregunta y,
- * opcionalmente, qué análisis/baseline usar; Spring resuelve todo lo demás server-side.
+ * Contrato del asistente sobre los resultados REALES (`POST /api/studies/{caseId}/chat`, `GET .../chat-context`,
+ * `GET .../chat-conversations(/{id})`). El Frontend nunca envía mediciones, hallazgos ni contexto clínico: solo la pregunta
+ * y QUÉ datos usar (la corrida que muestra el visor, o el par de corridas del visor dual). El servidor valida y arma todo.
  */
 
 export type ChatMessageRole = "USER" | "ASSISTANT";
+
+/** Qué datos respaldan una conversación: una corrida de un estudio, o el par (actual B, referencia A) del visor dual. */
+export type ChatScope = {
+  caseId: string;
+  runId: string;
+  referenceCaseId?: string | null;
+  referenceRunId?: string | null;
+};
+
+export type ChatReference = { ref: string; label: string };
 
 export type ChatMessage = {
   id: string;
@@ -14,21 +24,29 @@ export type ChatMessage = {
   model: string | null;
   provider: string | null;
   promptVersion: string | null;
+  /** Huella de los datos con que se respondió. Distinta de la actual = respuesta basada en datos anteriores. */
+  contextFingerprint: string | null;
+  references: ChatReference[];
 };
 
-/**
- * Stage 81-C: `conversationId` es opcional. `undefined`/`null` inicia una conversación nueva
- * (comportamiento de stage 80, sin cambios). Un valor existente continúa esa conversación --
- * el Backend valida que pertenezca al Study antes de agregar el turno.
- */
 export type ChatRequest = {
   question: string;
-  analysisId?: string;
-  baselineCaseId?: string;
+  runId: string;
+  referenceCaseId?: string;
+  referenceRunId?: string;
   conversationId?: string;
 };
 
-/** `humanReviewRequired`/`notClinicalDiagnosis` son siempre `true` — los define el Backend, nunca el modelo. */
+export type ChatResponseScope = {
+  kind: "study" | "pair";
+  runId: string;
+  referenceCaseId: string | null;
+  referenceRunId: string | null;
+  /** `false` en un par sin hallazgos P10.7 en los dos lados: no hay comparación de hallazgos y no se promete. */
+  findingsComparable: boolean;
+};
+
+/** `humanReviewRequired`/`notClinicalDiagnosis` son siempre `true`: los define el Backend, nunca el modelo. */
 export type ChatResponse = {
   answer: string;
   conversationId: string;
@@ -41,6 +59,29 @@ export type ChatResponse = {
   humanReviewRequired: boolean;
   notClinicalDiagnosis: boolean;
   contextSources: string[];
+  references: ChatReference[];
+  removedReferences: number;
+  contextFingerprint: string;
+  scope: ChatResponseScope;
+  elapsedMs: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  /** El proveedor cortó la respuesta por el límite de longitud: puede estar incompleta. */
+  truncated: boolean;
+};
+
+export type ChatProviderStatus = { enabled: boolean; available: boolean; model: string };
+
+/** Lo que respaldaría una pregunta ahora, sin consultar al modelo. `contextText` es exactamente lo que recibiría el proveedor. */
+export type ChatContextInfo = {
+  scope: ChatResponseScope;
+  contextFingerprint: string;
+  promptVersion: string;
+  contextSources: string[];
+  missing: string[];
+  elementCount: number;
+  contextText: string;
+  provider: ChatProviderStatus;
 };
 
 export type ChatConversationSummary = {
@@ -51,6 +92,7 @@ export type ChatConversationSummary = {
 
 export type ChatConversationHistory = {
   caseId: string;
+  scopeKey: string;
   conversations: ChatConversationSummary[];
 };
 
@@ -58,5 +100,8 @@ export type ChatConversationDetail = {
   conversationId: string;
   caseId: string;
   createdAt: string;
+  scopeKey: string;
+  runId: string | null;
+  referenceRunId: string | null;
   messages: ChatMessage[];
 };

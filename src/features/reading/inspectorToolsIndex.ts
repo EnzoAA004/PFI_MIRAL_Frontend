@@ -31,7 +31,7 @@ export type InspectorTool = {
 /** Todos los grupos definidos, incluidos los retirados de la interfaz. La interfaz usa INSPECTOR_TOOL_GROUPS. */
 export const ALL_INSPECTOR_TOOL_GROUPS: readonly { id: InspectorToolGroupId; title: string; description?: string }[] = [
   { id: "follow-up", title: "Seguimiento del paciente" },
-  { id: "delivery", title: "Informe y consulta" },
+  { id: "delivery", title: "Consulta" },
   { id: "evidence", title: "Evidencia y trazabilidad" },
   { id: "inspection", title: "Inspección técnica" },
   {
@@ -61,8 +61,7 @@ export const ALL_INSPECTOR_TOOLS: readonly InspectorTool[] = [
     id: "assistant",
     group: "delivery",
     title: "Asistente",
-    hint: "Chat con el contexto disponible",
-    provenance: "Usa el análisis de demostración; no recibe contexto clínico",
+    hint: "Preguntas sobre los resultados de este estudio, con sus fuentes y limitaciones",
   },
   { id: "concordance", group: "evidence", title: "Concordancia de evidencia", hint: "Compara hallazgos de lote y clasificación subarticular" },
   { id: "feedback", group: "evidence", title: "Feedback y curación", hint: "Curación de material para datasets futuros" },
@@ -86,11 +85,9 @@ export const ALL_INSPECTOR_TOOLS: readonly InspectorTool[] = [
  * - concordance, feedback, audit: grupo «Evidencia y trazabilidad».
  * - three-d, technical: grupo «Inspección técnica».
  * - demo: grupo «Análisis de demostración».
- * - assistant: oculto mientras dependa del análisis de demostración; se integra en la etapa siguiente.
  */
 export const RETIRED_INSPECTOR_TOOLS: readonly InspectorToolId[] = [
   "report",
-  "assistant",
   "concordance",
   "feedback",
   "audit",
@@ -99,7 +96,7 @@ export const RETIRED_INSPECTOR_TOOLS: readonly InspectorToolId[] = [
   "demo",
 ];
 
-/** Lo que el índice ofrece hoy: historial del paciente y comparación entre estudios (con datos reales). */
+/** Lo que el índice ofrece hoy: historial, comparación entre estudios y asistente (los tres con datos reales del visor). */
 export const INSPECTOR_TOOLS: readonly InspectorTool[] = ALL_INSPECTOR_TOOLS.filter((tool) => !RETIRED_INSPECTOR_TOOLS.includes(tool.id));
 
 /** Solo los grupos que tienen alguna herramienta visible: no quedan encabezados vacíos. */
