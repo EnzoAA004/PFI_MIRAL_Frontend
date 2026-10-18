@@ -108,6 +108,7 @@ tr { break-inside: avoid; }
 .matrix td.not_evaluated { color: #94a3b8; font-style: italic; }
 .summary ul { margin: 2pt 0 2pt 14pt; padding: 0; }
 .summary li { margin: 1pt 0; }
+.keep { break-inside: avoid; }
 .ficha-block { break-inside: avoid; border: 1px solid #d5e1ee; border-radius: 8px; padding: 5pt 9pt; margin-bottom: 5pt; }
 .ficha-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8pt; border-bottom: 1px solid #e2e8f0; padding-bottom: 2pt; margin-bottom: 3pt; }
 .ficha-head .tag { font-size: 7.8pt; color: #92400e; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 99px; padding: 0 7px; white-space: nowrap; }
@@ -272,8 +273,10 @@ function fichaHtml(model: PreReportGenerated, edits: PreReportEdits, selection: 
   const head = (suffix: string, tag = "") => `<div class="ficha-head"><h3>${escapeHtml(selection.level)}${suffix ? ` <span class="sub">· ${escapeHtml(suffix)}</span>` : ""}</h3>${tag}</div>`;
   const parts: string[] = [];
   if (selection.measurements.length) {
-    parts.push(`<div class="ficha-block">${head("Mediciones del análisis inicial")}${verification}<table><thead><tr><th>Medición</th><th>Valor</th><th>Procedencia</th><th>Corte</th></tr></thead><tbody>${measurementRows(selection, edits, traceBlocks)}</tbody></table>${missingTraces}</div>`);
-    for (const block of traceBlocks) parts.push(traceEvidenceHtml(selection.level, block, images[block.id]));
+    const table = `<div class="ficha-block">${head("Mediciones del análisis inicial")}${verification}<table><thead><tr><th>Medición</th><th>Valor</th><th>Procedencia</th><th>Corte</th></tr></thead><tbody>${measurementRows(selection, edits, traceBlocks)}</tbody></table>${missingTraces}</div>`;
+    const traces = traceBlocks.map((block) => traceEvidenceHtml(selection.level, block, images[block.id]));
+    // Título, tabla y primera evidencia juntos; cada bloque de evidencia repite nivel y título si continúa.
+    parts.push(traces.length ? `<div class="keep">${table}${traces[0]}</div>` : table, ...traces.slice(1));
   }
   if (selection.findings.length) {
     parts.push(`<div class="ficha-block">${head("Clasificación degenerativa por IA", hasPositive ? '<span class="tag">Predicción para revisar</span>' : "")}${selection.measurements.length ? "" : verification}${predictions}${missing.join("")}</div>`);
