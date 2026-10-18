@@ -290,7 +290,7 @@ check("resumen determinista: positivas con su texto vigente, negativas, no evalu
   const g = model();
   const blocks = m.resultsSummary(g, {});
   const text = JSON.stringify(blocks);
-  assert.match(text, /predijo como presentes, pendientes de revisión profesional/);
+  assert.match(text, /predijo como presentes?, pendientes? de revisión profesional/);
   assert.match(text, /L5-S1 · Abombamiento discal: predicción del modelo «present»?|L5-S1 · disc_bulging/);
   assert.match(text, /predicha como ausente|predichas como ausente/);
   assert.match(text, /no fueron evaluadas|no fue evaluada/);
@@ -311,7 +311,7 @@ check("resumen sin clasificación degenerativa: presenta mediciones y dice que l
   const g = model({ findings: [], findingsStatus: "none", levels: model().levels.map((l) => ({ ...l, findingKeys: [], defaultCard: l.level === "L5-S1" })) });
   const text = m.resultsSummary(g, {}).map((b) => (b.kind === "p" ? b.text : b.items.join(" "))).join(" ");
   assert.match(text, /La corrida no dispone de resultados de clasificación degenerativa por IA\. Eso no equivale a que ninguna categoría esté ausente\./);
-  assert.match(text, /Se presentan mediciones del análisis inicial \(altura del disco y área del disco\) de 1 nivel: L5-S1\./);
+  assert.match(text, /Se presentan mediciones del análisis inicial \(altura del disco y área del disco\) de 1 nivel \(L5-S1\)\./);
   assert.doesNotMatch(text, /ausentes? \(|predicha como ausente/);
   const invalid = m.resultsSummary(model({ findings: [], findingsStatus: "invalid", findingsStatusReason: "esquema inesperado" }), {}).map((b) => (b.kind === "p" ? b.text : "")).join(" ");
   assert.match(invalid, /no cumplen el contrato y no se muestran \(esquema inesperado\)/);

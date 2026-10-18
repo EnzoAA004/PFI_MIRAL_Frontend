@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 /**
@@ -69,29 +70,43 @@ for (const [caseId, tag] of CASES) {
     observaciones: await page.getByTestId("prereport-observations").inputValue(),
     resumen: await page.getByTestId("prereport-summary").innerText(),
   };
-  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("prereport-export-html").click()]);
-  const file = `${OUT}/PREINFORME-vista-previa-SIN-GUARDAR_${tag}.html`;
-  await download.saveAs(file);
-  const doc = await context.newPage();
-  await doc.setViewportSize({ width: 1000, height: 900 });
-  await doc.goto(`file:///${file.replace(/\\/g, "/")}`);
-  await doc.waitForTimeout(700);
-  const text = (await doc.locator("body").innerText()).replace(/\s+/g, " ");
-  await doc.pdf({ path: `${OUT}/PREINFORME-vista-previa-SIN-GUARDAR_${tag}.pdf`, format: "A4", printBackground: true, preferCSSPageSize: true });
-  await doc.screenshot({ path: `${OUT}/PREINFORME-vista-previa-SIN-GUARDAR_${tag}-pantalla.png`, fullPage: true });
-  await doc.close();
+  const exported = {};
+  for (const [variant, prefix] of [["brief", "PREINFORME"], ["full", "PREINFORME-CON-ANEXOS"]]) {
+    await page.getByTestId("prereport-variant").selectOption(variant);
+    await page.waitForTimeout(500);
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("prereport-export-html").click()]);
+    const file = `${OUT}/${prefix}_${tag}_vista-previa-sin-guardar.html`;
+    await download.saveAs(file);
+    const doc = await context.newPage();
+    await doc.setViewportSize({ width: 1000, height: 900 });
+    await doc.goto(`file:///${file.split("\\").join("/")}`);
+    await doc.waitForTimeout(700);
+    const pdf = `${OUT}/${prefix}_${tag}_vista-previa-sin-guardar.pdf`;
+    await doc.pdf({ path: pdf, format: "A4", printBackground: true, preferCSSPageSize: true });
+    const text = (await doc.locator("body").innerText()).replace(/\s+/g, " ");
+    const html = await readFile(file, "utf8");
+    const pages = (readFileSync(pdf, "latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+    exported[variant] = { file, pdf, text, html, pages, images: (html.match(/<img /g) ?? []).length };
+    await doc.close();
+  }
+  const bodyOf = (html) => html.slice(html.indexOf("<h2>Resumen"), html.indexOf("<h2>Alcance y limitaciones"));
+  const text = exported.brief.text;
   await page.getByTestId("prereport-close").click();
   const after = (await api(`/api/studies/${caseId}/prereport?runId=${runId}`)).draft;
   report.push({
     caso: caseId,
     editor: state,
+    paginas: { breve: exported.brief.pages, conAnexos: exported.full.pages },
+    imagenes: { breve: exported.brief.images, conAnexos: exported.full.images },
+    mismoCuerpoEnAmbas: bodyOf(exported.brief.html) === bodyOf(exported.full.html),
     contiene: {
       textoEditado: /texto editado/i.test(text),
       notaDePrueba: /\(prueba\)/i.test(text) || /Nota del nivel/.test(text),
       observaciones: !/Sin observaciones registradas/.test(text),
-      versionDelBorrador: (text.match(/Versión del borrador\s+(\S+(?: \S+)?)/) ?? [])[1] ?? null,
-      fichas: [...new Set([...text.matchAll(/\b(L[1-5]-[L|S][1-5]|T1[0-2]-[LT]?\d+)\s·\sMediciones del análisis inicial/g)].map((m) => m[1]))],
-      resultadosDeInvestigacion: /<h3>Resultados de investigación/.test(await (await import("node:fs/promises")).readFile(file, "utf8")),
+      versionDelBorrador: /Versión del borrador Sin guardar/i.test(text),
+      anexosEnBreve: /Anexo A/.test(text),
+      anexosEnCompleta: /Anexo A/.test(exported.full.text),
+      resultadosDeInvestigacion: /<h3>Resultados de investigación/.test(exported.brief.html),
     },
     borradorGuardado: { antes: before ? { version: before.version, actualizado: before.updatedAt } : null, despues: after ? { version: after.version, actualizado: after.updatedAt } : null, intacto: JSON.stringify(before && { v: before.version, u: before.updatedAt }) === JSON.stringify(after && { v: after.version, u: after.updatedAt }) },
   });

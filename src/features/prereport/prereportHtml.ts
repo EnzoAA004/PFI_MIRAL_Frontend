@@ -83,7 +83,7 @@ body { margin: 0; font: 9.6pt/1.4 'Segoe UI', Inter, Arial, sans-serif; color: #
 .sheet { max-width: 182mm; margin: 12px auto; background: #fff; padding: 10mm 12mm; box-shadow: 0 6px 24px rgba(15,23,42,.12); }
 @media print { body { background: #fff; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
 h1 { font-size: 19pt; margin: 2pt 0 3pt; letter-spacing: -.01em; }
-h2 { font-size: 12pt; margin: 11pt 0 5pt; color: #0f3d63; border-bottom: 1.2px solid #cbd9e8; padding-bottom: 2pt; break-after: avoid; }
+h2 { font-size: 12pt; margin: 9pt 0 4pt; color: #0f3d63; border-bottom: 1.2px solid #cbd9e8; padding-bottom: 2pt; break-after: avoid; }
 h3 { font-size: 10.5pt; margin: 0; break-after: avoid; }
 h4 { font-size: 8.5pt; margin: 6pt 0 2pt; color: #475569; text-transform: uppercase; letter-spacing: .05em; break-after: avoid; }
 p { margin: 2pt 0; }
@@ -108,20 +108,20 @@ tr { break-inside: avoid; }
 .matrix td.not_evaluated { color: #94a3b8; font-style: italic; }
 .summary ul { margin: 2pt 0 2pt 14pt; padding: 0; }
 .summary li { margin: 1pt 0; }
-.ficha-block { break-inside: avoid; border: 1px solid #d5e1ee; border-radius: 8px; padding: 6pt 9pt; margin-bottom: 6pt; }
+.ficha-block { break-inside: avoid; border: 1px solid #d5e1ee; border-radius: 8px; padding: 5pt 9pt; margin-bottom: 5pt; }
 .ficha-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8pt; border-bottom: 1px solid #e2e8f0; padding-bottom: 2pt; margin-bottom: 3pt; }
 .ficha-head .tag { font-size: 7.8pt; color: #92400e; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 99px; padding: 0 7px; white-space: nowrap; }
 .ficha-head h3 .sub { font-weight: 400; color: #475569; }
 .pred { margin: 1.5pt 0; padding-left: 10pt; position: relative; }
 .pred::before { content: "▸"; position: absolute; left: 0; color: #0f3d63; }
 .edited { font-size: 7.5pt; color: #6d28d9; margin-left: 4pt; }
-.evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 78mm)); gap: 3mm 6mm; margin-top: 3pt; }
+.evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 76mm)); gap: 2.5mm 6mm; margin-top: 3pt; }
 .evidence figure { margin: 0; break-inside: avoid; }
 .evidence img { width: 100%; height: auto; display: block; border: 1px solid #94a3b8; border-radius: 3px; background: #000; }
 .evidence figcaption { font-size: 7.8pt; color: #475569; margin-top: 1.5pt; }
 .series-row { grid-column: 1 / -1; font-size: 8.4pt; font-weight: 600; color: #0f3d63; margin: 3pt 0 -1pt; break-after: avoid; }
-.legend { font-size: 8.4pt; margin: 3pt 0 0; padding: 0; list-style: none; break-inside: avoid; }
-.legend li { margin: 1pt 0; }
+.legend { font-size: 8.2pt; margin: 3pt 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 1pt 14pt; break-inside: avoid; }
+.legend li { margin: 0; }
 .dot { display: inline-block; width: 8pt; height: 8pt; border-radius: 50%; margin-right: 4pt; vertical-align: -1pt; }
 .src { font-size: 7.8pt; color: #64748b; margin: 2pt 0 0; }
 .verify { border: 1px solid #fcd34d; background: #fffbeb; color: #5b3b05; border-radius: 6px; padding: 3pt 8pt; font-size: 8.4pt; margin: 3pt 0; }
@@ -302,7 +302,7 @@ function scopeSection(model: PreReportGenerated, edits: PreReportEdits, variant:
     "Cada medición sale de un único corte; una corrección numérica del profesional no modifica el trazo original de la IA.",
   ];
   const annexNote = variant === "brief"
-    ? "<p class=\"small muted\">Esta exportación no incluye los anexos (tabla completa de mediciones, cobertura y resultados omitidos, trazabilidad técnica y explicación técnica de las limitaciones). No se eliminó ningún dato: están disponibles en «Preinforme con anexos».</p>"
+    ? "<p class=\"small muted\">Esta exportación no incluye los anexos (tablas completas, trazabilidad técnica y explicación técnica de las limitaciones); no se eliminó ningún dato: figuran en «Preinforme con anexos».</p>"
     : "";
   return `<section>
 <h2>Alcance y limitaciones</h2>

@@ -1,13 +1,18 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 import { createIsolatedCorrectionCase } from "./lib/isolated-correction-case.mjs";
 
 /**
- * Preinforme visual probado desde la interfaz de 8288, con el stack real. No aprueba ni reanaliza ningún estudio existente y no
- * modifica sus resultados, correcciones, anotaciones ni su estado de revisión: solo crea borradores del preinforme. La prueba de
- * borrador desactualizado usa un caso aislado propio (se crea con «Nuevo estudio»).
+ * Preinforme visual probado desde la interfaz de 8288, con el stack real.
  *
- * Variables: PFI_WEB, PFI_API, OUT_DIR, SKIP_STALE=1 (no crea el caso aislado).
+ * Aislamiento: esta prueba NO escribe en ningún estudio existente.
+ *  - MENDELEY y OSF se abren en modo de SOLO LECTURA: el GET del preinforme se intercepta en el navegador para que el editor arranque
+ *    sin borrador y cualquier escritura (PUT/POST/PATCH/DELETE) se aborta y se registra. Su borrador guardado, si existe, no se lee
+ *    como base ni se modifica; al final se comprueba por API que conserva versión y fecha de actualización.
+ *  - Guardado, recarga, ediciones, evidencia faltante, exportación y borrador desactualizado se prueban sobre un caso aislado
+ *    propio (PREISO-n) que la prueba crea con «Nuevo estudio» y modifica por el flujo de Revisión.
+ *
+ * Variables: PFI_WEB, PFI_API, OUT_DIR, SKIP_ISOLATED=1 (omite el caso aislado).
  */
 const WEB = process.env.PFI_WEB ?? "http://localhost:8288";
 const API = process.env.PFI_API ?? "http://localhost:8280";
@@ -32,34 +37,54 @@ page.on("dialog", async (dialog) => {
 });
 const pageErrors = [];
 page.on("pageerror", (error) => pageErrors.push(String(error)));
+/** Escrituras que salieron del navegador (para comprobar qué tocó cada sección). */
 const writes = [];
 page.on("request", (request) => {
   const url = request.url().replace(/^https?:\/\/[^/]+/, "");
   if (request.method() !== "GET" && /^\/api\//.test(url) && !/\/api\/auth\//.test(url)) writes.push(`${request.method()} ${url}`);
 });
 
-async function token() {
-  const res = await fetch(`${API}/api/auth/demo-doctor`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-  const body = await res.json();
-  return body.accessToken ?? body.token;
-}
-const TOKEN = await token();
+const login = await (await fetch(`${API}/api/auth/demo-doctor`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+const TOKEN = login.accessToken ?? login.token;
 const api = async (path, init) => {
   const res = await fetch(`${API}${path}`, { ...init, headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json", ...(init?.headers ?? {}) } });
   return { status: res.status, body: await res.json().catch(() => null) };
 };
-async function runIdOf(caseId) {
-  const detail = await api(`/api/studies/${caseId}`);
-  return detail.body.runs[0].summary.runId;
-}
+const runIdOf = async (caseId) => (await api(`/api/studies/${caseId}`)).body.runs[0].summary.runId;
 const reviewOf = async (runId) => (await api(`/api/ai/runs/${runId}/review`)).body;
-/** Deja en blanco las ediciones de un borrador que esta prueba creó antes (la prueba es repetible). Solo toca el borrador del preinforme. */
-async function resetDraftEdits(caseId, runId) {
-  const current = (await api(`/api/studies/${caseId}/prereport?runId=${runId}`)).body.draft;
-  if (current) await api(`/api/studies/${caseId}/prereport?runId=${runId}`, { method: "PUT", body: JSON.stringify({ expectedVersion: current.version, edits: {} }) });
+const draftOf = async (caseId, runId) => (await api(`/api/studies/${caseId}/prereport?runId=${runId}`)).body.draft;
+const stamp = (draft) => (draft ? `${draft.version}@${draft.updatedAt}` : "sin borrador");
+
+/* ---- modo de solo lectura para los estudios existentes ------------------------------------------------------------------ */
+const readOnlyBlocked = [];
+const readOnlyPrereport = async (route) => {
+  const request = route.request();
+  if (request.method() !== "GET") {
+    readOnlyBlocked.push(`${request.method()} ${request.url().replace(/^https?:\/\/[^/]+/, "")}`);
+    return route.abort();
+  }
+  const response = await route.fetch();
+  const body = await response.json();
+  await route.fulfill({ response, json: { ...body, draft: null, stale: false, changes: [], orphanedEdits: [] } });
+};
+const readOnlyOthers = (route) => {
+  const request = route.request();
+  if (request.method() === "GET") return route.continue();
+  readOnlyBlocked.push(`${request.method()} ${request.url().replace(/^https?:\/\/[^/]+/, "")}`);
+  return route.abort();
+};
+const PREREPORT = /localhost:8280\/api\/studies\/[^/]+\/prereport/;
+const OTHER_API = /localhost:8280\/api\/(?!auth|studies\/[^/]+\/prereport)/;
+async function readOnlyOn() {
+  await page.route(PREREPORT, readOnlyPrereport);
+  await page.route(OTHER_API, readOnlyOthers);
+}
+async function readOnlyOff() {
+  await page.unroute(PREREPORT, readOnlyPrereport);
+  await page.unroute(OTHER_API, readOnlyOthers);
 }
 
-async function login() {
+async function loginUi() {
   await page.goto(`${WEB}/`, { waitUntil: "networkidle" });
   const demo = page.getByRole("button", { name: /Entrar con doctor demo/ });
   if (await demo.count()) await demo.click();
@@ -70,6 +95,10 @@ async function openStudy(caseId) {
   await page.locator("aside.rr-panel").waitFor({ timeout: 90_000 });
   await page.waitForTimeout(2500);
 }
+async function waitImages(timeout = 90_000) {
+  await page.waitForFunction(() => !document.querySelector('[data-testid="prereport-editor-column"]')?.textContent?.includes("preparando…"), null, { timeout });
+  await page.waitForTimeout(600);
+}
 async function openEditor() {
   await page.getByRole("tab", { name: /Revisi/ }).click();
   await page.getByTestId("prepare-prereport").click();
@@ -77,257 +106,205 @@ async function openEditor() {
   await page.getByTestId("prereport-summary").waitFor({ timeout: 30_000 });
   await waitImages();
 }
-/** Espera a que ninguna imagen del editor esté «preparando…». */
-async function waitImages(timeout = 90_000) {
-  await page.waitForFunction(() => !document.querySelector('[data-testid="prereport-editor-column"]')?.textContent?.includes("preparando…"), null, { timeout });
-  await page.waitForTimeout(600);
-}
 const frame = () => page.frameLocator('[data-testid="prereport-frame"]');
 const frameText = async () => (await frame().locator("body").innerText()).replace(/\s+/g, " ");
-async function allImagesLoaded() {
-  return frame().locator("img").evaluateAll((nodes) => nodes.length > 0 && nodes.every((n) => n.complete && n.naturalWidth > 0));
-}
+const allImagesLoaded = async () => frame().locator("img").evaluateAll((nodes) => nodes.length > 0 && nodes.every((n) => n.complete && n.naturalWidth > 0));
 
-async function exportDocument(tag) {
+/** Exporta una variante («brief» | «full») y devuelve el HTML guardado, el PDF y lo que tiene. */
+async function exportVariant(tag, variant) {
+  await page.getByTestId("prereport-variant").selectOption(variant);
+  await page.waitForTimeout(500);
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("prereport-export-html").click()]);
-  const file = `${OUT}/preinforme-borrador-${tag}.html`;
+  const file = `${OUT}/${tag}.html`;
   await download.saveAs(file);
   const doc = await context.newPage();
   await doc.setViewportSize({ width: 1000, height: 900 });
-  await doc.goto(`file:///${file.replace(/\\/g, "/").replace(/^\//, "")}`.replace("file:///C:", "file:///C:"));
+  await doc.goto(`file:///${file.replace(/\\/g, "/")}`);
   await doc.waitForTimeout(700);
-  await doc.screenshot({ path: `${OUT}/preinforme-borrador-${tag}-pantalla.png`, fullPage: true });
-  const pdf = `${OUT}/preinforme-borrador-${tag}.pdf`;
+  const pdf = `${OUT}/${tag}.pdf`;
   await doc.pdf({ path: pdf, format: "A4", printBackground: true, preferCSSPageSize: true });
   const images = await doc.locator("img").evaluateAll((nodes) => nodes.map((n) => [n.naturalWidth, n.naturalHeight, n.src.startsWith("data:")]));
+  const text = (await doc.locator("body").innerText()).replace(/\s+/g, " ");
   await doc.close();
-  return { file, pdf, images };
+  const pages = (readFileSync(pdf, "latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  return { file, pdf, images, text, pages, html: readFileSync(file, "utf8") };
 }
+/** El cuerpo del documento (de «Resumen» a «Alcance y limitaciones»): lo que debe ser idéntico entre variantes. */
+const bodyOf = (html) => html.slice(html.indexOf("<h2>Resumen"), html.indexOf("<h2>Alcance y limitaciones"));
 
 try {
-  await login();
-
-  /* ================================================================== MENDELEY */
+  await loginUi();
   const mendeleyRun = await runIdOf(MENDELEY);
-  await resetDraftEdits(MENDELEY, mendeleyRun);
+  const osfRun = await runIdOf(OSF);
+  const stampsBefore = { mendeley: stamp(await draftOf(MENDELEY, mendeleyRun)), osf: stamp(await draftOf(OSF, osfRun)) };
   const reviewBefore = await reviewOf(mendeleyRun);
-  const draftVersionBefore = (await api(`/api/studies/${MENDELEY}/prereport?runId=${mendeleyRun}`)).body.draft?.version ?? null;
-  await openStudy(MENDELEY);
 
-  // El visor: qué corte muestra el visor para el abombamiento de L5-S1 (para comparar con el documento).
+  /* ================================================================== MENDELEY (solo lectura) */
+  await readOnlyOn();
+  await openStudy(MENDELEY);
   await page.getByRole("tab", { name: "Resultados" }).click();
   await page.getByRole("tab", { name: "Hallazgos IA" }).click();
   const findingsPanel = page.locator('section[aria-label="Hallazgos discales asistidos por IA"]');
   await findingsPanel.locator('details[data-level="L5-S1"] summary').click();
   const viewerGoTo = (await findingsPanel.getByRole("button", { name: /Ver en el corte/ }).first().innerText()).replace(/\s+/g, " ");
-  const viewerRows = (await findingsPanel.locator('details[data-level="L5-S1"]').innerText()).replace(/\s+/g, " ");
   const cornerBefore = (await page.locator(".rr-corner-bl").first().innerText()).replace(/\s+/g, " ");
-  const counterBefore = (await page.locator(".rr-slice-counter, [data-testid=slice-counter]").first().innerText().catch(() => "")).trim();
 
   await page.getByRole("tab", { name: /Revisi/ }).click();
-  const enabled = await page.getByTestId("prepare-prereport").isEnabled();
-  check("1. «Preparar preinforme» disponible en Revisión con resultados utilizables, sin aprobar el estudio", enabled);
-  const writesBeforeOpen = writes.length;
+  check("1. «Preparar preinforme» disponible en Revisión con resultados utilizables, sin aprobar el estudio", await page.getByTestId("prepare-prereport").isEnabled());
   await openEditor();
-  check("1. abrir el editor no escribe nada en el Backend", writes.length === writesBeforeOpen, writes.slice(writesBeforeOpen).join(" | "));
-  const draftsAfterOpen = (await api(`/api/studies/${MENDELEY}/prereport?runId=${mendeleyRun}`)).body;
-  check("1. abrir no crea ni modifica el borrador", (draftsAfterOpen.draft?.version ?? null) === draftVersionBefore, `versión ${draftVersionBefore} → ${draftsAfterOpen.draft?.version ?? null}`);
-  const afterOpenReview = await reviewOf(mendeleyRun);
-  check("1. abrir no cambia la revisión", afterOpenReview.reviewStatus === reviewBefore.reviewStatus && afterOpenReview.corrections.length === reviewBefore.corrections.length, afterOpenReview.reviewStatus);
-
+  const text = await frameText();
   const barText = await page.locator(".pre-bar").innerText();
-  check("1. el documento dice borrador pendiente de revisión profesional y que no aprueba el estudio", /Borrador pendiente de revisión profesional/.test(barText) && /no aprueba el estudio/.test(barText), barText.replace(/\s+/g, " "));
+  check("1. el documento dice borrador pendiente de revisión profesional y que no aprueba el estudio", /Borrador pendiente de revisión profesional/.test(barText) && /no aprueba el estudio/.test(barText));
   await page.screenshot({ path: `${OUT}/01-editor-1366x768.png` });
 
-  // ---- ficha de L5-S1 comparada con el visor
-  const text = await frameText();
-  check("L5-S1. el abombamiento predicho figura como predicción del modelo con su probabilidad (70,4 %)", /Abombamiento discal: predicción del modelo «presente» \(70,4 %\)/.test(text));
+  check("resumen: identifica la clasificación positiva y su nivel como pendiente de revisión", /predijo como presentes?, pendientes? de revisión profesional/.test(text) && /L5-S1 · Abombamiento discal: predicción del modelo «presente» \(70,4 %\)/.test(text));
+  check("resumen: distingue ausentes y no evaluados, y no genera diagnóstico ni normalidad", /predichas como ausente/.test(text) && (!/no evaluado/i.test(text) || /no fueron evaluadas|no fue evaluada|no devolvió resultado/.test(text)) && !/diagnóstic[oa] de|normal\b|causa|recomend/i.test(text.replace(/no constituye un diagnóstico/g, "")));
+  check("resumen: aclara que el detalle por nivel es la selección y no la cobertura completa", /selección incluida en este documento/.test(text) && /no representa la cobertura completa/.test(text));
+  check("lenguaje: sin «P10.7», sin plurales entre paréntesis, con «Clasificación degenerativa por IA»", !/P10\.7|\(s\)|\(es\)/.test(text) && /Clasificación degenerativa por IA/.test(text));
+  check("modalidad: sin dato registrado se dice honestamente", /Modalidad No registrada en el estudio/i.test(text));
   const viewerSlice = (viewerGoTo.match(/corte (\d+)/) ?? [])[1];
-  check("L5-S1. el corte del documento coincide con el que marca el visor", viewerSlice && new RegExp(`Sagital T2 \\(detectada\\) · corte ${viewerSlice} de 15`).test(text), `visor: ${viewerGoTo}; ${viewerRows.slice(0, 120)}`);
-  check("L5-S1. hay región evaluada rotulada como tal (no como lesión)", /Región evaluada por el modelo/.test(text) && /no delimita una lesión/.test(text));
-  check("L5-S1. series T2 y T1 identificadas, corte en base 1", /Sagital T1 \(detectada\) · corte \d+ de 15/.test(text) && /Sagital T2 \(detectada\) · corte \d+ de 15/.test(text));
-  check("L5-S1. mediciones y predicciones P10.7 van en bloques e imágenes separados, con la correspondencia declarada pendiente de verificación", /Correspondencia pendiente de verificación/.test(text) && /Fuente: análisis inicial/.test(text) && /Fuente: P10\.7/.test(text) && !/trazos de las mediciones y región/.test(text));
-  check("L5-S1. las imágenes cargaron (incrustadas, no dependen de una URL)", await allImagesLoaded());
-  const imageSources = await frame().locator("img").evaluateAll((nodes) => nodes.map((n) => n.src.slice(0, 11)));
-  check("L5-S1. todas las imágenes son data URL", imageSources.length > 0 && imageSources.every((s) => s.startsWith("data:image")), imageSources.join(","));
-  check("sin atípicos, sin rangos, sin normalidad", !/atípic|dentro del rango|fuera de rango|normal\b/i.test(text.replace(/no constituye un diagnóstico/g, "")));
-  check("sin códigos internos ni modo real_baseline en el encabezado", !/real_baseline/.test(await frame().locator("header").innerText()));
-  check("fecha del estudio ausente se dice, no se inventa", /Fecha del estudio No informada/i.test(text) && /Edad al estudio No informada/i.test(text));
-  check("sin about:blank en el documento", !text.includes("about:blank"));
+  check("L5-S1: el corte del documento coincide con el que marca el visor", viewerSlice && new RegExp(`Sagital T2 \\(detectada\\) · corte ${viewerSlice} de 15`).test(text), viewerGoTo);
+  check("L5-S1: mediciones y clasificación en bloques separados, con la correspondencia pendiente de verificación", /Correspondencia pendiente de verificación/.test(text) && /La correspondencia anatómica entre estas mediciones y clasificaciones requiere verificación profesional\./.test(text) && /Mediciones del análisis inicial/.test(text) && /Región evaluada por el clasificador/.test(text));
+  check("L5-S1: T1 y T2 del mismo nivel en un único bloque, con leyenda compartida", (await frame().locator(".series-row").count()) === 2 && (await frame().locator(".legend").count()) === 2);
+  check("imágenes: «Imagen completa» y «Detalle ampliado», sin «sin deformar»", /Imagen completa/.test(text) && /Detalle ampliado/.test(text) && !/sin deformar/.test(text));
+  check("las imágenes cargaron e incrustadas (data URL)", await allImagesLoaded());
 
-  // ---- edición: incluir/excluir, texto editado, observaciones, guardado y recarga
-  const pfirrmannItem = page.locator('[data-testid^="pre-item-f:"]', { hasText: "Pfirrmann" }).first();
-  await pfirrmannItem.locator('input[type="checkbox"]').uncheck();
-  const bulgingItem = page.locator('[data-testid^="pre-item-f:"]', { hasText: "Abombamiento discal" }).first();
-  await bulgingItem.getByRole("button", { name: "Editar texto" }).click();
-  await bulgingItem.locator("textarea").fill("Abombamiento discal L5-S1: predicción del modelo «presente» (70,4 %). Correlacionar con la clínica.");
-  await page.getByLabel("Incluir la ficha de L4-L5").check();
-  await page.getByLabel("Observaciones sobre L5-S1").fill("Nota del nivel L5-S1 (prueba).");
-  await page.getByTestId("prereport-observations").fill("Observación general de prueba: sin conclusión diagnóstica.");
-  await page.getByTestId("pre-research").locator("summary").click();
-  await page.getByTestId("pre-research").locator('input[type="checkbox"]').first().check();
-  await page.waitForTimeout(800);
-  let text2 = await frameText();
-  check("edición: el texto editado rige en el documento y la exclusión de Pfirrmann se refleja", /Correlacionar con la clínica/.test(text2) && !/Grado de Pfirrmann: predicción del modelo «grado II»[^.]*experimental\s*texto/.test(text2));
-  check("edición: la ficha de L4-L5 se agrega y los resultados de investigación van en un apartado propio", /L4-L5/.test(text2) && /Resultados de investigación/.test(text2) && /No son una capacidad soportada para producto/.test(text2));
-  check("edición: observaciones del profesional visibles", /Observación general de prueba/.test(text2) && /Nota del nivel L5-S1/.test(text2));
-  const writesBeforeSave = writes.length;
-  await page.getByTestId("prereport-save").click();
-  await page.getByTestId("prereport-notice").filter({ hasText: /Borrador guardado \(versión \d+\)/ }).waitFor({ timeout: 20_000 });
-  const saveWrites = writes.slice(writesBeforeSave);
-  check("guardar escribe solo el borrador del preinforme", saveWrites.length === 1 && /PUT \/api\/studies\/.*\/prereport/.test(saveWrites[0]), saveWrites.join(" | "));
-  const reviewAfterSave = await reviewOf(mendeleyRun);
-  check("guardar no cambia la revisión ni crea correcciones", reviewAfterSave.reviewStatus === reviewBefore.reviewStatus && reviewAfterSave.corrections.length === reviewBefore.corrections.length);
-  const stored = (await api(`/api/studies/${MENDELEY}/prereport?runId=${mendeleyRun}`)).body.draft;
-  check("el borrador guardado conserva lo generado y lo editado por separado, con huella y versión", stored && stored.version >= 1 && /^src-/.test(stored.sourceFingerprint) && stored.generated.schema === "pfi.prereport.v1" && stored.edits.observations.startsWith("Observación general") && Object.keys(stored.edits.text).length === 1, JSON.stringify(Object.keys(stored.edits)));
-  check("se registran los parámetros de visualización de cada imagen", Object.keys(stored.edits.renderParams ?? {}).length >= 3 && Object.values(stored.edits.renderParams).every((p) => p.zoomCrop && p.imageSize && p.fullCrop));
-  check("las ediciones están contra claves de origen (medición/hallazgo), no contra posiciones", Object.keys(stored.edits.text).every((key) => /^(f|m|a):/.test(key)));
+  // ---- exportación breve y completa
+  const briefM = await exportVariant("MENDELEY-preinforme", "brief");
+  const dialogsAfterFirst = dialogs.length;
+  const fullM = await exportVariant("MENDELEY-preinforme-con-anexos", "full");
+  check("exportar: antes de exportar se informa la evidencia que falta", dialogsAfterFirst > 0 && /falta evidencia visual/.test(dialogs[0]) && /área del disco/.test(dialogs[0]), dialogs[0]?.slice(0, 160));
+  check("«Preinforme» (predeterminado) no incluye anexos; «con anexos» sí", !/Anexo A/.test(briefM.text) && /Anexo A · Tabla completa de mediciones/.test(fullM.text) && /Anexo C · Trazabilidad técnica/.test(fullM.text) && /Esta exportación no incluye los anexos/.test(briefM.text));
+  check("ambas variantes conservan borrador, identificación, versión de fuentes, limitaciones y avisos", [briefM, fullM].every((d) => /Borrador pendiente de revisión profesional/.test(d.text) && /Estudio MENDELEY-0015-MVBLQ5XS/i.test(d.text) && /Versión de las fuentes src-/i.test(d.text) && /Alcance y limitaciones/.test(d.text) && /correspondencia anatómica entre estas mediciones y clasificaciones requiere verificación profesional/.test(d.text) && /Evidencia visual no disponible/i.test(d.text)));
+  check("las dos variantes tienen las mismas cifras y evidencias (cuerpo idéntico, mismas imágenes)", bodyOf(briefM.html) === bodyOf(fullM.html) && briefM.images.length === fullM.images.length && briefM.images.length >= 6, `${briefM.images.length} imágenes`);
+  check("el PDF breve es más corto que el completo", briefM.pages > 0 && briefM.pages < fullM.pages, `${briefM.pages} frente a ${fullM.pages} páginas`);
+  check("«con anexos» deja el código P10.7 y las clases técnicas raw_ solo en el anexo", /P10\.7/.test(fullM.text) && /‡/.test(fullM.html) && !/raw_\d+/.test(briefM.text) && /sin correspondencia anatómica verificada/.test(fullM.text));
+  check("PDF exportado con imágenes completas incrustadas", briefM.images.every(([w, h, data]) => w > 0 && h > 0 && data));
 
-  await page.reload({ waitUntil: "networkidle" });
-  await page.locator("aside.rr-panel").waitFor({ timeout: 90_000 });
-  await page.waitForTimeout(2500);
-  await openEditor();
-  check("tras recargar, el borrador se recupera con sus ediciones", (await page.getByTestId("prereport-observations").inputValue()).startsWith("Observación general de prueba") && /Correlacionar con la clínica/.test(await frameText()));
-  check("tras recargar figura la versión guardada", new RegExp(`versión ${stored.version}`).test(await page.locator(".pre-bar").innerText()));
-
-  // ---- 1920×1080
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.waitForTimeout(600);
-  await page.screenshot({ path: `${OUT}/02-editor-1920x1080.png` });
-  const overflow1920 = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
-  check("1920×1080: el editor no desborda", !overflow1920);
-  await page.setViewportSize({ width: 1366, height: 768 });
-  await page.waitForTimeout(500);
-  check("1366×768: el editor no desborda horizontalmente", !(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)));
-  await page.getByTestId("prereport-preview").click();
-  await page.waitForTimeout(500);
-  await page.screenshot({ path: `${OUT}/03-vista-previa-1366x768.png` });
-  await page.getByTestId("prereport-preview").click();
-
-  // ---- exportar (PDF real a partir del HTML exportado) y verificar
-  const dialogsBefore = dialogs.length;
-  const exported = await exportDocument("MENDELEY");
-  check("exportar: antes de exportar se informa la evidencia que falta (área sin trazo)", dialogs.length > dialogsBefore && /falta evidencia visual/.test(dialogs.at(-1)) && /área del disco/.test(dialogs.at(-1)), dialogs.at(-1)?.slice(0, 200));
-  check("exportar: las imágenes del archivo salen completas e incrustadas", exported.images.length > 0 && exported.images.every(([w, h, data]) => w > 0 && h > 0 && data), JSON.stringify(exported.images.slice(0, 3)));
-
-  // ---- volver al visor conservando su estado
   await page.getByTestId("prereport-close").click();
-  await page.getByTestId("prereport-editor").waitFor({ state: "detached" });
   await page.getByRole("tab", { name: "Resultados" }).click();
-  const cornerAfter = (await page.locator(".rr-corner-bl").first().innerText()).replace(/\s+/g, " ");
-  check("volver al visor conserva corte, zoom y W/L", cornerAfter === cornerBefore, `${cornerBefore} → ${cornerAfter}`);
-  const finalReview = await reviewOf(mendeleyRun);
-  check("MENDELEY: la revisión sigue pendiente y sin correcciones (no se aprobó ni se reanalizó)", finalReview.reviewStatus === reviewBefore.reviewStatus && finalReview.corrections.length === reviewBefore.corrections.length && !writes.some((w) => /multiplanar\/run|product-analysis|review/.test(w) && !/prereport/.test(w)), writes.join(" | "));
+  check("volver al visor conserva corte, zoom y W/L", (await page.locator(".rr-corner-bl").first().innerText()).replace(/\s+/g, " ") === cornerBefore);
 
-  /* ================================================================== OSF: mediciones y trazos, sin P10.7 */
-  const osfRun = await runIdOf(OSF);
-  await resetDraftEdits(OSF, osfRun);
-  const osfReviewBefore = await reviewOf(osfRun);
+  /* ================================================================== OSF (solo lectura) */
   await openStudy(OSF);
   await openEditor();
   const osfText = await frameText();
-  check("OSF: dice explícitamente que la corrida no tiene resultados P10.7", /no tiene resultados P10\.7 persistidos/.test(osfText) && /no equivale a que ninguna categoría esté ausente/.test(osfText));
-  check("OSF: no inventa una matriz de negativos", !/Ausente · \d/.test(osfText) && !/No evaluado/.test(osfText));
-  const osfSummary = await page.getByTestId("prereport-summary").innerText();
-  check("OSF: hay fichas lumbares con mediciones e imágenes con trazos", /[1-9]\d* ficha/.test(osfSummary) && /[1-9]\d* imagen/.test(osfSummary), osfSummary);
+  check("OSF: se presentan mediciones y se explica que la corrida no dispone de resultados degenerativos", /Se presentan mediciones del análisis inicial/.test(osfText) && /La corrida no dispone de resultados de clasificación degenerativa por IA\. Eso no equivale a que ninguna categoría esté ausente\./.test(osfText));
+  check("OSF: no inventa una matriz de negativos ni resultados «no evaluados»", !/Ausente · \d/.test(osfText) && !/No evaluado/.test(osfText) && !/predicha como ausente/.test(osfText));
+  check("OSF: cada medición con trazo dice su serie, su corte (base 1) y su procedencia", /Sagital T\d \(\w+\) · corte \d+/.test(osfText) && /trazo de la IA/.test(osfText));
   check("OSF: las imágenes con trazos cargaron", await allImagesLoaded());
-  check("OSF: cada medición con trazo dice su serie, su corte (base 1) y su procedencia (IA)", /Sagital T\d \(\w+\) · corte \d+/.test(osfText) && /trazo de la IA/.test(osfText));
+  const briefO = await exportVariant("OSF-preinforme", "brief");
+  const fullO = await exportVariant("OSF-preinforme-con-anexos", "full");
+  check("OSF: breve y completo con las mismas cifras y evidencias", bodyOf(briefO.html) === bodyOf(fullO.html) && briefO.images.length === fullO.images.length && briefO.pages < fullO.pages, `${briefO.pages} frente a ${fullO.pages} páginas`);
   await page.screenshot({ path: `${OUT}/04-editor-OSF.png` });
-  await page.getByTestId("prereport-observations").fill("Borrador de prueba del flujo (OSF): sin conclusión diagnóstica.");
-  await page.getByTestId("prereport-save").click();
-  await page.getByTestId("prereport-notice").filter({ hasText: /Borrador guardado/ }).waitFor({ timeout: 20_000 });
-  const osfExport = await exportDocument("OSF");
-  check("OSF: PDF exportado con imágenes incrustadas", osfExport.images.length > 0 && osfExport.images.every(([w, h, data]) => w > 0 && h > 0 && data));
   await page.getByTestId("prereport-close").click();
-  const osfReviewAfter = await reviewOf(osfRun);
-  check("OSF: la revisión no cambió", osfReviewAfter.reviewStatus === osfReviewBefore.reviewStatus && osfReviewAfter.corrections.length === osfReviewBefore.corrections.length);
 
-  /* ================================================================== imagen no disponible / región inválida */
+  /* ================================================================== evidencia faltante (solo lectura, sobre MENDELEY) */
   await openStudy(MENDELEY);
-  await page.route(/\/api\/ai\/series\/.*\/slices\//, (route) => route.fulfill({ status: 404, contentType: "application/json", body: "{}" }));
-  await page.route(/\/prereport\?runId=/, async (route) => {
-    if (route.request().method() !== "GET") return route.continue();
+  const invalidRegion = async (route) => {
+    if (route.request().method() !== "GET") return readOnlyPrereport(route);
     const response = await route.fetch();
     const body = await response.json();
-    const draft = body.draft;
-    const generated = draft ? draft.generated : body.generated;
-    // Región inválida en el primer resultado del nivel L5-S1 (la corrida «declaró» una región fuera de su espacio).
-    const target = generated.findings.find((f) => f.level === "L5-S1" && f.type === "disc_bulging");
+    const target = body.generated.findings.find((f) => f.level === "L5-S1" && f.type === "disc_bulging");
     target.sources[0].region = null;
     target.sources[0].imagePath = null;
     target.sources[0].regionIssue = "el recuadro de la región cae fuera de su espacio de coordenadas";
-    await route.fulfill({ response, json: body });
-  });
+    await route.fulfill({ response, json: { ...body, draft: null, stale: false, changes: [], orphanedEdits: [] } });
+  };
+  await page.unroute(PREREPORT, readOnlyPrereport);
+  await page.route(PREREPORT, invalidRegion);
+  await page.route(/\/api\/ai\/series\/.*\/slices\//, (route) => route.fulfill({ status: 404, contentType: "application/json", body: "{}" }));
   await openEditor();
   const failText = await frameText();
-  check("imagen no disponible: se conserva el resultado textual y se dice el motivo", /Imagen no disponible/.test(failText) && /Abombamiento discal/.test(failText), failText.slice(failText.indexOf("Imagen no disponible"), failText.indexOf("Imagen no disponible") + 160));
-  check("región inválida: se conserva la clasificación sin localización y se informa", /Sin región evaluada/.test(failText) && /región inválida/.test(failText) && /sin localización/.test(failText));
-  check("no se sustituye por un corte genérico (no hay imagen de relleno para lo que falló)", (await frame().locator("img").count()) === 0 || /Imagen no disponible/.test(failText));
-  const confirmCount = dialogs.length;
+  check("evidencia faltante: imagen no disponible conserva el resultado textual y dice el motivo", /Imagen no disponible/.test(failText) && /Abombamiento discal/.test(failText));
+  check("evidencia faltante: región inválida conserva la clasificación sin localización y se informa", /Sin región evaluada/.test(failText) && /región inválida/.test(failText) && /sin localización/.test(failText));
+  const before = dialogs.length;
   await page.getByTestId("prereport-export-html").click();
   await page.waitForTimeout(2500);
-  check("antes de exportar se informa qué evidencia falta", dialogs.length > confirmCount && /falta evidencia visual/.test(dialogs.at(-1)) && /región inválida/.test(dialogs.at(-1)), dialogs.at(-1)?.slice(0, 260));
+  check("evidencia faltante: antes de exportar se informa qué falta", dialogs.length > before && /falta evidencia visual/.test(dialogs.at(-1)) && /región inválida/.test(dialogs.at(-1)), dialogs.at(-1)?.slice(0, 200));
   await page.screenshot({ path: `${OUT}/05-evidencia-faltante.png` });
   await page.unroute(/\/api\/ai\/series\/.*\/slices\//);
-  await page.unroute(/\/prereport\?runId=/);
+  await page.unroute(PREREPORT, invalidRegion);
   await page.getByTestId("prereport-close").click();
+  await readOnlyOff();
+
+  check("estudios existentes: ninguna escritura salió del navegador y su borrador guardado quedó intacto", writes.length === 0 && readOnlyBlocked.length === 0 && stamp(await draftOf(MENDELEY, mendeleyRun)) === stampsBefore.mendeley && stamp(await draftOf(OSF, osfRun)) === stampsBefore.osf, `${stampsBefore.mendeley} | ${stampsBefore.osf}; intentos bloqueados: ${readOnlyBlocked.length}; escrituras: ${writes.join(" ; ")}`);
+  const reviewAfter = await reviewOf(mendeleyRun);
+  check("MENDELEY: la revisión sigue igual (no se aprobó ni se reanalizó)", reviewAfter.reviewStatus === reviewBefore.reviewStatus && reviewAfter.corrections.length === reviewBefore.corrections.length);
 
   /* ================================================================== permisos */
   const noToken = await fetch(`${API}/api/studies/${MENDELEY}/prereport?runId=${mendeleyRun}`);
-  check("permisos: sin token no hay acceso (401)", noToken.status === 401, noToken.status);
-  const badRun = await api(`/api/studies/${MENDELEY}/prereport?runId=${osfRun}`);
-  check("permisos: una corrida de otro estudio se rechaza (404) y no se elige otra", badRun.status === 404, badRun.status);
-  const noRun = await api(`/api/studies/${MENDELEY}/prereport`);
-  check("la corrida es obligatoria (400)", noRun.status === 400, noRun.status);
+  check("permisos: sin token no hay acceso (401)", noToken.status === 401);
+  check("permisos: una corrida de otro estudio se rechaza (404)", (await api(`/api/studies/${MENDELEY}/prereport?runId=${osfRun}`)).status === 404);
+  check("la corrida es obligatoria (400)", (await api(`/api/studies/${MENDELEY}/prereport`)).status === 400);
 
-  /* ================================================================== borrador desactualizado (caso aislado) */
-  if (!process.env.SKIP_STALE) {
+  /* ================================================================== caso aislado: guardado, recarga, ediciones, desactualizado */
+  if (!process.env.SKIP_ISOLATED) {
     const caseId = `PREISO-${Date.now() % 100000}`;
     await page.goto(`${WEB}/`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Nuevo estudio" }).waitFor();
     const iso = await createIsolatedCorrectionCase(page, { caseId, corrected: 7.3, log: (m) => console.log("  ·", m) });
     await openEditor();
-    await page.getByTestId("prereport-observations").fill("Observación sobre el caso aislado.");
-    const isoItem = page.locator('[data-testid^="pre-item-m:sagittal-disc-l4-l5-height"]').first();
-    if (await isoItem.count()) {
-      await isoItem.getByRole("button", { name: "Editar texto" }).click();
-      await isoItem.locator("textarea").fill("Altura L4-L5 (texto editado por la profesional).");
-    }
+    check("aislado: el borrador parte de lo generado y sin guardar", /sin guardar/.test(await page.locator(".pre-bar").innerText()));
+
+    // edición: texto editado, exclusión, nota del nivel y observaciones
+    const heightItem = page.locator('[data-testid^="pre-item-m:sagittal-disc-l4-l5-height"]').first();
+    await heightItem.getByRole("button", { name: "Editar texto" }).click();
+    await heightItem.locator("textarea").fill("Altura L4-L5 (texto editado por la profesional).");
+    const areaItem = page.locator('[data-testid^="pre-item-m:sagittal-disc-l4-l5-area"]').first();
+    if (await areaItem.count()) await areaItem.locator('input[type="checkbox"]').uncheck();
+    await page.getByLabel("Observaciones sobre L4-L5").fill("Nota del nivel L4-L5 (aislado).");
+    await page.getByTestId("prereport-observations").fill("Observación general del caso aislado.");
+    await page.waitForTimeout(700);
+    const editedText = await frameText();
+    check("aislado: los textos editados y las observaciones rigen en el documento", /texto editado por la profesional/.test(editedText) && /Nota del nivel L4-L5/.test(editedText) && /Observación general del caso aislado/.test(editedText));
+
+    const writesBeforeSave = writes.length;
     await page.getByTestId("prereport-save").click();
-    await page.getByTestId("prereport-notice").filter({ hasText: /Borrador guardado/ }).waitFor({ timeout: 20_000 });
-    const isoDraft = (await api(`/api/studies/${caseId}/prereport?runId=${iso.runId}`)).body;
-    check("aislado: el borrador refleja la corrección profesional vigente", JSON.stringify(isoDraft.draft.generated.measurements.find((m) => m.id === "sagittal-disc-l4-l5-height")).includes('"corrected":7.3'));
+    await page.getByTestId("prereport-notice").filter({ hasText: /Borrador guardado \(versión 1\)/ }).waitFor({ timeout: 20_000 });
+    check("aislado: guardar escribe solo el borrador del preinforme", writes.slice(writesBeforeSave).length === 1 && /PUT \/api\/studies\/.*\/prereport/.test(writes.at(-1)), writes.slice(writesBeforeSave).join(" | "));
+    const stored = await draftOf(caseId, iso.runId);
+    check("aislado: lo generado y lo editado se guardan por separado, con huella, versión y parámetros de imagen", stored.version === 1 && /^src-/.test(stored.sourceFingerprint) && stored.edits.observations.startsWith("Observación general") && Object.keys(stored.edits.renderParams ?? {}).length >= 1 && Object.keys(stored.edits.text).every((key) => /^(f|m|a):/.test(key)));
+    const correctionsBeforeStale = (await reviewOf(iso.runId)).corrections.length;
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator("aside.rr-panel").waitFor({ timeout: 90_000 });
+    await page.waitForTimeout(2500);
+    await openEditor();
+    check("aislado: tras recargar se recupera el borrador con sus ediciones", (await page.getByTestId("prereport-observations").inputValue()).startsWith("Observación general del caso aislado") && /texto editado por la profesional/.test(await frameText()));
+
+    const briefI = await exportVariant("AISLADO-preinforme", "brief");
+    const fullI = await exportVariant("AISLADO-preinforme-con-anexos", "full");
+    check("aislado: exportación breve y completa con el mismo cuerpo y las ediciones", bodyOf(briefI.html) === bodyOf(fullI.html) && /texto editado por la profesional/.test(briefI.text) && /Anexo A/.test(fullI.text) && !/Anexo A/.test(briefI.text));
+    check("aislado: excluir anexos de una exportación no cambia lo guardado", stamp(await draftOf(caseId, iso.runId)) === stamp(stored));
     await page.getByTestId("prereport-close").click();
 
-    // Cambia una corrección (por el flujo existente de Revisión) → el borrador queda basado en datos anteriores.
+    // cambia una corrección por el flujo existente → borrador desactualizado
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("aside.rr-panel").waitFor({ timeout: 90_000 });
     await page.waitForTimeout(2500);
     await page.getByRole("tab", { name: "Resultados" }).click();
     await page.getByRole("tab", { name: "Mediciones" }).click();
     await page.locator(".rr-level", { hasText: "L4-L5" }).first().click();
-    const heightRow = page.locator(".rr-measure", { hasText: "Altura discal" }).first();
-    await heightRow.locator(".rr-measure-input").fill("6.1");
+    await page.locator(".rr-measure", { hasText: "Altura discal" }).first().locator(".rr-measure-input").fill("6.1");
     await page.getByRole("tab", { name: "Revisión" }).click();
     await page.getByRole("button", { name: "Guardar borrador", exact: true }).click();
     await page.getByText(/Borrador guardado correctamente/).first().waitFor({ timeout: 20_000 });
     await page.getByTestId("prepare-prereport").click();
     await page.getByTestId("prereport-editor").waitFor();
     await page.getByTestId("prereport-stale").waitFor({ timeout: 30_000 });
-    check("aislado: al cambiar la corrección el borrador se marca «basado en datos anteriores»", true);
-    check("aislado: el contenido NO se actualizó solo (sigue la corrección anterior)", /7,3/.test(await frameText()) && !/6,1 mm/.test(await frameText().then((t) => t.split("Anexo A")[0])));
+    const staleText = await frameText();
+    check("aislado: al cambiar la corrección el borrador queda «basado en datos anteriores» y no se actualiza solo", /Basado en datos anteriores/.test(staleText) && /texto editado por la profesional/.test(staleText));
     await page.getByRole("button", { name: /Ver cambios/ }).click();
-    const changesText = await page.getByTestId("prereport-changes").innerText();
-    check("aislado: se muestran los cambios (antes/ahora)", /6,1/.test(changesText) && /7,3/.test(changesText), changesText.replace(/\s+/g, " "));
-    check("aislado: las ediciones siguen intactas mientras está desactualizado", (await page.getByTestId("prereport-observations").inputValue()) === "Observación sobre el caso aislado.");
+    const changes = await page.getByTestId("prereport-changes").innerText();
+    check("aislado: se muestran los cambios (antes y ahora)", /6,1/.test(changes) && /7,3/.test(changes), changes.replace(/\s+/g, " "));
+    check("aislado: las ediciones siguen intactas mientras está desactualizado", (await page.getByTestId("prereport-observations").inputValue()) === "Observación general del caso aislado.");
     await page.screenshot({ path: `${OUT}/06-borrador-desactualizado.png` });
     await page.getByTestId("prereport-update-sources").click();
     await page.getByTestId("prereport-notice").filter({ hasText: /Fuentes actualizadas/ }).waitFor({ timeout: 20_000 });
-    check("aislado: la actualización es explícita y conserva las ediciones", (await page.getByTestId("prereport-observations").inputValue()) === "Observación sobre el caso aislado." && (await page.getByTestId("prereport-stale").count()) === 0);
-    const after = (await frameText()).split("Anexo A")[0];
-    check("aislado: tras actualizar rige el valor corregido actual", /6,1/.test(after));
-    const edited = (await api(`/api/studies/${caseId}/prereport?runId=${iso.runId}`)).body.draft;
-    check("aislado: la edición de texto sobrevive a la actualización de fuentes", Object.values(edited.edits.text ?? {}).some((v) => /texto editado por la profesional/.test(v)));
+    const updated = await draftOf(caseId, iso.runId);
+    check("aislado: la actualización es explícita, conserva las ediciones y pasa a los datos actuales", (await page.getByTestId("prereport-stale").count()) === 0 && /Observación general del caso aislado/.test(updated.edits.observations) && Object.values(updated.edits.text).some((v) => /texto editado por la profesional/.test(v)) && JSON.stringify(updated.generated).includes('"corrected":6.1'));
+    check("aislado: el preinforme no tocó las correcciones del estudio", (await reviewOf(iso.runId)).corrections.length >= correctionsBeforeStale);
     await page.getByTestId("prereport-close").click();
   }
 

@@ -77,7 +77,7 @@ export function resultsSummary(model: PreReportGenerated, edits: PreReportEdits)
     const positives = model.findings.filter((f) => f.section === "principal" && f.positive);
     const included = positives.filter((f) => levelIncluded(model, edits, f.level) && findingIncluded(edits, f));
     if (included.length) {
-      blocks.push({ kind: "p", text: "La clasificación degenerativa por IA predijo como presentes, pendientes de revisión profesional:" });
+      blocks.push({ kind: "p", text: included.length === 1 ? "La clasificación degenerativa por IA predijo como presente, pendiente de revisión profesional:" : "La clasificación degenerativa por IA predijo como presentes, pendientes de revisión profesional:" });
       blocks.push({ kind: "ul", items: included.map((f) => `${f.level} · ${effectiveText(edits, f.key, f.text)}`) });
     } else if (positives.length === 0) {
       blocks.push({ kind: "p", text: "La clasificación degenerativa por IA no predijo como presente ninguna de las cuatro categorías principales en los niveles evaluados." });
@@ -104,7 +104,7 @@ export function resultsSummary(model: PreReportGenerated, edits: PreReportEdits)
   if (measurements.length) {
     const levels = selections.filter((s) => s.measurements.length).map((s) => s.level);
     const names = [...new Set(measurements.map((x) => (x.labelKey && MEASUREMENT_NAMES[x.labelKey]) || x.label))];
-    blocks.push({ kind: "p", text: `Se presentan mediciones del análisis inicial (${listText(names)}) de ${plural(levels.length, "nivel", "niveles")}: ${listText(levels)}.` });
+    blocks.push({ kind: "p", text: `Se presentan mediciones del análisis inicial (${listText(names)}) de ${plural(levels.length, "nivel", "niveles")} (${listText(levels)}).` });
   }
 
   const withData = model.levels.filter((l) => l.evaluated).map((l) => l.level);
@@ -371,6 +371,8 @@ export function evidenceBlocks(model: PreReportGenerated, edits: PreReportEdits,
       })),
     });
   }
+  // Dentro de cada fuente, la serie analizada (T2) va primero.
+  blocks.sort((a, b) => a.kind.localeCompare(b.kind) * -1 || Number(/T2/.test(b.seriesLabel)) - Number(/T2/.test(a.seriesLabel)));
   return options.all ? blocks : blocks.filter((block) => block.included);
 }
 
