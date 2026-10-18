@@ -146,6 +146,7 @@ try {
   check("L5-S1. el corte del documento coincide con el que marca el visor", viewerSlice && new RegExp(`Sagital T2 \\(detectada\\) · corte ${viewerSlice} de 15`).test(text), `visor: ${viewerGoTo}; ${viewerRows.slice(0, 120)}`);
   check("L5-S1. hay región evaluada rotulada como tal (no como lesión)", /Región evaluada por el modelo/.test(text) && /no delimita una lesión/.test(text));
   check("L5-S1. series T2 y T1 identificadas, corte en base 1", /Sagital T1 \(detectada\) · corte \d+ de 15/.test(text) && /Sagital T2 \(detectada\) · corte \d+ de 15/.test(text));
+  check("L5-S1. mediciones y predicciones P10.7 van en bloques e imágenes separados, con la correspondencia declarada pendiente de verificación", /Correspondencia pendiente de verificación/.test(text) && /Fuente: análisis inicial/.test(text) && /Fuente: P10\.7/.test(text) && !/trazos de las mediciones y región/.test(text));
   check("L5-S1. las imágenes cargaron (incrustadas, no dependen de una URL)", await allImagesLoaded());
   const imageSources = await frame().locator("img").evaluateAll((nodes) => nodes.map((n) => n.src.slice(0, 11)));
   check("L5-S1. todas las imágenes son data URL", imageSources.length > 0 && imageSources.every((s) => s.startsWith("data:image")), imageSources.join(","));

@@ -196,7 +196,7 @@ export type EvidenceBlock = {
   /** El profesional puede quitar una imagen sin quitar el resultado. */
   included: boolean;
   level: string;
-  kind: "trace" | "region" | "combined";
+  kind: "trace" | "region";
   imagePath: string;
   /** Corte en base 1, tal como lo muestra el visor. */
   sliceNumber: number | null;
@@ -220,34 +220,37 @@ function seriesInfo(model: PreReportGenerated, inputId: string | null) {
  */
 export function evidenceBlocks(model: PreReportGenerated, edits: PreReportEdits, selection: LevelSelection, options: { all?: boolean } = {}): EvidenceBlock[] {
   type Draft = { traces: PreReportMeasurement[]; regions: { finding: PreReportFinding; region: PreReportRegion }[]; inputId: string | null };
+  // Las mediciones (análisis inicial) y las regiones P10.7 vienen de circuitos distintos, con niveles asignados por separado y sin un
+  // vínculo persistido entre ambos: NUNCA se dibujan en una misma imagen, aunque coincidan en el mismo corte. Una imagen por fuente.
   const byImage = new Map<string, Draft>();
-  const draftFor = (imagePath: string): Draft => {
-    const existing = byImage.get(imagePath);
+  const draftFor = (kind: "trace" | "region", imagePath: string): Draft => {
+    const key = `${kind}|${imagePath}`;
+    const existing = byImage.get(key);
     if (existing) return existing;
     const created: Draft = { traces: [], regions: [], inputId: null };
-    byImage.set(imagePath, created);
+    byImage.set(key, created);
     return created;
   };
   for (const measurement of selection.measurements) {
     if (!measurement.imagePath || measurement.trace.status !== "located" || !measurement.trace.points.length) continue;
-    draftFor(measurement.imagePath).traces.push(measurement);
+    draftFor("trace", measurement.imagePath).traces.push(measurement);
   }
   for (const finding of selection.findings) {
     for (const source of finding.sources) {
       if (!source.region || !source.imagePath) continue;
-      const draft = draftFor(source.imagePath);
+      const draft = draftFor("region", source.imagePath);
       draft.regions.push({ finding, region: source.region });
       draft.inputId = source.region.inputId;
     }
   }
   const blocks: EvidenceBlock[] = [];
-  for (const [imagePath, draft] of byImage) {
-    // Un mismo corte lleva sus trazos y sus regiones juntos: no se repite la imagen. La numeración es única en el bloque.
+  for (const [mapKey, draft] of byImage) {
+    const imagePath = mapKey.slice(mapKey.indexOf("|") + 1);
     const info = seriesInfo(model, draft.inputId);
     const first = draft.traces[0];
     const sliceNumber = first ? (first.sliceIndex === null ? null : first.sliceIndex + 1) : draft.regions[0].region.sliceIndex + 1;
-    const id = `img:${selection.level}:${imagePath}`;
-    const kind: EvidenceBlock["kind"] = draft.traces.length && draft.regions.length ? "combined" : draft.traces.length ? "trace" : "region";
+    const kind: EvidenceBlock["kind"] = draft.traces.length ? "trace" : "region";
+    const id = `img:${kind}:${selection.level}:${imagePath}`;
     blocks.push({
       id,
       included: isIncluded(edits, id, true),
@@ -268,7 +271,7 @@ export function evidenceBlocks(model: PreReportGenerated, edits: PreReportEdits,
       })),
       regions: draft.regions.map((entry, index) => ({
         ref: entry.finding.key,
-        n: draft.traces.length + index + 1,
+        n: index + 1,
         label: `${entry.finding.typeLabel}: ${entry.finding.className}`,
         positive: entry.finding.positive,
         region: entry.region,

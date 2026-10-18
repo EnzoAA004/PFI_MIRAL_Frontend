@@ -142,18 +142,28 @@ check("las imágenes se agrupan por nivel e imagen: un bloque de trazos y un blo
   assert.equal(m.selectedLevels(g, off)[0].findings.length, 2);
 });
 
-check("trazos y región sobre el mismo corte van en UNA imagen, con numeración única", () => {
+check("trazos y región P10.7 NUNCA van en una misma imagen, aunque coincidan en el corte: una imagen por fuente", () => {
   const g = model();
   for (const f of g.findings.filter((x) => x.level === "L5-S1")) f.sources[0].imagePath = "/api/ai/assets/plane-1/sagittal/input.png";
   const blocks = m.evidenceBlocks(g, {}, m.selectedLevels(g, {})[0]);
-  assert.equal(blocks.length, 2, "T2 analizado (combinado) + T1");
-  const combined = blocks.find((b) => b.kind === "combined");
-  assert.equal(combined.traces.length, 1);
-  assert.equal(combined.regions.length, 2);
-  assert.deepEqual([...combined.traces.map((t) => t.n), ...combined.regions.map((r) => r.n)], [1, 2, 3]);
+  assert.equal(blocks.length, 3, "trazos (análisis inicial) + región T2 + región T1");
+  assert.ok(blocks.every((b) => b.kind === "trace" ? b.regions.length === 0 : b.traces.length === 0), "ningún bloque mezcla fuentes");
+  const sameSlice = blocks.filter((b) => b.imagePath === "/api/ai/assets/plane-1/sagittal/input.png");
+  assert.equal(sameSlice.length, 2, "el mismo corte aparece una vez por fuente");
   const doc = html.buildPreReportHtml(g, {}, Object.fromEntries(blocks.map((b) => [b.id, readyImage])), meta);
-  assert.match(doc, /trazos de las mediciones y región evaluada por el modelo/);
-  assert.equal((doc.match(/<img /g) ?? []).length, 4);
+  assert.match(doc, /Fuente: análisis inicial/);
+  assert.match(doc, /Fuente: P10\.7/);
+  assert.doesNotMatch(doc, /trazos de las mediciones y región evaluada/);
+  assert.equal((doc.match(/<img /g) ?? []).length, 6);
+});
+
+check("una ficha con mediciones y predicciones declara la correspondencia pendiente de verificación", () => {
+  const g = model();
+  const doc = html.buildPreReportHtml(g, {}, {}, meta);
+  assert.match(doc, /Correspondencia pendiente de verificación/);
+  assert.match(doc, /No se presentan como evidencia de un mismo disco/);
+  assert.match(doc, /Mediciones del análisis inicial/);
+  assert.match(doc, /Predicciones del modelo \(P10\.7\)/);
 });
 
 check("la evidencia faltante se informa: región inválida, sin región y medición sin trazo", () => {
@@ -162,7 +172,7 @@ check("la evidencia faltante se informa: región inválida, sin región y medici
   const missing = m.missingEvidence(bad, {});
   assert.ok(missing.some((x) => /Abombamiento discal \(Sagital T2\)/.test(x.what) && /región inválida/.test(x.reason)), JSON.stringify(missing));
   assert.ok(missing.some((x) => /área del disco/.test(x.what) && /trazo/.test(x.reason)));
-  const doc = html.buildPreReportHtml(bad, {}, { "img:L5-S1:/api/ai/assets/plane-1/sagittal/input.png": readyImage }, meta);
+  const doc = html.buildPreReportHtml(bad, {}, { "img:trace:L5-S1:/api/ai/assets/plane-1/sagittal/input.png": readyImage }, meta);
   assert.match(doc, /Sin región evaluada/);
   assert.match(doc, /se conserva la clasificación sin localización/);
   assert.match(doc, /Evidencia no disponible · /, "el anexo la lista");

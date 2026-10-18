@@ -305,10 +305,9 @@ function EditorColumn({
                       {blocks.map((block) => {
                         const imageState = imageStates[block.id];
                         const status = !block.included ? "excluida" : !imageState || imageState.status === "loading" ? "preparando…" : imageState.status === "ready" ? "lista" : `no disponible: ${imageState.error}`;
-                        const label = `${block.seriesLabel} · corte ${block.sliceNumber ?? "—"}: ${[
-                          block.traces.length ? `${block.traces.length} trazo(s)` : "",
-                          block.regions.length ? `${block.regions.length} región(es) evaluada(s) por el modelo` : "",
-                        ].filter(Boolean).join(" + ")}`;
+                        const label = `${block.kind === "trace" ? "Análisis inicial" : "P10.7"} · ${block.seriesLabel} · corte ${block.sliceNumber ?? "—"}: ${
+                          block.kind === "trace" ? `${block.traces.length} trazo(s)` : `${block.regions.length} región(es) evaluada(s) por el modelo`
+                        }`;
                         return (
                           <li className="pre-item" key={block.id}>
                             <label className="pre-item-check">

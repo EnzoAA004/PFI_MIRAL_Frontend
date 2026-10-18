@@ -107,6 +107,7 @@ tr { break-inside: avoid; }
 .legend { font-size: 8.5pt; margin: 3pt 0 0; padding: 0; list-style: none; }
 .legend li { margin: 1pt 0; }
 .dot { display: inline-block; width: 8pt; height: 8pt; border-radius: 50%; margin-right: 4pt; vertical-align: -1pt; }
+.verify { border: 1px solid #fcd34d; background: #fffbeb; color: #5b3b05; border-radius: 6px; padding: 4pt 8pt; font-size: 8.5pt; margin: 4pt 0; }
 .obs { border-left: 3px solid #0f3d63; background: #f8fafc; padding: 4pt 8pt; margin-top: 5pt; font-size: 9.5pt; }
 .obs strong { display: block; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; color: #475569; }
 .missing { font-size: 8.5pt; color: #92400e; margin: 3pt 0; }
@@ -184,10 +185,8 @@ function legendItem(color: string, text: string): string {
 function evidenceHtml(block: EvidenceBlock, state: ImageState | undefined): string {
   const slice = block.sliceNumber === null ? "corte no informado" : `corte ${block.sliceNumber}${block.sliceTotal ? ` de ${block.sliceTotal}` : ""}`;
   const title = block.kind === "trace"
-    ? "Corte analizado con los trazos de las mediciones"
-    : block.kind === "region"
-      ? "Región evaluada por el modelo (no delimita una lesión)"
-      : "Corte analizado: trazos de las mediciones y región evaluada por el modelo (no delimita una lesión)";
+    ? "Fuente: análisis inicial · Corte analizado con los trazos de las mediciones"
+    : "Fuente: P10.7 · Región evaluada por el modelo (no delimita una lesión)";
   if (!state || state.status === "loading") {
     return `<div class="missing">Imagen en preparación: ${escapeHtml(block.seriesLabel)} · ${escapeHtml(slice)}.</div>`;
   }
@@ -221,27 +220,37 @@ function measurementRows(selection: LevelSelection, edits: PreReportEdits, block
 
 function fichaHtml(model: PreReportGenerated, edits: PreReportEdits, selection: LevelSelection, images: Record<string, ImageState>): string {
   const blocks = evidenceBlocks(model, edits, selection);
+  const traceBlocks = blocks.filter((b) => b.kind === "trace");
+  const regionBlocks = blocks.filter((b) => b.kind === "region");
   const note = edits.levelNotes?.[selection.level]?.trim();
   const sectionOrder = { principal: 0, experimental: 1, investigacion: 2 } as const;
   const predictions = selection.findings.slice().sort((a, b) => sectionOrder[a.section] - sectionOrder[b.section]).map((f) =>
     `<p class="pred">${para(effectiveText(edits, f.key, f.text))}${isEdited(edits, f.key, f.text) ? '<span class="edited">texto editado</span>' : ""}</p>`).join("");
   const hasPositive = selection.findings.some((f) => f.section === "principal" && f.positive);
   const measurementTable = selection.measurements.length
-    ? `<h4>Mediciones seleccionadas</h4><table><thead><tr><th>Medición</th><th>Valor</th><th>Procedencia</th><th>Corte</th></tr></thead><tbody>${measurementRows(selection, edits, blocks)}</tbody></table>`
+    ? `<table><thead><tr><th>Medición</th><th>Valor</th><th>Procedencia</th><th>Corte</th></tr></thead><tbody>${measurementRows(selection, edits, traceBlocks)}</tbody></table>`
     : "";
   const missing = selection.findings.flatMap((f) => f.sources.filter((s) => s.available && !s.region).map((s) =>
     `<p class="missing"><strong>Sin región evaluada</strong> · ${escapeHtml(f.typeLabel)} (${escapeHtml(s.roleLabel)}): ${escapeHtml(s.regionIssue ? `la corrida guardó una región inválida (${s.regionIssue}); se conserva la clasificación sin localización.` : "la corrida no guardó la región evaluada.")}</p>`));
   const unlocated = selection.measurements.filter((m) => !m.imagePath && !m.invalidReason && !isEdited(edits, m.key, m.text)).length;
   const missingTraces = unlocated ? `<p class="missing">${unlocated} medición(es) sin trazo guardado: se informa solo el valor.</p>` : "";
-  const first = `<div class="ficha-block">
-<div class="ficha-head"><h3>${escapeHtml(selection.level)}</h3>${hasPositive ? '<span class="tag">Predicción para revisar</span>' : ""}</div>
-${predictions ? `<h4>Predicciones del modelo</h4>${predictions}` : ""}
-${measurementTable}${missingTraces}${missing.join("")}
-${note ? `<div class="obs"><strong>Observaciones del profesional</strong>${para(note)}</div>` : ""}
-${blocks[0] ? evidenceHtml(blocks[0], images[blocks[0].id]) : ""}
-</div>`;
-  const rest = blocks.slice(1).map((block) => `<div class="ficha-block"><div class="ficha-head"><h3>${escapeHtml(selection.level)} <span class="muted">· continuación</span></h3></div>${evidenceHtml(block, images[block.id])}</div>`).join("");
-  return `<div class="ficha">${first}${rest}</div>`;
+  const both = selection.measurements.length > 0 && selection.findings.length > 0;
+  const verification = both
+    ? `<p class="verify" data-testid="level-verification"><strong>Correspondencia pendiente de verificación.</strong> Las mediciones (análisis inicial) y las predicciones P10.7 de ${escapeHtml(selection.level)} provienen de circuitos distintos: cada uno asigna el nivel por su cuenta (conteo de espacios discales desde el inferior, sobre cortes y series diferentes) y el sistema no guarda un vínculo entre ambos. No se presentan como evidencia de un mismo disco.</p>`
+    : "";
+  const head = (suffix: string, tag = "") => `<div class="ficha-head"><h3>${escapeHtml(selection.level)}${suffix ? ` <span class="muted">· ${escapeHtml(suffix)}</span>` : ""}</h3>${tag}</div>`;
+  const parts: string[] = [];
+  if (selection.measurements.length) {
+    parts.push(`<div class="ficha-block">${head("Mediciones del análisis inicial")}${verification}<h4>Mediciones seleccionadas</h4>${measurementTable}${missingTraces}${traceBlocks[0] ? evidenceHtml(traceBlocks[0], images[traceBlocks[0].id]) : ""}</div>`);
+    for (const block of traceBlocks.slice(1)) parts.push(`<div class="ficha-block">${head("Mediciones del análisis inicial · continuación")}${evidenceHtml(block, images[block.id])}</div>`);
+  }
+  if (selection.findings.length) {
+    parts.push(`<div class="ficha-block">${head("Predicciones del modelo (P10.7)", hasPositive ? '<span class="tag">Predicción para revisar</span>' : "")}${selection.measurements.length ? "" : verification}<h4>Predicciones del modelo</h4>${predictions}${missing.join("")}${regionBlocks[0] ? evidenceHtml(regionBlocks[0], images[regionBlocks[0].id]) : ""}</div>`);
+    for (const block of regionBlocks.slice(1)) parts.push(`<div class="ficha-block">${head("Predicciones del modelo (P10.7) · continuación")}${evidenceHtml(block, images[block.id])}</div>`);
+  }
+  if (note) parts.push(`<div class="ficha-block">${head("")}<div class="obs"><strong>Observaciones del profesional</strong>${para(note)}</div></div>`);
+  if (!parts.length) parts.push(`<div class="ficha-block">${head("")}<p class="muted">Sin elementos seleccionados en este nivel.</p></div>`);
+  return `<div class="ficha">${parts.join("")}</div>`;
 }
 
 function researchSection(model: PreReportGenerated, edits: PreReportEdits): string {
