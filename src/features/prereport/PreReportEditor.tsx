@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { buildPreReportHtml, type DocumentMeta } from "./prereportHtml";
+import { VARIANT_LABEL, buildPreReportHtml, type DocumentMeta, type ExportVariant } from "./prereportHtml";
 import {
   DRAFT_BANNER,
   documentSummary,
@@ -13,6 +13,7 @@ import {
   levelKey,
   measurementIncluded,
   missingEvidence,
+  plural,
   selectedLevels,
   withInclude,
   withLevelNote,
@@ -93,6 +94,8 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
   const [previewOnly, setPreviewOnly] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
+  /** Qué variante del documento se previsualiza y exporta. Excluir los anexos no borra datos ni cambia lo guardado. */
+  const [variant, setVariant] = useState<ExportVariant>("brief");
 
   const meta = useMemo<DocumentMeta | null>(() => (view ? {
     generatedAt: view.draft?.updatedAt ?? view.generatedAt,
@@ -101,7 +104,7 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
     stale: view.stale,
   } : null), [view]);
 
-  const html = useMemo(() => (model && meta ? buildPreReportHtml(model, edits, imageStates, meta) : ""), [model, edits, imageStates, meta]);
+  const html = useMemo(() => (model && meta ? buildPreReportHtml(model, edits, imageStates, meta, { variant }) : ""), [model, edits, imageStates, meta, variant]);
 
   async function documentHtml(): Promise<{ html: string; proceed: boolean }> {
     if (!model || !meta) return { html: "", proceed: false };
@@ -115,7 +118,7 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
       if (missing.length && !window.confirm(`Antes de exportar: falta evidencia visual para estos elementos. Se conserva el resultado textual y el documento lo indica.\n\n${missing.join("\n")}\n\n¿Exportar igual?`)) {
         return { html: "", proceed: false };
       }
-      return { html: buildPreReportHtml(model, edits, settled, meta), proceed: true };
+      return { html: buildPreReportHtml(model, edits, settled, meta, { variant }), proceed: true };
     } finally {
       setExporting(false);
     }
@@ -149,7 +152,7 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `preinforme-borrador-${(model?.study.caseId ?? "estudio").replace(/[^A-Za-z0-9._-]/g, "_")}.html`;
+    link.download = `preinforme-borrador${variant === "full" ? "-con-anexos" : ""}-${(model?.study.caseId ?? "estudio").replace(/[^A-Za-z0-9._-]/g, "_")}.html`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
@@ -177,6 +180,13 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
           <button data-testid="prereport-preview" disabled={!model} onClick={() => setPreviewOnly((value) => !value)} type="button">
             {previewOnly ? "Volver a editar" : "Vista previa"}
           </button>
+          <label className="pre-variant">
+            <span>Contenido</span>
+            <select aria-label="Contenido a exportar" data-testid="prereport-variant" onChange={(event) => setVariant(event.target.value as ExportVariant)} value={variant}>
+              <option value="brief">{VARIANT_LABEL.brief}</option>
+              <option value="full">{VARIANT_LABEL.full}</option>
+            </select>
+          </label>
           <button data-testid="prereport-export-pdf" disabled={!model || exporting} onClick={() => void exportPdf()} type="button">
             {exporting ? "Preparando…" : "Exportar PDF (borrador)"}
           </button>
@@ -246,13 +256,13 @@ function EditorColumn({
       <section className="pre-card">
         <h3>Contenido</h3>
         <p className="pre-hint" data-testid="prereport-summary">
-          {summary.cards} ficha(s) · {summary.findingsIncluded} predicción(es) · {summary.measurementsIncluded} medición(es) · {summary.imagesPlanned} imagen(es)
-          {summary.researchIncluded ? ` · ${summary.researchIncluded} de investigación` : ""}
+          {plural(summary.cards, "ficha")} · {plural(summary.findingsIncluded, "predicción", "predicciones")} · {plural(summary.measurementsIncluded, "medición", "mediciones")} · {plural(summary.imagesPlanned, "imagen", "imágenes")}
+          {summary.researchIncluded ? ` · ${plural(summary.researchIncluded, "resultado")} de investigación` : ""}
         </p>
         <p className="pre-hint">Excluir algo de este documento no lo borra del estudio. Los resultados de investigación quedan fuera por defecto.</p>
         {missing.length > 0 && (
           <details className="pre-missing" data-testid="prereport-missing">
-            <summary>{missing.length} elemento(s) sin evidencia visual completa</summary>
+            <summary>{plural(missing.length, "elemento")} sin evidencia visual completa</summary>
             <ul>{missing.map((item, index) => <li key={`${item.what}-${index}`}><strong>{item.what}:</strong> {item.reason}</li>)}</ul>
           </details>
         )}
@@ -305,8 +315,8 @@ function EditorColumn({
                       {blocks.map((block) => {
                         const imageState = imageStates[block.id];
                         const status = !block.included ? "excluida" : !imageState || imageState.status === "loading" ? "preparando…" : imageState.status === "ready" ? "lista" : `no disponible: ${imageState.error}`;
-                        const label = `${block.kind === "trace" ? "Análisis inicial" : "P10.7"} · ${block.seriesLabel} · corte ${block.sliceNumber ?? "—"}: ${
-                          block.kind === "trace" ? `${block.traces.length} trazo(s)` : `${block.regions.length} región(es) evaluada(s) por el modelo`
+                        const label = `${block.kind === "trace" ? "Análisis inicial" : "Clasificación por IA"} · ${block.seriesLabel} · corte ${block.sliceNumber ?? "—"}: ${
+                          block.kind === "trace" ? plural(block.traces.length, "trazo") : plural(block.regions.length, "región evaluada", "regiones evaluadas")
                         }`;
                         return (
                           <li className="pre-item" key={block.id}>
@@ -346,7 +356,7 @@ function EditorColumn({
               <ItemRow edits={edits} generatedText={`${f.level} · ${f.text}`} included={findingIncluded(edits, f)} itemKey={f.key} key={f.key} badge="Investigación" onChange={onChange} />
             ))}
           </ul>
-          <p className="pre-hint">{includedResearch(model, edits).length} incluido(s).</p>
+          <p className="pre-hint">{includedResearch(model, edits).length === 1 ? "1 incluido." : `${includedResearch(model, edits).length} incluidos.`}</p>
         </details>
       )}
 

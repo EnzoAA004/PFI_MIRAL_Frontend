@@ -30,6 +30,95 @@ export const LUMBAR_LEVELS = ["L1-L2", "L2-L3", "L3-L4", "L4-L5", "L5-S1"];
 
 export const DRAFT_BANNER = "Preinforme · Borrador pendiente de revisión profesional";
 
+
+export const SECTION_ORDER = { principal: 0, experimental: 1, investigacion: 2 } as const;
+
+/** Plural correcto: `plural(1, "ficha")` → «1 ficha»; `plural(2, "ficha")` → «2 fichas»; formas irregulares por parámetro. */
+export function plural(count: number, singular: string, pluralForm?: string): string {
+  return `${count} ${count === 1 ? singular : (pluralForm ?? `${singular}s`)}`;
+}
+
+/**
+ * Modalidad tal como la registra el estudio. Solo se traduce un código persistido (MR/MRI/RM → «Resonancia magnética»);
+ * nunca se infiere del título del documento ni del nombre de un archivo. Sin dato, se dice que no está registrada.
+ */
+export function modalityLabel(value: string | null | undefined): string {
+  const code = (value ?? "").trim();
+  if (!code) return "No registrada en el estudio";
+  return ["MR", "MRI", "RM"].includes(code.toUpperCase()) ? "Resonancia magnética" : code;
+}
+
+export type SummaryBlock = { kind: "p"; text: string } | { kind: "ul"; items: string[] };
+
+const MEASUREMENT_NAMES: Record<string, string> = {
+  "disc height": "altura del disco",
+  "disc width": "ancho del disco",
+  "disc area": "área del disco",
+  "canal ap": "diámetro anteroposterior del canal",
+};
+
+function listText(items: string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
+}
+
+/**
+ * Resumen determinista de lo que incluye el documento. Describe predicciones y mediciones; no diagnostica, no afirma
+ * normalidad ni causalidad y no recomienda nada. Distingue «ausente» (predicción negativa), «no evaluado» (la corrida no devolvió
+ * resultado para ese nivel y categoría) y «no disponible» (la corrida no tiene clasificación degenerativa). Usa el texto vigente
+ * de cada predicción (el editado por el profesional, si lo hay): no lo sobrescribe. Los conteos técnicos quedan en el anexo.
+ */
+export function resultsSummary(model: PreReportGenerated, edits: PreReportEdits): SummaryBlock[] {
+  const blocks: SummaryBlock[] = [];
+  const selections = selectedLevels(model, edits);
+  const classification = model.findings.filter((f) => f.section !== "investigacion");
+
+  if (model.findingsStatus === "available" && classification.length) {
+    const positives = model.findings.filter((f) => f.section === "principal" && f.positive);
+    const included = positives.filter((f) => levelIncluded(model, edits, f.level) && findingIncluded(edits, f));
+    if (included.length) {
+      blocks.push({ kind: "p", text: "La clasificación degenerativa por IA predijo como presentes, pendientes de revisión profesional:" });
+      blocks.push({ kind: "ul", items: included.map((f) => `${f.level} · ${effectiveText(edits, f.key, f.text)}`) });
+    } else if (positives.length === 0) {
+      blocks.push({ kind: "p", text: "La clasificación degenerativa por IA no predijo como presente ninguna de las cuatro categorías principales en los niveles evaluados." });
+    }
+    if (positives.length > included.length) {
+      blocks.push({ kind: "p", text: `${plural(positives.length - included.length, "predicción presente no está incluida", "predicciones presentes no están incluidas")} en este documento por decisión del profesional; figura en la tabla de resultados.` });
+    }
+    const cells = summaryMatrix(model).flatMap((row) => MAIN_CATEGORIES.map((c) => row.cells[c]));
+    const absent = cells.filter((c) => c.state === "absent").length;
+    const notEvaluated = cells.filter((c) => c.state === "not_evaluated").length;
+    const parts = [`${plural(absent, "combinación de nivel y categoría fue predicha", "combinaciones de nivel y categoría fueron predichas")} como ausente${absent === 1 ? "" : "s"}`];
+    if (notEvaluated) parts.push(`${plural(notEvaluated, "no fue evaluada", "no fueron evaluadas")} por la corrida`);
+    blocks.push({ kind: "p", text: `${parts.join("; ")}. Un resultado ausente es una predicción del modelo, no una conclusión.` });
+    if (classification.some((f) => f.type === "pfirrmann_grade")) {
+      blocks.push({ kind: "p", text: "El grado de Pfirrmann es experimental y se informa por nivel en la tabla." });
+    }
+  } else if (model.findingsStatus === "invalid") {
+    blocks.push({ kind: "p", text: `Los resultados de la clasificación degenerativa por IA de la corrida no cumplen el contrato y no se muestran (${model.findingsStatusReason ?? "motivo no informado"}).` });
+  } else {
+    blocks.push({ kind: "p", text: "La corrida no dispone de resultados de clasificación degenerativa por IA. Eso no equivale a que ninguna categoría esté ausente." });
+  }
+
+  const measurements = selections.flatMap((s) => s.measurements);
+  if (measurements.length) {
+    const levels = selections.filter((s) => s.measurements.length).map((s) => s.level);
+    const names = [...new Set(measurements.map((x) => (x.labelKey && MEASUREMENT_NAMES[x.labelKey]) || x.label))];
+    blocks.push({ kind: "p", text: `Se presentan mediciones del análisis inicial (${listText(names)}) de ${plural(levels.length, "nivel", "niveles")}: ${listText(levels)}.` });
+  }
+
+  const withData = model.levels.filter((l) => l.evaluated).map((l) => l.level);
+  const withoutCard = withData.filter((level) => !levelIncluded(model, edits, level));
+  const unchecked = classification.filter((f) => levelIncluded(model, edits, f.level) && !findingIncluded(edits, f)).length;
+  if (withoutCard.length || unchecked) {
+    blocks.push({
+      kind: "p",
+      text: `El detalle por nivel corresponde a la selección incluida en este documento${withoutCard.length ? ` (sin ficha: ${listText(withoutCard)})` : ""}; no representa la cobertura completa de la corrida.`,
+    });
+  }
+  return blocks;
+}
+
 /* ------------------------------------------------------------------ formato */
 
 export function formatNumber(value: number | null | undefined, digits = 1): string {
@@ -235,9 +324,13 @@ export function evidenceBlocks(model: PreReportGenerated, edits: PreReportEdits,
     if (!measurement.imagePath || measurement.trace.status !== "located" || !measurement.trace.points.length) continue;
     draftFor("trace", measurement.imagePath).traces.push(measurement);
   }
-  for (const finding of selection.findings) {
+  // Cada resultado lleva el MISMO número en todas las series donde tiene región: la leyenda de un nivel es una sola.
+  const regionNumber = new Map<string, number>();
+  const ordered = selection.findings.slice().sort((a, b) => SECTION_ORDER[a.section] - SECTION_ORDER[b.section]);
+  for (const finding of ordered) {
     for (const source of finding.sources) {
       if (!source.region || !source.imagePath) continue;
+      if (!regionNumber.has(finding.key)) regionNumber.set(finding.key, regionNumber.size + 1);
       const draft = draftFor("region", source.imagePath);
       draft.regions.push({ finding, region: source.region });
       draft.inputId = source.region.inputId;
@@ -269,9 +362,9 @@ export function evidenceBlocks(model: PreReportGenerated, edits: PreReportEdits,
         space: { width: m.trace.space.width, height: m.trace.space.height },
         origin: m.trace.origin === "profesional" ? "profesional" : "ia",
       })),
-      regions: draft.regions.map((entry, index) => ({
+      regions: draft.regions.slice().sort((a, b) => (regionNumber.get(a.finding.key) ?? 0) - (regionNumber.get(b.finding.key) ?? 0)).map((entry, index) => ({
         ref: entry.finding.key,
-        n: index + 1,
+        n: regionNumber.get(entry.finding.key) ?? index + 1,
         label: `${entry.finding.typeLabel}: ${entry.finding.className}`,
         positive: entry.finding.positive,
         region: entry.region,

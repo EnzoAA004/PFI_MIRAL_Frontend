@@ -18,11 +18,12 @@ function load(paths, exportNames) {
 }
 
 const m = load(["src/features/prereport/prereportModel.ts"], [
+  "plural", "modalityLabel", "resultsSummary", "SECTION_ORDER",
   "isIncluded", "levelIncluded", "effectiveText", "isEdited", "withInclude", "withText", "withLevelNote", "withObservations", "sameEdits",
   "selectedLevels", "includedResearch", "summaryMatrix", "evidenceBlocks", "missingEvidence", "documentSummary", "annexMeasurements",
   "formatNumber", "formatValue", "formatPercent", "DRAFT_BANNER", "levelKey",
 ]);
-const html = load(["src/features/prereport/prereportModel.ts", "src/features/prereport/prereportHtml.ts"], ["buildPreReportHtml", "DRAFT_BANNER"]);
+const html = load(["src/features/prereport/prereportModel.ts", "src/features/prereport/prereportHtml.ts"], ["buildPreReportHtml", "DRAFT_BANNER", "VARIANT_LABEL", "CORRESPONDENCE_NOTICE"]);
 const img = load(["src/features/prereport/prereportImages.ts"], ["zoomCropFor"]);
 
 let passed = 0;
@@ -118,7 +119,7 @@ check("el resumen compacto muestra negativos y no evaluados; sin P10.7 no invent
   assert.equal(l5.cells.disc_narrowing.state, "not_evaluated");
   assert.equal(rows.find((r) => r.level === "L4-L5").cells.disc_bulging.state, "absent");
   const none = html.buildPreReportHtml(model({ findings: [], findingsStatus: "none", levels: model().levels.map((l) => ({ ...l, findingKeys: [] })) }), {}, {}, meta);
-  assert.match(none, /no tiene resultados P10\.7 persistidos\. Eso no equivale a que ninguna categoría esté ausente/);
+  assert.match(none, /no dispone de resultados de clasificación degenerativa por IA\. Eso no equivale a que ninguna categoría esté ausente/);
   assert.doesNotMatch(none, /class="matrix"/, "sin P10.7 no hay matriz que parezca un resultado negativo");
 });
 
@@ -151,8 +152,8 @@ check("trazos y región P10.7 NUNCA van en una misma imagen, aunque coincidan en
   const sameSlice = blocks.filter((b) => b.imagePath === "/api/ai/assets/plane-1/sagittal/input.png");
   assert.equal(sameSlice.length, 2, "el mismo corte aparece una vez por fuente");
   const doc = html.buildPreReportHtml(g, {}, Object.fromEntries(blocks.map((b) => [b.id, readyImage])), meta);
-  assert.match(doc, /Fuente: análisis inicial/);
-  assert.match(doc, /Fuente: P10\.7/);
+  assert.match(doc, /Mediciones del análisis inicial/);
+  assert.match(doc, /Región evaluada por el clasificador/);
   assert.doesNotMatch(doc, /trazos de las mediciones y región evaluada/);
   assert.equal((doc.match(/<img /g) ?? []).length, 6);
 });
@@ -161,9 +162,9 @@ check("una ficha con mediciones y predicciones declara la correspondencia pendie
   const g = model();
   const doc = html.buildPreReportHtml(g, {}, {}, meta);
   assert.match(doc, /Correspondencia pendiente de verificación/);
-  assert.match(doc, /No se presentan como evidencia de un mismo disco/);
+  assert.match(doc, /La correspondencia anatómica entre estas mediciones y clasificaciones requiere verificación profesional\./);
   assert.match(doc, /Mediciones del análisis inicial/);
-  assert.match(doc, /Predicciones del modelo \(P10\.7\)/);
+  assert.match(doc, /Clasificación degenerativa por IA/);
 });
 
 check("la evidencia faltante se informa: región inválida, sin región y medición sin trazo", () => {
@@ -175,7 +176,8 @@ check("la evidencia faltante se informa: región inválida, sin región y medici
   const doc = html.buildPreReportHtml(bad, {}, { "img:trace:L5-S1:/api/ai/assets/plane-1/sagittal/input.png": readyImage }, meta);
   assert.match(doc, /Sin región evaluada/);
   assert.match(doc, /se conserva la clasificación sin localización/);
-  assert.match(doc, /Evidencia no disponible · /, "el anexo la lista");
+  assert.match(doc, /Evidencia visual no disponible/, "el cuerpo la lista, también sin anexos");
+  assert.match(html.buildPreReportHtml(bad, {}, {}, meta, { variant: "full" }), /Evidencia no disponible · /, "el anexo la lista");
 });
 
 check("una imagen que falla conserva el resultado textual y dice el motivo; nunca se sustituye por otro corte", () => {
@@ -199,7 +201,10 @@ check("el documento dice borrador, separa fechas, no inventa datos y no muestra 
   assert.match(head, /Edad al estudio<\/dt><dd>No informada/);
   assert.match(head, /Contexto clínico<\/dt><dd class="muted">No informado/);
   assert.doesNotMatch(head, /real_baseline|run-1|sagittal_spider/);
-  assert.match(doc, /real_baseline/, "el modo de inferencia está solo en la trazabilidad del anexo");
+  assert.doesNotMatch(doc, /real_baseline/, "el cuerpo no lleva el modo de inferencia");
+  assert.match(html.buildPreReportHtml(model(), {}, {}, meta, { variant: "full" }), /real_baseline/, "el modo de inferencia está solo en la trazabilidad del anexo");
+  assert.match(head, /Modalidad<\/dt><dd>No registrada en el estudio/);
+  assert.match(head, /Versión de las fuentes<\/dt><dd>src-abc/);
   assert.match(doc, /@page/);
   assert.match(doc, /counter\(page\)/);
   assert.match(doc, /thead \{ display: table-header-group; \}/);
@@ -211,8 +216,9 @@ check("sin veredictos de rango, sin «atípicos», sin frases de normalidad ni d
   for (const forbidden of [/atípic/i, /dentro del rango/i, /fuera de rango/i, /por debajo del rango/i, /sin cambios/i, /normal/i, /compatible con/i, /diagnóstico de/i]) {
     assert.doesNotMatch(doc.replace("no constituye un diagnóstico", "").replace(/no constituye diagnóstico/g, ""), forbidden, String(forbidden));
   }
-  assert.match(doc, /No registrada/, "la ausencia de corrección se dice como «No registrada»");
-  assert.match(doc, /no indica que alguien haya revisado el valor/);
+  const fullDoc = html.buildPreReportHtml(model(), m.withInclude({}, m.levelKey("L4-L5"), true), {}, meta, { variant: "full" });
+  assert.match(fullDoc, /No registrada/, "la ausencia de corrección se dice como «No registrada»");
+  assert.match(fullDoc, /no indica que alguien haya revisado el valor/);
 });
 
 check("procedencia IA / corrección profesional y trazo original: una corrección numérica no cambia el trazo", () => {
@@ -230,10 +236,16 @@ check("la ficha reúne nivel, texto e imagen en un bloque que no se corta al pag
   const states = Object.fromEntries(m.evidenceBlocks(g, {}, m.selectedLevels(g, {})[0]).map((b) => [b.id, readyImage]));
   const doc = html.buildPreReportHtml(g, {}, states, meta);
   assert.match(doc, /\.ficha-block \{ break-inside: avoid;/);
-  assert.match(doc, /continuación/, "el segundo bloque de imágenes repite el nivel");
-  assert.equal((doc.match(/<img /g) ?? []).length, 6, "tres imágenes × (completa + ampliación)");
-  assert.match(doc, /Región evaluada por el modelo \(no delimita una lesión\)/);
-  assert.match(doc, /Ampliación de la misma zona, sin deformar/);
+  assert.equal((doc.match(/<img /g) ?? []).length, 6, "tres imágenes × (completa + detalle)");
+  assert.match(doc, /Región evaluada por el clasificador/);
+  assert.match(doc, /No delimitan una lesión/);
+  assert.match(doc, /Imagen completa/);
+  assert.match(doc, /Detalle ampliado/);
+  assert.doesNotMatch(doc, /sin deformar/);
+  assert.doesNotMatch(doc, /continuación/, "T1 y T2 del mismo nivel comparten un bloque, con título y leyenda únicos");
+  const regionBlock = doc.slice(doc.indexOf("Región evaluada por el clasificador"));
+  assert.equal((regionBlock.match(/class="series-row"/g) ?? []).length, 2, "una fila por serie dentro del mismo bloque");
+  assert.equal((regionBlock.match(/<ul class="legend">/g) ?? []).length, 1, "leyenda compartida");
 });
 
 check("el borrador desactualizado se rotula y el documento nunca se actualiza solo", () => {
@@ -272,6 +284,117 @@ check("formato consistente: es-AR, un decimal, unidades legibles", () => {
   assert.equal(m.formatValue(4.2, "deg"), "4,2°");
   assert.equal(m.formatValue(null, "mm"), "—");
   assert.equal(m.formatPercent(0.7044), "70,4 %");
+});
+
+check("resumen determinista: positivas con su texto vigente, negativas, no evaluadas y selección; sin diagnóstico ni normalidad", () => {
+  const g = model();
+  const blocks = m.resultsSummary(g, {});
+  const text = JSON.stringify(blocks);
+  assert.match(text, /predijo como presentes, pendientes de revisión profesional/);
+  assert.match(text, /L5-S1 · Abombamiento discal: predicción del modelo «present»?|L5-S1 · disc_bulging/);
+  assert.match(text, /predicha como ausente|predichas como ausente/);
+  assert.match(text, /no fueron evaluadas|no fue evaluada/);
+  assert.match(text, /selección incluida en este documento/);
+  assert.match(text, /no representa la cobertura completa/);
+  for (const forbidden of [/diagnóstic/i, /normal/i, /causa/i, /recomend/i, /sugier/i, /progres/i, /mejor[ií]a|empeor/i]) assert.doesNotMatch(text, forbidden, String(forbidden));
+  // El texto editado por el profesional rige en el resumen: no se sobrescribe.
+  const edited = m.withText({}, "f:L5-S1-disc_bulging", "Texto de la profesional sobre L5-S1", g.findings[0].text);
+  assert.match(JSON.stringify(m.resultsSummary(g, edited)), /Texto de la profesional sobre L5-S1/);
+  // Si el profesional excluye la predicción positiva, el resumen lo dice y no sugiere cobertura completa.
+  const excluded = m.withInclude({}, "f:L5-S1-disc_bulging", false);
+  const excludedText = JSON.stringify(m.resultsSummary(g, excluded));
+  assert.match(excludedText, /no está incluida en este documento por decisión del profesional/);
+  assert.doesNotMatch(excludedText, /predijo como presentes, pendientes/);
+});
+
+check("resumen sin clasificación degenerativa: presenta mediciones y dice que la corrida no la tiene (nunca como negativo)", () => {
+  const g = model({ findings: [], findingsStatus: "none", levels: model().levels.map((l) => ({ ...l, findingKeys: [], defaultCard: l.level === "L5-S1" })) });
+  const text = m.resultsSummary(g, {}).map((b) => (b.kind === "p" ? b.text : b.items.join(" "))).join(" ");
+  assert.match(text, /La corrida no dispone de resultados de clasificación degenerativa por IA\. Eso no equivale a que ninguna categoría esté ausente\./);
+  assert.match(text, /Se presentan mediciones del análisis inicial \(altura del disco y área del disco\) de 1 nivel: L5-S1\./);
+  assert.doesNotMatch(text, /ausentes? \(|predicha como ausente/);
+  const invalid = m.resultsSummary(model({ findings: [], findingsStatus: "invalid", findingsStatusReason: "esquema inesperado" }), {}).map((b) => (b.kind === "p" ? b.text : "")).join(" ");
+  assert.match(invalid, /no cumplen el contrato y no se muestran \(esquema inesperado\)/);
+});
+
+check("dos variantes del mismo contenido: «Preinforme» (predeterminada) y «con anexos»; ambas conservan borrador, identificación, fuentes, limitaciones y avisos", () => {
+  const g = model();
+  g.findings[0].sources[0] = { ...g.findings[0].sources[0], region: null, imagePath: null, regionIssue: "el recuadro de la región cae fuera de su espacio de coordenadas" };
+  const states = Object.fromEntries(m.evidenceBlocks(g, {}, m.selectedLevels(g, {})[0]).map((b) => [b.id, readyImage]));
+  const brief = html.buildPreReportHtml(g, {}, states, meta);
+  const explicitBrief = html.buildPreReportHtml(g, {}, states, meta, { variant: "brief" });
+  const full = html.buildPreReportHtml(g, {}, states, meta, { variant: "full" });
+  assert.equal(brief, explicitBrief, "la predeterminada es «Preinforme»");
+  assert.equal(html.VARIANT_LABEL.brief, "Preinforme");
+  assert.equal(html.VARIANT_LABEL.full, "Preinforme con anexos");
+  for (const doc of [brief, full]) {
+    assert.match(doc, /Preinforme · Borrador pendiente de revisión profesional/);
+    assert.match(doc, /Estudio<\/dt><dd>MEN-1/);
+    assert.match(doc, /Versión de las fuentes<\/dt><dd>src-abc/);
+    assert.match(doc, /Alcance y limitaciones/);
+    assert.match(doc, /requiere revisión profesional y no constituye un diagnóstico/);
+    assert.match(doc, /La correspondencia anatómica entre estas mediciones y clasificaciones requiere verificación profesional\./);
+    assert.match(doc, /Evidencia visual no disponible/);
+    assert.match(doc, /región inválida/);
+  }
+  assert.doesNotMatch(brief, /Anexo A/);
+  assert.doesNotMatch(brief, /Trazabilidad técnica/);
+  assert.match(brief, /Esta exportación no incluye los anexos/);
+  assert.match(full, /Anexo A · Tabla completa de mediciones/);
+  assert.match(full, /Anexo C · Trazabilidad técnica/);
+  assert.match(full, /Anexo D · Alcance, limitaciones y correspondencia anatómica/);
+  // Mismas cifras y evidencias en ambas: el cuerpo (desde «Resumen» hasta «Alcance») es idéntico.
+  const body = (doc) => doc.slice(doc.indexOf("<h2>Resumen"), doc.indexOf("<h2>Alcance y limitaciones"));
+  assert.equal(body(brief), body(full));
+  assert.equal((brief.match(/<img /g) ?? []).length, (full.match(/<img /g) ?? []).length);
+});
+
+check("lenguaje del cuerpo: sin códigos ni explicaciones de implementación; el código P10.7 queda en la trazabilidad", () => {
+  const g = model();
+  const brief = html.buildPreReportHtml(g, m.withInclude({}, m.levelKey("L4-L5"), true), {}, meta);
+  assert.doesNotMatch(brief, /P10\.7/, "el cuerpo no usa el código");
+  assert.doesNotMatch(brief, /\(s\)|\(es\)/, "sin plurales entre paréntesis");
+  assert.doesNotMatch(brief, /real_baseline|sagittal_spider|pfi\./);
+  assert.match(brief, /Clasificación degenerativa por IA/);
+  const full = html.buildPreReportHtml(g, {}, {}, meta, { variant: "full" });
+  assert.match(full, /Código P10\.7/, "el código está en la trazabilidad");
+  assert.equal(m.plural(1, "ficha"), "1 ficha");
+  assert.equal(m.plural(2, "ficha"), "2 fichas");
+  assert.equal(m.plural(1, "predicción", "predicciones"), "1 predicción");
+  assert.equal(m.plural(3, "predicción", "predicciones"), "3 predicciones");
+  assert.equal(m.plural(0, "imagen", "imágenes"), "0 imágenes");
+});
+
+check("modalidad: solo se traduce un código registrado; sin dato se dice que no está registrada", () => {
+  assert.equal(m.modalityLabel(null), "No registrada en el estudio");
+  assert.equal(m.modalityLabel(""), "No registrada en el estudio");
+  assert.equal(m.modalityLabel("MR"), "Resonancia magnética");
+  assert.equal(m.modalityLabel("MRI"), "Resonancia magnética");
+  assert.equal(m.modalityLabel("CT"), "CT");
+  const g = model();
+  g.study.modality = "MR";
+  assert.match(html.buildPreReportHtml(g, {}, {}, meta), /Modalidad<\/dt><dd>Resonancia magnética/);
+});
+
+check("clases técnicas raw_*: se conservan en el anexo, marcadas sin correspondencia anatómica verificada, sin traducir", () => {
+  const g = model();
+  g.measurements.push(measurement("raw100", null, "raw_100 area", "raw_100 area", 692.7, { level: null, levelScope: "level", defaultInclude: false, imagePath: null, plane: "axial", sliceIndex: 10 }));
+  const brief = html.buildPreReportHtml(g, {}, {}, meta);
+  assert.doesNotMatch(brief, /raw_100/, "no aparece en el cuerpo");
+  const full = html.buildPreReportHtml(g, {}, {}, meta, { variant: "full" });
+  assert.match(full, /raw_100 area ‡/);
+  assert.match(full, /Clase técnica del análisis \(códigos raw_…\) sin correspondencia anatómica verificada/);
+  assert.match(full, /no se traduce a una estructura/);
+});
+
+check("la leyenda de regiones es única por nivel: cada resultado conserva su número en todas las series", () => {
+  const g = model();
+  const selection = m.selectedLevels(g, {})[0];
+  const blocks = m.evidenceBlocks(g, {}, selection).filter((b) => b.kind === "region");
+  assert.equal(blocks.length, 2);
+  const numbers = blocks.map((b) => b.regions.map((r) => `${r.ref}=${r.n}`).sort().join(","));
+  assert.equal(numbers[0], numbers[1], "mismos números en T2 y T1");
+  assert.deepEqual([...new Set(blocks.flatMap((b) => b.regions.map((r) => r.n)))].sort(), [1, 2]);
 });
 
 console.log(`Preinforme visual: ${passed} pruebas pasaron`);
