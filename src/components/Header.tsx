@@ -3,6 +3,8 @@ import { fetchTechnicalReportPayload } from "../technicalReportApi";
 import { BarChart3, ChevronDown, LogOut, UserCircle, UserCog } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+const TECHNICAL_REPORT_ENTRY_VISIBLE = false;
+
 /** Global navigation, identity, session and technical-report entry point. */
 interface HeaderProps {
   activeView: ViewKey;
@@ -153,7 +155,8 @@ function renderTechnicalReportHtml(payload: any) {
 export function Header({ activeView, onChangeView, currentRunId, userName, onLogout }: HeaderProps) {
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const showTechnicalReport = activeView === "review" && Boolean(currentRunId);
+  // Acceso retirado: la única salida documental visible es el preinforme. La función, el endpoint y la auditoría se conservan.
+  const showTechnicalReport = TECHNICAL_REPORT_ENTRY_VISIBLE && activeView === "review" && Boolean(currentRunId);
 
   useEffect(() => {
     if (!profileMenuOpen) return undefined;
