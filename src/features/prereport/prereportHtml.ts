@@ -164,7 +164,6 @@ ${meta.stale ? `<div class="note warn"><strong>Basado en datos anteriores:</stro
 <div><dt>Fecha de generación</dt><dd>${escapeHtml(dateTimeText(meta.generatedAt))}</dd></div>
 <div><dt>Edad al estudio</dt><dd>${escapeHtml(age)}</dd></div>
 <div><dt>Modalidad</dt><dd>${escapeHtml(modalityLabel(model.study.modality))}</dd></div>
-<div><dt>Versión de las fuentes</dt><dd>${escapeHtml(meta.fingerprint)}</dd></div>
 <div><dt>Versión del borrador</dt><dd>${meta.draftVersion === null ? "Sin guardar" : meta.draftVersion}</dd></div>
 ${informed.length ? informed.map(([label, value]) => `<div class="wide"><dt>${escapeHtml(label)}</dt><dd>${para(value ?? "")}</dd></div>`).join("") : `<div class="wide"><dt>Contexto clínico</dt><dd class="muted">No informado para este estudio.</dd></div>`}
 <div class="wide"><dt>Series analizadas</dt><dd>${series}</dd></div>
@@ -172,7 +171,7 @@ ${informed.length ? informed.map(([label, value]) => `<div class="wide"><dt>${es
 </header>`;
 }
 
-function summarySection(model: PreReportGenerated, edits: PreReportEdits): string {
+function summarySection(model: PreReportGenerated, edits: PreReportEdits, variant: ExportVariant): string {
   const blocks = resultsSummary(model, edits).map((block) =>
     block.kind === "p"
       ? `<p>${escapeHtml(block.text)}</p>`
@@ -183,7 +182,7 @@ function summarySection(model: PreReportGenerated, edits: PreReportEdits): strin
   if (!model.study.studyDate) absences.push("La fecha del estudio no está informada.");
   if (model.coverage.findingsRejected > 0) absences.push(`${plural(model.coverage.findingsRejected, "resultado no cumple", "resultados no cumplen")} el contrato y no se muestran; no se interpreta${model.coverage.findingsRejected === 1 ? "" : "n"} como «ausente».`);
   const noLevel = model.measurements.filter((m) => m.level === null).length;
-  if (noLevel > 0) absences.push(`${plural(noLevel, "medición sin nivel asignado", "mediciones sin nivel asignado")} (figura${noLevel === 1 ? "" : "n"} en los anexos).`);
+  if (noLevel > 0) absences.push(`${plural(noLevel, "medición sin nivel asignado", "mediciones sin nivel asignado")} (${variant === "full" ? "véase el Anexo A" : "disponible" + (noLevel === 1 ? "" : "s") + " en la versión con anexos"}).`);
   return `<section class="summary">
 <h2>Resumen</h2>
 ${blocks}
@@ -305,12 +304,12 @@ function scopeSection(model: PreReportGenerated, edits: PreReportEdits, variant:
     "Cada medición sale de un único corte; una corrección numérica del profesional no modifica el trazo original de la IA.",
   ];
   const annexNote = variant === "brief"
-    ? "<p class=\"small muted\">Esta exportación no incluye los anexos (tablas completas, trazabilidad técnica y explicación técnica de las limitaciones); no se eliminó ningún dato: figuran en «Preinforme con anexos».</p>"
+    ? "<p class=\"small muted\">Disponibles en la versión con anexos: tablas completas, trazabilidad técnica (incluida la versión de las fuentes) y explicación técnica de las limitaciones. Esta exportación no las incluye; no se eliminó ningún dato.</p>"
     : "";
   return `<section>
 <h2>Alcance y limitaciones</h2>
 <ul class="plain small">${items.map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul>
-${missing.length ? `<h4>Evidencia visual no disponible</h4><ul class="plain small">${missing.map((m) => `<li><strong>${escapeHtml(m.what)}</strong>: ${escapeHtml(m.reason)}</li>`).join("")}</ul>` : ""}
+${missing.length ? `<div class="keep"><h4>Evidencia visual no disponible</h4><ul class="plain small">${missing.map((m) => `<li><strong>${escapeHtml(m.what)}</strong>: ${escapeHtml(m.reason)}</li>`).join("")}</ul></div>` : ""}
 ${annexNote}
 </section>`;
 }
@@ -338,13 +337,13 @@ function annex(model: PreReportGenerated, edits: PreReportEdits, meta: DocumentM
 <h2>Anexo A · Tabla completa de mediciones</h2>
 <p class="small muted">Todas las mediciones de la corrida (${model.measurements.length}). Unidades: mm (longitudes), mm² (áreas), ° (ángulos). «Corrección profesional: No registrada» significa que no hay corrección guardada; no indica que alguien haya revisado el valor.</p>
 ${annexTable(annexMeasurements(model))}
-<h2>Anexo B · Cobertura y resultados omitidos del cuerpo</h2>
+<div class="keep"><h2>Anexo B · Cobertura y resultados omitidos del cuerpo</h2>
 <ul class="plain small">
 <li>La corrida contiene ${plural(cov.measurementsTotal, "medición", "mediciones")} (${cov.measurementsWithTrace} con trazo guardado, ${cov.measurementsCorrected} con corrección profesional) y ${plural(cov.findingsTotal, "resultado")} de clasificación degenerativa por IA (código P10.7).</li>
 <li>Este documento incluye ${plural(summary.cards, "ficha")} por nivel, ${plural(summary.findingsIncluded, "predicción", "predicciones")}, ${plural(summary.measurementsIncluded, "medición", "mediciones")} y ${plural(summary.imagesPlanned, "imagen", "imágenes")} de evidencia${summary.researchIncluded ? `, y ${plural(summary.researchIncluded, "resultado")} de investigación en un apartado aparte` : ""}.</li>
-${model.omitted.map((o) => `<li><strong>${escapeHtml(o.what)}</strong>: ${escapeHtml(o.reason)}</li>`).join("")}${missing.map((m) => `<li><strong>Evidencia no disponible · ${escapeHtml(m.what)}</strong>: ${escapeHtml(m.reason)}</li>`).join("")}
-</ul>
-<h2>Anexo C · Trazabilidad técnica</h2>
+${model.omitted.map((o) => `<li><strong>${escapeHtml(o.what)}</strong>: ${escapeHtml(o.reason.replace(/figuran en el anexo/g, "figuran en el Anexo A"))}</li>`).join("")}${missing.map((m) => `<li><strong>Evidencia visual no disponible · ${escapeHtml(m.what)}</strong>: ${escapeHtml(m.reason)}</li>`).join("")}
+</ul></div>
+<div class="keep"><h2>Anexo C · Trazabilidad técnica</h2>
 <table class="small"><tbody>
 <tr><th>Corrida</th><td>${escapeHtml(model.run.runId)}</td></tr>
 <tr><th>Modelo sagital</th><td>${escapeHtml(model.run.modelKey)}</td></tr>
@@ -354,10 +353,10 @@ ${model.omitted.map((o) => `<li><strong>${escapeHtml(o.what)}</strong>: ${escape
 <tr><th>Versión del borrador</th><td>${meta.draftVersion === null ? "Sin guardar" : meta.draftVersion}</td></tr>
 <tr><th>Series</th><td>${model.series.map((s) => `${escapeHtml(s.label)} (${escapeHtml(s.inputId)})`).join("<br>") || "—"}</td></tr>
 <tr><th>Clasificación degenerativa por IA</th><td>Código P10.7 (esquema pfi.disc-degenerative-findings.v1)</td></tr>
-</tbody></table>
-<h2>Anexo D · Alcance, limitaciones y correspondencia anatómica</h2>
+</tbody></table></div>
+<div class="keep"><h2>Anexo D · Alcance, limitaciones y correspondencia anatómica</h2>
 <ul class="plain small">${model.limitations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>
-<p class="footer-note">Uso académico y de investigación. Datos de-identificados. Para corregir una medición use el flujo de revisión del estudio: editar este preinforme no modifica predicciones ni correcciones.</p>
+<p class="footer-note">Uso académico y de investigación. Datos de-identificados. Para corregir una medición use el flujo de revisión del estudio: editar este preinforme no modifica predicciones ni correcciones.</p></div>
 </section>`;
 }
 
@@ -376,7 +375,7 @@ export function buildPreReportHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style></head>
 <body data-variant="${variant}"><main class="sheet">
 ${header(model, meta)}
-${summarySection(model, edits)}
+${summarySection(model, edits, variant)}
 ${matrixSection(model)}
 <section><h2>Fichas por nivel</h2>${fichas || `<p class="muted">No hay fichas seleccionadas. El resumen, la tabla de resultados${variant === "full" ? " y los anexos" : ""} contienen lo que informa la corrida.</p>`}${researchSection(model, edits)}</section>
 <section><h2>Observaciones del profesional</h2>${observations ? `<div class="obs">${para(observations)}</div>` : `<p class="muted">Sin observaciones registradas. Este documento no contiene una conclusión diagnóstica generada automáticamente.</p>`}</section>

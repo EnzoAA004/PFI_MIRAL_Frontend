@@ -130,7 +130,7 @@ async function exportVariant(tag, variant) {
   return { file, pdf, images, text, pages, html: readFileSync(file, "utf8") };
 }
 /** El cuerpo del documento (de «Resumen» a «Alcance y limitaciones»): lo que debe ser idéntico entre variantes. */
-const bodyOf = (html) => html.slice(html.indexOf("<h2>Resumen"), html.indexOf("<h2>Alcance y limitaciones"));
+const bodyOf = (html) => html.slice(html.indexOf("<h2>Resumen"), html.indexOf("<h2>Alcance y limitaciones")).replace(/\((véase el Anexo A|disponibles? en la versión con anexos)\)/g, "(ref)");
 
 try {
   await loginUi();
@@ -174,8 +174,8 @@ try {
   const dialogsAfterFirst = dialogs.length;
   const fullM = await exportVariant("MENDELEY-preinforme-con-anexos", "full");
   check("exportar: antes de exportar se informa la evidencia que falta", dialogsAfterFirst > 0 && /falta evidencia visual/.test(dialogs[0]) && /área del disco/.test(dialogs[0]), dialogs[0]?.slice(0, 160));
-  check("«Preinforme» (predeterminado) no incluye anexos; «con anexos» sí", !/Anexo A/.test(briefM.text) && /Anexo A · Tabla completa de mediciones/.test(fullM.text) && /Anexo C · Trazabilidad técnica/.test(fullM.text) && /Esta exportación no incluye los anexos/.test(briefM.text));
-  check("ambas variantes conservan borrador, identificación, versión de fuentes, limitaciones y avisos", [briefM, fullM].every((d) => /Borrador pendiente de revisión profesional/.test(d.text) && /Estudio MENDELEY-0015-MVBLQ5XS/i.test(d.text) && /Versión de las fuentes src-/i.test(d.text) && /Alcance y limitaciones/.test(d.text) && /correspondencia anatómica entre estas mediciones y clasificaciones requiere verificación profesional/.test(d.text) && /Evidencia visual no disponible/i.test(d.text)));
+  check("«Preinforme» (predeterminado) no incluye anexos; «con anexos» sí", !/Anexo A/.test(briefM.text) && /Anexo A · Tabla completa de mediciones/.test(fullM.text) && /Anexo C · Trazabilidad técnica/.test(fullM.text) && /Disponibles en la versión con anexos/.test(briefM.text));
+  check("ambas variantes conservan borrador, identificación, versión de fuentes, limitaciones y avisos", [briefM, fullM].every((d) => /Borrador pendiente de revisión profesional/.test(d.text) && /Estudio MENDELEY-0015-MVBLQ5XS/i.test(d.text) && (d === fullM ? /Versión de las fuentes src-/i.test(d.text) : !/Versión de las fuentes src-/i.test(d.text)) && /Alcance y limitaciones/.test(d.text) && /correspondencia anatómica entre estas mediciones y clasificaciones requiere verificación profesional/.test(d.text) && /Evidencia visual no disponible/i.test(d.text)));
   check("las dos variantes tienen las mismas cifras y evidencias (cuerpo idéntico, mismas imágenes)", bodyOf(briefM.html) === bodyOf(fullM.html) && briefM.images.length === fullM.images.length && briefM.images.length >= 6, `${briefM.images.length} imágenes`);
   check("el PDF breve es más corto que el completo", briefM.pages > 0 && briefM.pages < fullM.pages, `${briefM.pages} frente a ${fullM.pages} páginas`);
   check("«con anexos» deja el código P10.7 y las clases técnicas raw_ solo en el anexo", /P10\.7/.test(fullM.text) && /‡/.test(fullM.html) && !/raw_\d+/.test(briefM.text) && /sin correspondencia anatómica verificada/.test(fullM.text));

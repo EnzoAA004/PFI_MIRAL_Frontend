@@ -177,7 +177,7 @@ check("la evidencia faltante se informa: región inválida, sin región y medici
   assert.match(doc, /Sin región evaluada/);
   assert.match(doc, /se conserva la clasificación sin localización/);
   assert.match(doc, /Evidencia visual no disponible/, "el cuerpo la lista, también sin anexos");
-  assert.match(html.buildPreReportHtml(bad, {}, {}, meta, { variant: "full" }), /Evidencia no disponible · /, "el anexo la lista");
+  assert.match(html.buildPreReportHtml(bad, {}, {}, meta, { variant: "full" }), /Evidencia visual no disponible · /, "el anexo la lista");
 });
 
 check("una imagen que falla conserva el resultado textual y dice el motivo; nunca se sustituye por otro corte", () => {
@@ -204,7 +204,7 @@ check("el documento dice borrador, separa fechas, no inventa datos y no muestra 
   assert.doesNotMatch(doc, /real_baseline/, "el cuerpo no lleva el modo de inferencia");
   assert.match(html.buildPreReportHtml(model(), {}, {}, meta, { variant: "full" }), /real_baseline/, "el modo de inferencia está solo en la trazabilidad del anexo");
   assert.match(head, /Modalidad<\/dt><dd>No registrada en el estudio/);
-  assert.match(head, /Versión de las fuentes<\/dt><dd>src-abc/);
+  assert.doesNotMatch(head, /Versión de las fuentes/, "la versión de las fuentes no va en la cabecera");
   assert.match(doc, /@page/);
   assert.match(doc, /counter\(page\)/);
   assert.match(doc, /thead \{ display: table-header-group; \}/);
@@ -330,7 +330,6 @@ check("dos variantes del mismo contenido: «Preinforme» (predeterminada) y «co
   for (const doc of [brief, full]) {
     assert.match(doc, /Preinforme · Borrador pendiente de revisión profesional/);
     assert.match(doc, /Estudio<\/dt><dd>MEN-1/);
-    assert.match(doc, /Versión de las fuentes<\/dt><dd>src-abc/);
     assert.match(doc, /Alcance y limitaciones/);
     assert.match(doc, /requiere revisión profesional y no constituye un diagnóstico/);
     assert.match(doc, /La correspondencia anatómica entre estas mediciones y clasificaciones requiere verificación profesional\./);
@@ -339,12 +338,15 @@ check("dos variantes del mismo contenido: «Preinforme» (predeterminada) y «co
   }
   assert.doesNotMatch(brief, /Anexo A/);
   assert.doesNotMatch(brief, /Trazabilidad técnica/);
-  assert.match(brief, /Esta exportación no incluye los anexos/);
+  assert.match(brief, /Disponibles en la versión con anexos/);
+  assert.doesNotMatch(brief, /src-abc/, "la huella solo figura en la trazabilidad de la variante con anexos");
+  assert.match(full, /Versión de las fuentes<\/th><td>src-abc/);
+  assert.doesNotMatch(brief, /figuran? en los anexos/);
   assert.match(full, /Anexo A · Tabla completa de mediciones/);
   assert.match(full, /Anexo C · Trazabilidad técnica/);
   assert.match(full, /Anexo D · Alcance, limitaciones y correspondencia anatómica/);
   // Mismas cifras y evidencias en ambas: el cuerpo (desde «Resumen» hasta «Alcance») es idéntico.
-  const body = (doc) => doc.slice(doc.indexOf("<h2>Resumen"), doc.indexOf("<h2>Alcance y limitaciones"));
+  const body = (doc) => doc.slice(doc.indexOf("<h2>Resumen"), doc.indexOf("<h2>Alcance y limitaciones")).replace(/\((véase el Anexo A|disponibles? en la versión con anexos)\)/g, "(ref)");
   assert.equal(body(brief), body(full));
   assert.equal((brief.match(/<img /g) ?? []).length, (full.match(/<img /g) ?? []).length);
 });

@@ -89,7 +89,7 @@ for (const [caseId, tag] of CASES) {
     exported[variant] = { file, pdf, text, html, pages, images: (html.match(/<img /g) ?? []).length };
     await doc.close();
   }
-  const bodyOf = (html) => html.slice(html.indexOf("<h2>Resumen"), html.indexOf("<h2>Alcance y limitaciones"));
+  const bodyOf = (html) => html.slice(html.indexOf("<h2>Resumen"), html.indexOf("<h2>Alcance y limitaciones")).replace(/\((véase el Anexo A|disponibles? en la versión con anexos)\)/g, "(ref)");
   const text = exported.brief.text;
   await page.getByTestId("prereport-close").click();
   const after = (await api(`/api/studies/${caseId}/prereport?runId=${runId}`)).draft;
