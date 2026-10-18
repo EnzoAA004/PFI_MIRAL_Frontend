@@ -1370,18 +1370,6 @@
 
   .rr-report-actions button:hover { color: var(--text-primary-strong); border-color: var(--border-info); }
 
-  /* El informe ofrecido al finalizar: se destaca porque aparece una sola vez, justo
-     cuando el estudio deja de cambiar, y perderselo obliga a ir a buscarlo. */
-  .rr-report-ready {
-    margin-top: var(--sp-2);
-    padding: var(--sp-2);
-    border: 1px solid var(--border-info);
-    border-radius: var(--radius-btn);
-    background: var(--surface-raised, transparent);
-  }
-
-  .rr-report-ready p { margin: 0 0 var(--sp-1); font-size: var(--fs-small); color: var(--text-primary-strong); }
-
   /* Right panel ---------------------------------------------------------- */
   .rr-panel {
     background: var(--surface);
@@ -3592,6 +3580,21 @@
   /* Preinforme visual (borrador): editor sobre el visor. */
   .rr-prereport-entry { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
   .rr-prereport-entry h4 { margin: 0; }
+  .rr-prereport-btn {
+    min-height: 30px;
+    padding: 0 var(--sp-3, 12px);
+    background: var(--surface-subtle);
+    border: 1px solid var(--border-info, var(--border));
+    border-radius: var(--radius-btn);
+    color: var(--text-primary-strong, var(--text));
+    font: inherit;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .rr-prereport-btn:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-raised, var(--surface-subtle)); }
+  .rr-prereport-btn:focus-visible { outline: 2px solid var(--border-info, currentColor); outline-offset: 2px; }
+  .rr-prereport-btn:disabled { opacity: .4; cursor: default; }
   .pre-overlay { position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column; background: var(--bg-app, #f4f7fb); color: var(--text, #102033); }
   .pre-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--surface, #fff); }
   .pre-bar-title { display: flex; flex-direction: column; min-width: 240px; }

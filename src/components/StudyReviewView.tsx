@@ -407,7 +407,6 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   const [notes, setNotes] = useState(run.review?.notes ?? run.review?.observations ?? "");
   const [saveMessage, setSaveMessage] = useState("");
   /** El informe queda ofrecido cuando el estudio se finaliza. */
-  const [reportReady, setReportReady] = useState(false);
   /** Editor del preinforme (borrador): se monta encima del visor, que conserva su estado por debajo. */
   const [preReportOpen, setPreReportOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<ReviewInspectorTab>("results");
@@ -506,7 +505,6 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     setLandmarkDrafts({});
     setLandmarkAddMode(false);
     setSaveMessage("");
-    setReportReady(false);
     setMetadataError("");
     setMetadataDialogOpen(false);
   }, [run.runId, run.review?.status, run.review?.notes, run.review?.observations, run.reviewStatus]);
@@ -1679,50 +1677,6 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     return `<table><thead><tr><th>Nivel</th><th>Pfirrmann</th><th>Hallazgos</th></tr></thead><tbody>${filas}</tbody></table>${bloqueInvestigacion}`;
   }
 
-  /**
-   * El documento del informe, uno solo.
-   *
-   * Lo comparten la descarga del archivo y la ventana de impresion: si cada salida
-   * armara su propio HTML, el PDF que firma el medico podria decir algo distinto que
-   * el .html que quedo guardado, y no habria forma de saber cual vale.
-   */
-  function buildReportHtml() {
-    const payload = exportPayload();
-    const measurementRows = payload.measurements.map((row) => `<tr><td><strong>${escapeHtml(row.label)}</strong><br><span>${escapeHtml(row.level)}</span></td><td>${escapeHtml(row.aiValue)} ${escapeHtml(row.unit)}</td><td>${escapeHtml(row.reviewerValue ?? "sin cambios")}</td><td>${escapeHtml(row.deltaFormatted)}</td><td>${escapeHtml(row.status)}</td><td>${row.outlier ? "Si" : "No"}</td></tr>`).join("");
-    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>MIRA·L - ${escapeHtml(payload.caseId)}</title><style>body{font-family:Inter,Segoe UI,Arial,sans-serif;margin:32px;color:#102033;background:#f8fafc}.report{background:#fff;border:1px solid #d8e6f4;border-radius:18px;box-shadow:0 18px 50px rgba(15,23,42,.08);padding:28px;max-width:1080px;margin:auto}.eyebrow{text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-size:12px;font-weight:800}h1{margin:6px 0 4px;font-size:28px}.muted{color:#64748b}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}.card{border:1px solid #e2e8f0;border-radius:14px;padding:12px;background:#f8fbff}.card strong{display:block;font-size:20px;margin-top:4px}table{border-collapse:collapse;width:100%;margin-top:16px}th{background:#eef4fb;text-align:left;font-size:12px;text-transform:uppercase;color:#475569}td,th{border-bottom:1px solid #e2e8f0;padding:12px;vertical-align:top}td span{color:#64748b;font-size:12px}.notice{border:1px solid #bae6fd;background:#f0f9ff;border-radius:14px;padding:12px;margin-top:18px}.footer{font-size:12px;color:#64748b;margin-top:20px}.level{border-top:1px solid #e2e8f0;padding:12px 0}.level h3{margin:0 0 6px;font-size:15px}.level ul{margin:0;padding-left:20px}.level li{margin:3px 0;font-size:14px}.flag{color:#b45309;font-style:normal;font-size:12px;font-weight:700}.research{border:1px dashed #cbd5e1;border-radius:14px;padding:12px 16px;margin-top:16px;background:#fbfdff}.research h3{margin:0 0 4px;font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#475569}.research ul{margin:8px 0 0;padding-left:20px}.research li{font-size:14px;margin:3px 0}@media print{body{background:#fff;margin:0}.report{box-shadow:none;border:0}}</style></head><body><main class="report"><div class="eyebrow">MIRA·L · Mapeo Integrado y Revisión Anatómica Lumbar</div><h1>Resumen académico de revisión</h1><p class="muted">Caso ${escapeHtml(payload.caseId)} · Corrida ${escapeHtml(payload.runId)} · Generado ${escapeHtml(payload.generatedAt)}</p><section class="grid"><div class="card">Estado<strong>${escapeHtml(payload.reviewStatusLabel)}</strong></div><div class="card">Modo<strong>${escapeHtml(payload.inferenceMode)}</strong></div><div class="card">Mediciones<strong>${payload.summary.measurementsTotal}</strong></div><div class="card">Atípicos<strong>${payload.summary.outliers}</strong></div></section><section class="notice"><strong>Alcance:</strong> uso académico/investigación, datos de-identificados, requiere revisión profesional y no constituye diagnóstico clínico. No incluye imágenes crudas. Preparación: ${escapeHtml(payload.modelReadiness)}.</section><h2>Hallazgos por nivel</h2>${reportSections()}<h2>Hallazgos degenerativos</h2>${findingsSection()}<h2>Mediciones IA vs revisor</h2><table><thead><tr><th>Medición</th><th>IA</th><th>Revisor</th><th>Delta</th><th>Estado</th><th>Atípico</th></tr></thead><tbody>${measurementRows}</tbody></table><h2>Notas</h2><p>${escapeHtml(payload.notes || "Sin notas registradas.")}</p><div class="footer">Referencia de sujeto deidentificada: ${escapeHtml(payload.subjectRef)} · Fecha de estudio: ${escapeHtml(payload.studyDate)} · Modelo: ${escapeHtml(payload.modelKey)}</div></main></body></html>`;
-    return html;
-  }
-
-  async function exportHtml() {
-    downloadTextFile(`${safeFileFragment(displayRun.caseId)}-${safeFileFragment(displayRun.runId)}-informe.html`, buildReportHtml(), "text/html;charset=utf-8");
-  }
-
-  /**
-   * Abre el informe listo para imprimir, que es como se lo guarda en PDF.
-   *
-   * No se genera el PDF a mano: haria falta una libreria embebida solo para redibujar
-   * lo que el navegador ya sabe paginar, y el resultado seria un segundo documento que
-   * mantener. El dialogo de impresion tiene "Guardar como PDF" de destino y respeta el
-   * `@media print` que la hoja ya trae.
-   *
-   * La ventana se abre desde el clic y no despues de una espera: un `window.open`
-   * diferido lo bloquea el navegador por venir sin gesto del usuario.
-   */
-  function printReport() {
-    const ventana = window.open("", "_blank");
-    if (!ventana) {
-      setSaveMessage("El navegador bloqueó la ventana del informe. Habilitá las ventanas emergentes para este sitio.");
-      return;
-    }
-    ventana.document.write(buildReportHtml());
-    ventana.document.close();
-    ventana.focus();
-    // Esperar a que el documento asiente antes de imprimir: sin esto el dialogo puede
-    // salir sobre una pagina todavia vacia.
-    ventana.addEventListener("load", () => ventana.print());
-    if (ventana.document.readyState === "complete") ventana.print();
-  }
-
   async function exportBackendStudyReport(format: "json" | "pdf") {
     if (!displayRun.caseId) return;
     setStudyReportExportError("");
@@ -1770,19 +1724,6 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     }
     if (hasMeasurementDrafts) commitReviewerMeasurements();
     setSaveMessage(status === "pendiente" ? "Borrador guardado correctamente" : status === "observado" ? "Estudio marcado como observado." : status === "aceptado" ? "Estudio finalizado y aprobado por el revisor." : "Estudio descartado por el revisor.");
-    /*
-     * Al finalizar queda el informe listo para llevarse.
-     *
-     * Es el momento en que el estudio deja de cambiar: las mediciones ya se cerraron
-     * unas lineas mas arriba y el estado pasa a solo lectura, asi que el documento
-     * emitido aca es el que corresponde a lo que se acaba de firmar. Antes habia que
-     * acordarse de ir a exportar, y un informe que hay que recordar generar es un
-     * informe que no se genera.
-     *
-     * Se ofrece, no se dispara: abrir el dialogo de impresion sin que nadie lo pida
-     * seria arrebatarle la pantalla al revisor justo despues de guardar.
-     */
-    setReportReady(status === "aceptado");
   }
 
   async function saveStudyMetadata() {
@@ -2615,6 +2556,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                 <h4>Preinforme</h4>
                 <p className="rr-note">Borrador con los resultados de esta corrida y su evidencia visual. No aprueba el estudio ni modifica su revisión.</p>
                 <button
+                  className="rr-prereport-btn"
                   data-testid="prepare-prereport"
                   disabled={!displayRun.caseId || !run.runId || (resultRows.length === 0 && discDegenerativeSnapshot.findings.length === 0)}
                   onClick={() => setPreReportOpen(true)}
@@ -2635,15 +2577,6 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
               {reviewActions.draftReason && <p className="rr-note" data-testid="draft-reason">{reviewActions.draftReason}</p>}
               {reviewActions.confirmReason && <p className="rr-note" data-testid="confirm-reason">{reviewActions.confirmReason}</p>}
               {saveMessage && <p className="rr-ok" role="status">{saveMessage}</p>}
-              {reportReady && (
-                <div className="rr-report-ready">
-                  <p>El informe del estudio finalizado está listo.</p>
-                  <div className="rr-report-actions">
-                    <button onClick={printReport} type="button">Descargar PDF</button>
-                    <button onClick={() => { void exportHtml(); }} type="button">Guardar HTML</button>
-                  </div>
-                </div>
-              )}
             </div>
           </ReviewInspectorPanel>
 
