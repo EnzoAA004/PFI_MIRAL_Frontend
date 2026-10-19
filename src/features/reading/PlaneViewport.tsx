@@ -189,6 +189,8 @@ export function PlaneViewport({
       )}
       <div className="rr-viewport">
         <div className="rr-corner rr-corner-tl"><strong>{caseLabel}</strong></div>
+        {/* Esquina superior derecha: la anotación de la serie y, debajo, el panel de estructuras, apilados para que no se pisen. */}
+        <div className="rr-corner-stack-tr">
         <div className="rr-corner rr-corner-tr">
           <strong>{seriesName}</strong>
           {sliceLabel}{"\n"}<span className="rr-viewport-role">{seriesRoleLabel}</span>
@@ -201,6 +203,27 @@ export function PlaneViewport({
               {"\n"}Secuencia: {sequenceText(sequence)}
             </span>
           )}
+        </div>
+        {segmentation && segmentation.instances.length > 0 && (
+          <details className="rr-instances-panel">
+            <summary>Estructuras ({segmentation.instances.length})</summary>
+            <ul className="rr-instances" aria-label={`Estructuras segmentadas en ${plane}`}>
+            {segmentation.instances.map((instance) => (
+              <li key={instance.id}>
+                <label>
+                  <input
+                    checked={!hiddenInstances.includes(instance.index)}
+                    onChange={() => onToggleInstance(instance.index)}
+                    type="checkbox"
+                  />
+                  <i style={{ background: resolveSegmentationDisplayColor(instance, segmentation) }} />
+                  <span>{instanceLabel(instance, displayStructureLabel)}</span>
+                </label>
+              </li>
+            ))}
+            </ul>
+          </details>
+        )}
         </div>
         {/* W/L es información de lectura. Modelo y modo viven en Más → Técnico. */}
         <div className="rr-corner rr-corner-bl">
@@ -250,31 +273,6 @@ export function PlaneViewport({
           slicePixels={slicePixels}
           pixelsBaseUrl={pixelsBaseUrl}
         />
-        {/*
-          Leyenda por instancia: cada vértebra y cada disco con su color y su nivel.
-          Es lo que permite ver a qué estructura pertenece cada mancha, y apagar una
-          sin perder las demás.
-        */}
-        {segmentation && segmentation.instances.length > 0 && (
-          <details className="rr-instances-panel">
-            <summary>Estructuras ({segmentation.instances.length})</summary>
-            <ul className="rr-instances" aria-label={`Estructuras segmentadas en ${plane}`}>
-            {segmentation.instances.map((instance) => (
-              <li key={instance.id}>
-                <label>
-                  <input
-                    checked={!hiddenInstances.includes(instance.index)}
-                    onChange={() => onToggleInstance(instance.index)}
-                    type="checkbox"
-                  />
-                  <i style={{ background: resolveSegmentationDisplayColor(instance, segmentation) }} />
-                  <span>{instanceLabel(instance, displayStructureLabel)}</span>
-                </label>
-              </li>
-            ))}
-            </ul>
-          </details>
-        )}
       </div>
       {slice && (
         <div className="rr-slicebar">
