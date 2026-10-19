@@ -67,7 +67,7 @@
     height: 34px;
     padding: 0 var(--sp-3);
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     border: 1px solid var(--primary);
     border-radius: var(--radius-btn);
     font-size: var(--fs-small);
@@ -216,7 +216,7 @@
     padding: 1px 5px;
   }
 
-  .wl-empty-cell { color: var(--text-muted); opacity: .65; }
+  .wl-empty-cell { color: var(--text-muted); }
 
   .wl-state {
     margin: 0;
@@ -902,11 +902,11 @@
      claro: en una tabla densa un color de relleno fuerte compite con los
      estados, que son lo que hay que poder leer de un vistazo. */
   .wl-row.is-selected {
-    background: color-mix(in srgb, var(--clinical-accent) 12%, transparent);
+    background: color-mix(in srgb, var(--clinical-accent) 8%, transparent);
     box-shadow: inset 2px 0 0 var(--clinical-accent);
   }
 
-  .wl-row.is-selected:hover { background: color-mix(in srgb, var(--clinical-accent) 16%, transparent); }
+  .wl-row.is-selected:hover { background: color-mix(in srgb, var(--clinical-accent) 11%, transparent); }
 
   /* Panel del estudio seleccionado -------------------------------------- */
   .wl-panel {
@@ -1072,9 +1072,9 @@
   }
 
   .wl-pagination button.is-current {
-    background: var(--clinical-accent);
-    border-color: var(--clinical-accent);
-    color: var(--surface);
+    background: var(--teal-strong);
+    border-color: var(--teal-strong);
+    color: var(--on-primary);
     font-weight: var(--fw-semibold);
   }
 
@@ -1263,7 +1263,7 @@
   .ns-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
   .ns-block-head h3 { margin: 0; font-size: var(--fs-small); font-weight: var(--fw-semibold); }
   .ns-block-head span { color: var(--text-muted); font-size: var(--fs-micro); }
-  .ns-req, .ns-block-head b { color: var(--danger); font-weight: var(--fw-semibold); }
+  .ns-req, .ns-block-head b { color: var(--text-danger-strong); font-weight: var(--fw-semibold); }
 
   /* Las listas de datos de la vista no heredan el estilo global de <dt> (mayúsculas y negrita). */
   .wl-new-study dt { font-weight: 400; text-transform: none; letter-spacing: normal; }

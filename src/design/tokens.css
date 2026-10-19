@@ -341,4 +341,25 @@
 
     color-scheme: light;
   }
+
+  /*
+   * Alias que el código ya usaba sin que existieran (--line, --muted, --fs-xs…): sin definición el navegador descartaba la
+   * declaración completa (bordes que no se dibujaban, textos con el color heredado). Se declaran en CADA ámbito de tema para
+   * que se resuelvan contra los valores de ese ámbito: un alias declarado solo en :root se congelaría con los colores del claro.
+   */
+  :root,
+  [data-theme="clinical"],
+  [data-theme="reading"],
+  [data-theme="reading-light"] {
+    --line: var(--border);
+    --muted: var(--text-muted);
+    --fs-xs: var(--fs-micro);
+    --fw-bold: 700;
+    --sp-5: 20px;
+    --shadow-md: var(--shadow-card);
+    --surface-hover: color-mix(in srgb, var(--surface) 90%, var(--text));
+    /* --accent NO se define: las mediciones derivadas dibujadas sobre la imagen lo usan con su propio valor de respaldo. */
+    --ok: var(--text-success-strong);
+    --amber: var(--text-warning-strong);
+  }
 }

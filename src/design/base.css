@@ -24,6 +24,25 @@
   textarea,
   select {
     font: inherit;
+    /* Sin esto el navegador pinta el texto de los controles en negro, ilegible sobre una superficie oscura. */
+    color: inherit;
+  }
+  /*
+   * Aspecto base de los controles sin estilo propio: superficie y borde del tema. Sin esto el navegador usa su gris «claro»
+   * de siempre, que sobre una interfaz oscura deja texto claro sobre fondo claro. Cualquier componente que defina su
+   * propio fondo o borde lo pisa (esta capa es la de menor prioridad).
+   */
+  button {
+    background-color: var(--surface-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-btn);
+  }
+  select,
+  textarea,
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']) {
+    background-color: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-input);
   }
   button,
   [role='button'],

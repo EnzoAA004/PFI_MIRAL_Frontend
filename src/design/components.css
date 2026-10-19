@@ -1321,7 +1321,7 @@ body {
   border:1px solid var(--surface-border);
   box-shadow:var(--surface-shadow)}
 .panel-card, .page-heading, .history-hero, .metric-card {
-  background:rgba(255, 255, 255, .96)}
+  background:var(--surface-elevated)}
 .panel-card {
   transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease}
 .panel-card:hover {
@@ -1488,8 +1488,8 @@ body {
   padding:12px;
   border:1px solid rgba(148, 163, 184, .2);
   border-radius:16px;
-  background:linear-gradient(180deg, rgba(248, 251, 255, .96), rgba(255, 255, 255, .92));
-  box-shadow:0 6px 18px rgba(15, 23, 42, .045)}
+  background:var(--surface-subtle);
+  box-shadow:var(--shadow-sm)}
 .worklist-search-row {
   display:grid;
   grid-template-columns:minmax(260px, 1fr) auto auto;
