@@ -23,6 +23,8 @@ import {
 } from "./prereportModel";
 import type { PreReportEdits, PreReportFinding, PreReportGenerated, PreReportMeasurement } from "./prereportTypes";
 import { usePreReport } from "./usePreReport";
+import { useUnsavedChanges } from "../navigation/useUnsavedChanges";
+import { requestLeave } from "../navigation/unsavedChanges";
 
 type Props = {
   caseId: string;
@@ -90,7 +92,7 @@ function measurementDetail(m: PreReportMeasurement): string {
 
 export function PreReportEditor({ caseId, runId, onClose }: Props) {
   const state = usePreReport(caseId, runId);
-  const { model, view, edits, setEdits, dirty, busy, notice, imageStates, settleImages, save, updateSources } = state;
+  const { model, view, edits, setEdits, dirty, pendingEdits, busy, notice, imageStates, settleImages, save, updateSources } = state;
   const [previewOnly, setPreviewOnly] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
@@ -157,9 +159,11 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
+  useUnsavedChanges("prereport", "Preinforme", pendingEdits ? ["Ediciones del preinforme (selección, textos u observaciones)"] : []);
+
   function close() {
-    if (dirty && view?.draft && !window.confirm("Hay cambios sin guardar en el borrador. ¿Volver al visor y descartarlos?")) return;
-    onClose();
+    // Solo se pregunta por lo del preinforme: la Revisión sigue abierta debajo y conserva lo suyo.
+    requestLeave(onClose, { scope: "prereport" });
   }
 
   return (

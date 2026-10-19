@@ -4379,3 +4379,47 @@ body,
     width: 100%;
   }
 }
+
+/* Confirmación al salir con cambios sin guardar (modal real: el foco circula entre sus dos botones). */
+.unsaved-overlay {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface-dark, #0b1220) 55%, transparent);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: var(--sp-4);
+  position: fixed;
+  z-index: 1000;
+}
+.unsaved-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-modal, 0 12px 40px rgba(0, 0, 0, .35));
+  color: var(--text);
+  display: grid;
+  gap: var(--sp-3);
+  max-width: 440px;
+  padding: var(--sp-4) var(--sp-5, 20px);
+  width: 100%;
+}
+.unsaved-dialog h2 {
+  margin: 0;
+}
+.unsaved-dialog p,
+.unsaved-dialog ul {
+  margin: 0;
+}
+.unsaved-dialog ul {
+  padding-left: 1.2em;
+}
+.unsaved-note {
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+.unsaved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+}

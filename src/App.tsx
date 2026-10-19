@@ -5,6 +5,8 @@ import { hydrateAuthSession, loadAuthSession } from "./authStorage";
 import { frontendLogger } from "./security/frontendLogger";
 import { SESSION_INVALIDATED_EVENT, onCrossTabSessionSync } from "./security/sessionCleanup";
 import { AppShell } from "./components/AppShell";
+import { UnsavedChangesGuard } from "./features/navigation/UnsavedChangesGuard";
+import { requestLeave } from "./features/navigation/unsavedChanges";
 import { AuthView } from "./components/AuthView";
 import { OnboardingTutorial } from "./components/OnboardingTutorial";
 import { PatientHistoryPage } from "./components/PatientHistoryPage";
@@ -497,7 +499,7 @@ function App() {
   if (pendingApproval) return <PendingApprovalView session={session} onLogout={logout} />;
 
   return (
-    <AppShell activeView={activeView} activeNavView={worklistNavView} onChangeView={changeView} health={health} modelCount={models.length} aiModuleAvailable={safeRun?.aiModuleAvailable ?? false} degradedMode={safeRun?.degradedMode ?? false} currentRunId={safeRun?.runId} userName={session.user.fullName} onLogout={logout} reviewQueueCount={reviewQueueCount} immersive={activeView === "review"}>
+    <AppShell activeView={activeView} activeNavView={worklistNavView} onChangeView={changeView} health={health} modelCount={models.length} aiModuleAvailable={safeRun?.aiModuleAvailable ?? false} degradedMode={safeRun?.degradedMode ?? false} currentRunId={safeRun?.runId} userName={session.user.fullName} onLogout={() => { requestLeave(logout); }} reviewQueueCount={reviewQueueCount} immersive={activeView === "review"}>
       {needsOnboarding && <OnboardingTutorial saving={onboardingSaving} onComplete={() => void completeOnboarding()} />}
       {error && (
         <div className="toast error app-error-toast" role="alert">
@@ -535,6 +537,7 @@ function App() {
       ))}
       {activeView === "settings" && <SettingsView user={session.user} onUserUpdated={(user) => setSession((current) => current ? { ...current, user } : current)} onLogout={logout} />}
       {activeView === "analytics" && <ReviewAnalyticsView onBack={() => changeView("dashboard")} />}
+      <UnsavedChangesGuard />
     </AppShell>
   );
 }

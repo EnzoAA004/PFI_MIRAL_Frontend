@@ -87,6 +87,8 @@ import { coordinateEvidence, parseVolumeGeometry, referenceLineOn, slicePlaneAt 
 import { annotatedSlices, annotationToLandmark, displayAnnotationScope, formatMeasurement, isAnnotationVisible, landmarkToAnnotation, measureDistance, withLandmarkAnnotations, type Annotation, type AnnotationScope } from "../features/reading/annotations";
 import { updateStudyMetadata } from "../studyApi";
 import { fetchStudyReportExport, getStudyReport } from "../studyReportApi";
+import { useUnsavedChanges } from "../features/navigation/useUnsavedChanges";
+import { pendingReviewItems } from "../features/navigation/pendingReviewItems";
 import type { StudyReport } from "../contracts/studyReportTypes";
 import { displayModelKey, displayPrimaryPlane, displayStudyDate, displaySubjectRef } from "../studyDisplay";
 import { emptyStudyMetadataDraft, normalizeStudyMetadataInput, priorityToBackend, subjectRefErrorMessage, validateSubjectRef, type StudyMetadataDraft } from "../studyMetadata";
@@ -405,6 +407,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   const [annotationsError, setAnnotationsError] = useState("");
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>(run.review?.status ?? run.reviewStatus ?? "pendiente");
   const [notes, setNotes] = useState(run.review?.notes ?? run.review?.observations ?? "");
+  /** Último estado de la revisión cargado o guardado: contra él se detectan los cambios sin guardar. */
+  const [savedReview, setSavedReview] = useState({ status: (run.review?.status ?? run.reviewStatus ?? "pendiente") as ReviewStatus, notes: run.review?.notes ?? run.review?.observations ?? "" });
   const [saveMessage, setSaveMessage] = useState("");
   /** El informe queda ofrecido cuando el estudio se finaliza. */
   /** Editor del preinforme (borrador): se monta encima del visor, que conserva su estado por debajo. */
@@ -494,6 +498,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   useEffect(() => {
     setReviewStatus(run.review?.status ?? run.reviewStatus ?? "pendiente");
     setNotes(run.review?.notes ?? run.review?.observations ?? "");
+    setSavedReview({ status: run.review?.status ?? run.reviewStatus ?? "pendiente", notes: run.review?.notes ?? run.review?.observations ?? "" });
     setReviewerValues({});
     /*
      * Tambien al cambiar de estudio, y aca no es cosmético: los ids de medición se
@@ -1699,6 +1704,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     const nextMeasurements = currentReviewerMeasurements();
     const review = await onSaveReview(status, notes, nextMeasurements);
     if (!review) return;
+    // Un guardado exitoso fija el nuevo estado de referencia; uno fallido (arriba) conserva los cambios pendientes.
+    setSavedReview({ status, notes });
     const runId = displayRun.runId;
     if (runId) {
       try {
@@ -1797,6 +1804,16 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   }
   const annotationsUnsaved = JSON.stringify(annotations) !== savedAnnotationsKey || Object.keys(landmarkDrafts).length > 0;
   const annotationsNotice = annotationsPendingNotice({ unsaved: annotationsUnsaved, draftText: noteDraft });
+  useUnsavedChanges("review", "Revisión", pendingReviewItems({
+    notes,
+    savedNotes: savedReview.notes,
+    status: reviewStatus,
+    savedStatus: savedReview.status,
+    annotationsUnsaved,
+    annotationTextDraft: noteDraft,
+    measurementDraftCount: reviewerDraftCount,
+    contourDraftCount,
+  }));
 
   /* Pestañas y herramientas comparten el panel, pero cada una conserva su estado: solo cambia qué se ve. */
   function selectInspectorTab(tab: ReviewInspectorTab) {

@@ -63,6 +63,8 @@ export function usePreReport(caseId: string, runId: string) {
   /** Lo que se muestra: el borrador guardado (con lo generado cuando se creó o actualizó) o, sin borrador, lo generado hoy. */
   const model: PreReportGenerated | null = view ? (view.draft?.generated ?? view.generated) : null;
   const dirty = view !== null && (view.draft === null ? true : !sameEdits(edits, savedEdits));
+  /** Ediciones del profesional sin guardar (contra el último borrador guardado o, sin borrador, contra lo generado). */
+  const pendingEdits = view !== null && !sameEdits(edits, savedEdits);
 
   const blocks = useMemo(() => {
     if (!model) return [] as EvidenceBlock[];
@@ -171,5 +173,5 @@ export function usePreReport(caseId: string, runId: string) {
     }
   }, [apply, caseId, runId]);
 
-  return { phase, view, model, edits, setEdits, dirty, busy, notice, setNotice, imageStates, blocks, settleImages, save, updateSources, reload };
+  return { phase, view, model, edits, setEdits, dirty, pendingEdits, busy, notice, setNotice, imageStates, blocks, settleImages, save, updateSources, reload };
 }
