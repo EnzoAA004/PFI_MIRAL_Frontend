@@ -558,6 +558,19 @@ export type PatientStudyProductAnalysis = {
   notClinicalDiagnosis: boolean;
 };
 
+/**
+ * Resumen de la corrida real del análisis inicial de un estudio (la misma que alimenta `measurementsByPlane`).
+ * `null`/ausente = el estudio no tiene corrida. Las mediciones son las de ESA corrida, nunca una suma de varias.
+ */
+export type PatientStudyLatestRun = {
+  runId: string;
+  status: string;
+  createdAt?: string | null;
+  planes: string[];
+  measurementCount: number | null;
+  correctedMeasurementCount: number | null;
+};
+
 export type PatientStudy = {
   caseId: string;
   subjectRef?: string | null;
@@ -577,6 +590,8 @@ export type PatientStudy = {
   createdAt?: string;
   updatedAt?: string;
   productAnalysis?: PatientStudyProductAnalysis | null;
+  /** Corrida real del análisis inicial. Ausente en respuestas anteriores del backend. */
+  latestRun?: PatientStudyLatestRun | null;
   metrics?: {
     lordosisAngle?: number;
     canalDiameter?: number;

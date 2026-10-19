@@ -337,8 +337,8 @@ test("R no se fabrican CASE-HISTORY ni métricas ficticias", () => {
   const viewSource = readFileSync(join(root, "src/components/PatientHistoryView.tsx"), "utf8");
   assert.doesNotMatch(historySource, /CASE-HISTORY/);
   assert.doesNotMatch(viewSource, /lordosisAngle|canalDiameter|averageDiscHeight|l45DiscHeight/);
-  assert.match(viewSource, /No disponible/);
-  assert.match(viewSource, /measurementsByPlane/);
+  assert.match(viewSource, /No informad/);
+  assert.doesNotMatch(viewSource, /measurementsByPlane/);
 });
 
 test("S StudyReviewView abre formulario real y refresca después del éxito", () => {

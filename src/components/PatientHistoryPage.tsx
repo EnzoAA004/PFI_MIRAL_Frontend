@@ -68,7 +68,6 @@ export function PatientHistoryPage({ subjectRef, currentCaseId, onBack, onOpenSt
       studies={state.history.studies}
       subjectRef={state.history.subjectRef}
       target={{ kind: "subject", subjectRef: state.history.subjectRef }}
-      source={state.history.source}
       summary={state.history.summary}
       currentCaseId={currentCaseId}
       onOpenStudyReview={onOpenStudy}

@@ -10,6 +10,7 @@ import { ageProvenanceLabel } from "../../studyAge";
 import { aiAssetUrl } from "../../multiplanarApi";
 import { useAuthenticatedImageUrl } from "../../authenticatedAssets";
 import { PriorityBadge, ReviewBadge } from "../../components/StatusBadge";
+import { lastReviewFact, reviewerFact, sliceCountFact } from "./studyPanelFacts";
 
 /**
  * Panel del estudio seleccionado.
@@ -106,6 +107,7 @@ export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPane
 
   const run = detail?.runs?.[0];
   const review = detail?.review;
+  const finalized = (review?.status ?? run?.reviewStatus ?? study.reviewStatus) === "aceptado";
   const series = detail?.archiveSeries ?? [];
   const runIdForPlane = (plane: Plane) => (plane === "sagittal" ? run?.sagittalRunId : run?.axialRunId) ?? run?.runId ?? study.latestRunId;
 
@@ -138,9 +140,9 @@ export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPane
           {state === "failed" ? <p className="wl-panel-note">No se pudo consultar el detalle del estudio.</p> : null}
           {state === "ready" ? (
             <dl className="wl-panel-facts">
-              <div><dt>Estado</dt><dd>{displayReviewStatus(review?.status ?? study.reviewStatus)}</dd></div>
-              <div><dt>Revisor</dt><dd>{review?.reviewer?.trim() ? review.reviewer : "Sin revisor asignado"}</dd></div>
-              <div><dt>Última revisión</dt><dd>{review?.reviewedAt?.trim() ? new Date(review.reviewedAt).toLocaleString("es-AR") : "Sin revisiones"}</dd></div>
+              <div><dt>Estado</dt><dd>{displayReviewStatus(review?.status ?? run?.reviewStatus ?? study.reviewStatus)}</dd></div>
+              <div><dt>Revisor</dt><dd>{reviewerFact(run, review, finalized)}</dd></div>
+              <div><dt>Última revisión</dt><dd>{lastReviewFact(run, review, finalized)}</dd></div>
             </dl>
           ) : null}
         </section>
@@ -176,7 +178,7 @@ export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPane
                 />
                 <div className="wl-series-text">
                   <strong>{item.description || planeLabel(item.plane)}</strong>
-                  <span>{planeLabel(item.plane)} · {weightingLabel(item.weighting)} · {item.sliceCount} {item.sliceCount === 1 ? "corte" : "cortes"}</span>
+                  <span>{planeLabel(item.plane)} · {weightingLabel(item.weighting)} · {sliceCountFact(item, run)}</span>
                   {item.analyzable ? null : <em>{unusableReason(item)}</em>}
                 </div>
               </li>

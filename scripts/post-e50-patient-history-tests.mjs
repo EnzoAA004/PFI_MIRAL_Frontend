@@ -52,6 +52,7 @@ function loadSubjectHistory(fetchImpl) {
     authHeaders: () => ({ Authorization: "Bearer test-token" }),
     validateVisibleDataOrigin: () => undefined,
     applyCorrectionsToMeasurements: (measurements) => measurements,
+    resolveMeasurementLabel: (item) => (typeof item.label === "string" && item.label.trim() ? item.label.trim() : typeof item.labelKey === "string" ? item.labelKey.trim() : "Medición revisable"),
     normalizePersistedCorrection: () => null,
     generateTraceId: () => "trace-test",
     refreshDoctorSession: async () => undefined,
@@ -235,21 +236,21 @@ await test("16. empty state subjectRef null usa el texto exacto del brief", () =
   assert.match(studyReviewSource, /Este estudio no tiene una referencia longitudinal disponible\./);
 });
 
-await test("17. empty state de un único Study usa el texto exacto del brief", () => {
-  assert.match(historyViewSource, /No hay otros estudios disponibles para comparación\./);
+await test("17. el historial ya no usa los paneles del circuito de demostración ni jerga de implementación", () => {
+  assert.doesNotMatch(historyViewSource, /measurementsByPlane/);
+  assert.doesNotMatch(historyViewSource, /postgres-domain/);
+  assert.doesNotMatch(historyViewSource, /EvolutionSection|buildComparativeRows|Mediciones longitudinales reales/);
+  assert.doesNotMatch(historyViewSource, /Este estudio todavía no tiene un análisis\./);
 });
 
-await test("18. empty state sin análisis usa el texto exacto del brief", () => {
-  assert.match(historyViewSource, /Este estudio todavía no tiene un análisis\./);
+await test("18. el análisis se lee de la corrida real (latestRun), no de productAnalysis", () => {
+  assert.match(historyViewSource, /analysisOf\(study\)/);
+  assert.doesNotMatch(historyViewSource, /productAnalysis/);
 });
 
-await test("19. empty state sin series comparables usa el texto exacto del brief", () => {
-  assert.match(historyViewSource, /No hay mediciones comparables entre múltiples estudios\./);
-});
-
-await test("20. warnings se muestran sin reinterpretarse (67B2/67C se mapean a texto legible, no se ocultan)", () => {
-  assert.match(historyViewSource, /67B2_RUNTIME_PARITY_NOT_PROVEN/);
-  assert.match(historyViewSource, /67C_RUNTIME_PARITY_NOT_PROVEN/);
+await test("19. sin comparaciones propias: se conserva el acceso a la comparación real del estudio", () => {
+  assert.match(historyViewSource, /Comparación entre estudios/);
+  assert.match(historyViewSource, /onCompareStudies/);
 });
 
 await test("21. ningún texto estático afirma una mejora o empeoramiento clínico (84-N) -- el disclaimer 'no constituye diagnóstico' sigue permitido", () => {
@@ -259,22 +260,19 @@ await test("21. ningún texto estático afirma una mejora o empeoramiento clíni
   assert.doesNotMatch(historyViewSource, /diagn[oó]stic(?!o clínico)/i);
 });
 
-await test("22. la evolución no calcula deltas en el Frontend -- sólo muestra el punto ya resuelto por el Backend", () => {
+await test("22. el historial no calcula deltas en el Frontend", () => {
   assert.doesNotMatch(historyViewSource, /effectiveValue\s*-\s*automaticValue|trend\s*=/);
 });
 
-await test("23. el valor corregido muestra explícitamente el valor automático original", () => {
-  assert.match(historyViewSource, /Valor revisado: automático/);
+await test("23. el contrato de series sigue disponible en la API (se conserva, la pantalla ya no lo muestra)", () => {
+  const api = readFileSync(join(root, "src/subjectHistoryApi.ts"), "utf8");
+  assert.match(api, /fetchMeasurementSeries/);
 });
 
 await test("24. no se agrega una librería de charts nueva (84-S)", () => {
   const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
   assert.equal(Object.keys(deps).some((name) => /recharts|chart\.js|d3/i.test(name)), false);
-});
-
-await test("25. selector Nivel · Métrica existe para elegir la serie a mostrar", () => {
-  assert.match(historyViewSource, /Nivel · Métrica/);
 });
 
 // ---- 13 (open action)/27: routing real, sin recarga completa ----

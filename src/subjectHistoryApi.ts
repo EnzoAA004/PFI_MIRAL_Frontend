@@ -3,8 +3,9 @@ import { authHeaders, refreshDoctorSession } from "./authClient";
 import { validateVisibleDataOrigin } from "./dataMode";
 import { toSafeFrontendError } from "./security/safeError";
 import { generateTraceId } from "./security/traceId";
-import type { Measurement, MeasurementSeries, MeasurementSeriesKey, PatientHistoryGovernance, PatientHistoryResponse, PatientHistorySummary, PatientStudy, PatientStudyProductAnalysis, PersistedReviewCorrection, Plane, Priority, ReviewStatus, SubjectSummary } from "./appTypes";
+import type { Measurement, MeasurementSeries, MeasurementSeriesKey, PatientHistoryGovernance, PatientHistoryResponse, PatientHistorySummary, PatientStudy, PatientStudyLatestRun, PatientStudyProductAnalysis, PersistedReviewCorrection, Plane, Priority, ReviewStatus, SubjectSummary } from "./appTypes";
 import { applyCorrectionsToMeasurements, normalizePersistedCorrection } from "./studyApi";
+import { resolveMeasurementLabel } from "./clinicalDisplay";
 
 function mapPriority(value?: string): Priority {
   if (value === "alta" || value === "high") return "alta";
@@ -52,7 +53,8 @@ function normalizeMeasurement(value: unknown, _index: number, plane: Plane): Mea
   const item = asRecord(value);
   if (!item) return null;
   const id = optionalString(item, "id") ?? optionalString(item, "measurementId");
-  const label = optionalString(item, "label") ?? optionalString(item, "name");
+  // El backend entrega `labelKey` (clave canónica) y no `label`: sin este respaldo se descartaban todas las mediciones.
+  const label = optionalString(item, "label") ?? optionalString(item, "name") ?? (optionalString(item, "labelKey") ? resolveMeasurementLabel(item) : null);
   const aiValue = item.aiValue ?? item.value;
   const rawValue = item.value;
   const reviewerValue = item.reviewerValue;
@@ -97,6 +99,24 @@ function normalizeCorrections(value: unknown): PersistedReviewCorrection[] {
     const correction = normalizePersistedCorrection(entry, index);
     return correction ? [correction] : [];
   });
+}
+
+/** Corrida real del análisis inicial; `null` si el estudio no tiene corrida o el objeto está mal formado. */
+function normalizeLatestRun(value: unknown): PatientStudyLatestRun | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const runId = optionalString(record, "runId");
+  const status = optionalString(record, "status");
+  if (!runId || !status) return null;
+  const count = (key: string) => (typeof record[key] === "number" ? record[key] as number : null);
+  return {
+    runId,
+    status,
+    createdAt: optionalString(record, "createdAt"),
+    planes: Array.isArray(record.planes) ? record.planes.filter((entry): entry is string => typeof entry === "string") : [],
+    measurementCount: count("measurementCount"),
+    correctedMeasurementCount: count("correctedMeasurementCount"),
+  };
 }
 
 /**
@@ -150,6 +170,7 @@ function normalizeHistoryStudy(value: unknown, index: number, path: string): Pat
     createdAt: optionalString(record, "createdAt") || undefined,
     updatedAt: optionalString(record, "updatedAt") || undefined,
     productAnalysis: normalizeProductAnalysis(record.productAnalysis),
+    latestRun: normalizeLatestRun(record.latestRun),
   };
 }
 
