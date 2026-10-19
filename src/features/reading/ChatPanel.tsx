@@ -162,6 +162,8 @@ function ChatPanelBody({ scope }: Props) {
       <div className="chat-input-row">
         <textarea
           aria-label="Escribir una pregunta"
+          placeholder="Escribí tu pregunta sobre este estudio…"
+          rows={3}
           value={draft}
           disabled={!canSend}
           onChange={(event) => setDraft(event.target.value)}

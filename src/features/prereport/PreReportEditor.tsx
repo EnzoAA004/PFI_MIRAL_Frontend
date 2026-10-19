@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { explainStale } from "./staleExplanation";
 import { VARIANT_LABEL, buildPreReportHtml, type DocumentMeta, type ExportVariant } from "./prereportHtml";
 import {
   DRAFT_BANNER,
@@ -105,59 +106,71 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
     draftVersion: view.draft?.version ?? null,
     fingerprint: view.draft?.sourceFingerprint ?? view.fingerprint,
     stale: view.stale,
+    staleNote: view.stale ? explainStale(view.changes).documentNote : undefined,
   } : null), [view]);
+
+  const staleInfo = useMemo(() => explainStale(view?.changes ?? []), [view]);
 
   const html = useMemo(() => (model && meta ? buildPreReportHtml(model, edits, imageStates, meta, { variant }) : ""), [model, edits, imageStates, meta, variant]);
 
-  async function documentHtml(): Promise<{ html: string; proceed: boolean }> {
-    if (!model || !meta) return { html: "", proceed: false };
+  /** Exportación a la espera de que se confirme que faltan imágenes (la pregunta se muestra en el editor, no en un diálogo nativo). */
+  const [pendingExport, setPendingExport] = useState<{ kind: "pdf" | "html"; missing: string[]; html: string } | null>(null);
+
+  /**
+   * Prepara el documento. La advertencia por evidencia visual faltante va dentro del editor: un window.confirm se queda
+   * esperando (o ni aparece) cuando la pestaña quedó en segundo plano, que es justo lo que pasa al abrir el PDF en otra pestaña.
+   */
+  async function prepareDocument(): Promise<{ html: string; missing: string[] } | null> {
+    if (!model || !meta) return null;
     setExporting(true);
     try {
       const settled = await settleImages();
-      const missing = missingEvidence(model, edits).map((item) => `• ${item.what}: ${item.reason}`);
+      const missing = missingEvidence(model, edits).map((item) => `${item.what}: ${item.reason}`);
       for (const [id, image] of Object.entries(settled)) {
-        if (image.status === "failed") missing.push(`• Imagen ${id.replace(/^img:/, "")}: ${image.error}`);
+        if (image.status === "failed") missing.push(`Imagen ${id.replace(/^img:/, "")}: ${image.error}`);
       }
-      if (missing.length && !window.confirm(`Antes de exportar: falta evidencia visual para estos elementos. Se conserva el resultado textual y el documento lo indica.\n\n${missing.join("\n")}\n\n¿Exportar igual?`)) {
-        return { html: "", proceed: false };
-      }
-      return { html: buildPreReportHtml(model, edits, settled, meta, { variant }), proceed: true };
+      return { html: buildPreReportHtml(model, edits, settled, meta, { variant }), missing };
     } finally {
       setExporting(false);
     }
   }
 
-  async function exportPdf() {
-    // La ventana se abre desde el clic (antes de esperar las imágenes): un window.open diferido lo bloquea el navegador.
+  function openPdf(documentHtml: string) {
     const target = window.open("", "_blank");
     if (!target) {
       state.setNotice({ kind: "error", text: "El navegador bloqueó la ventana del documento. Habilitá las ventanas emergentes para este sitio." });
       return;
     }
-    target.document.write("<p style='font:14px sans-serif;padding:24px'>Preparando el preinforme…</p>");
-    const result = await documentHtml();
-    if (!result.proceed) {
-      target.close();
-      return;
-    }
     target.document.open();
-    target.document.write(result.html);
+    target.document.write(documentHtml);
     target.document.close();
     target.focus();
     // Dar tiempo a que el documento (con sus imágenes incrustadas) asiente antes de abrir el diálogo de impresión.
     window.setTimeout(() => target.print(), 600);
   }
 
-  async function exportHtmlFile() {
-    const result = await documentHtml();
-    if (!result.proceed) return;
-    const blob = new Blob([result.html], { type: "text/html;charset=utf-8" });
+  function saveHtml(documentHtml: string) {
+    const blob = new Blob([documentHtml], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = `preinforme-borrador${variant === "full" ? "-con-anexos" : ""}-${(model?.study.caseId ?? "estudio").replace(/[^A-Za-z0-9._-]/g, "_")}.html`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  function deliver(kind: "pdf" | "html", documentHtml: string) {
+    setPendingExport(null);
+    if (kind === "pdf") openPdf(documentHtml);
+    else saveHtml(documentHtml);
+  }
+
+  async function startExport(kind: "pdf" | "html") {
+    setPendingExport(null);
+    const prepared = await prepareDocument();
+    if (!prepared) return;
+    if (prepared.missing.length) setPendingExport({ kind, missing: prepared.missing, html: prepared.html });
+    else deliver(kind, prepared.html);
   }
 
   useUnsavedChanges("prereport", "Preinforme", pendingEdits ? ["Ediciones del preinforme (selección, textos u observaciones)"] : []);
@@ -195,10 +208,10 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
               <option value="full">{VARIANT_LABEL.full}</option>
             </select>
           </label>
-          <button data-testid="prereport-export-pdf" disabled={!model || exporting} onClick={() => void exportPdf()} type="button">
+          <button data-testid="prereport-export-pdf" disabled={!model || exporting} onClick={() => void startExport("pdf")} type="button">
             {exporting ? "Preparando…" : "Exportar PDF (borrador)"}
           </button>
-          <button data-testid="prereport-export-html" disabled={!model || exporting} onClick={() => void exportHtmlFile()} type="button">Guardar HTML</button>
+          <button data-testid="prereport-export-html" disabled={!model || exporting} onClick={() => void startExport("html")} type="button">Guardar HTML</button>
           <button data-testid="prereport-close" onClick={close} type="button">Volver al visor</button>
         </div>
       </header>
@@ -209,20 +222,30 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
       {view && model && (
         <>
           {notice && <p className={`pre-notice pre-notice-${notice.kind}`} data-testid="prereport-notice" role={notice.kind === "error" ? "alert" : "status"}>{notice.text}</p>}
+          {pendingExport && (
+            <section className="pre-export-confirm" data-testid="prereport-export-confirm" role="alertdialog" aria-label="Falta evidencia visual">
+              <p><strong>Falta evidencia visual para estos elementos.</strong> Se conserva el resultado textual y el documento lo indica.</p>
+              <ul>{pendingExport.missing.map((item) => <li key={item}>{item}</li>)}</ul>
+              <div className="pre-stale-actions">
+                <button className="rr-primary" data-testid="prereport-export-confirm-go" onClick={() => deliver(pendingExport.kind, pendingExport.html)} type="button">Exportar igual</button>
+                <button data-testid="prereport-export-confirm-cancel" onClick={() => setPendingExport(null)} type="button">Cancelar</button>
+              </div>
+            </section>
+          )}
           {view.stale && (
             <section className="pre-stale" data-testid="prereport-stale" role="alert">
-              <p><strong>Borrador basado en datos anteriores.</strong> Las correcciones o el contexto del estudio cambiaron después de crearlo. Tu contenido no se modificó ni se actualizó solo.</p>
+              <p><strong>Borrador basado en datos anteriores.</strong> {staleInfo.text}</p>
               <div className="pre-stale-actions">
-                <button onClick={() => setShowChanges((value) => !value)} type="button">{showChanges ? "Ocultar cambios" : `Ver cambios (${view.changes.length})`}</button>
+                {staleInfo.detailCount > 0 && <button onClick={() => setShowChanges((value) => !value)} type="button">{showChanges ? "Ocultar cambios" : `Ver cambios (${staleInfo.detailCount})`}</button>}
                 <button className="rr-primary" data-testid="prereport-update-sources" disabled={busy !== null} onClick={() => void updateSources()} type="button">
                   {busy === "update" ? "Actualizando…" : "Actualizar con los datos actuales"}
                 </button>
               </div>
-              {showChanges && (
+              {showChanges && staleInfo.detailCount > 0 && (
                 <ul className="pre-changes" data-testid="prereport-changes">
                   {view.changes.map((change) => (
                     <li key={`${change.key}-${change.kind}`}>
-                      <strong>{change.kind === "added" ? "Nuevo" : change.kind === "removed" ? "Ya no está" : "Cambió"}:</strong> {change.label}
+                      <strong>{change.section === "document" ? "Texto del documento" : change.kind === "added" ? "Nuevo" : change.kind === "removed" ? "Ya no está" : "Cambió"}:</strong> {change.label}
                       {change.before !== null && change.after !== null && <span className="pre-diff"> — antes: {change.before} · ahora: {change.after}</span>}
                     </li>
                   ))}

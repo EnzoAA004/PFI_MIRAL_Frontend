@@ -47,6 +47,8 @@ export type DocumentMeta = {
   fingerprint: string;
   /** El borrador se creó con fuentes distintas a las actuales. */
   stale: boolean;
+  /** Por qué está desactualizado, según lo que realmente cambió (ver `explainStale`). Sin esto se usa la explicación por defecto. */
+  staleNote?: string;
 };
 
 export const CORRESPONDENCE_NOTICE = "La correspondencia anatómica entre estas mediciones y clasificaciones requiere verificación profesional.";
@@ -156,7 +158,7 @@ function header(model: PreReportGenerated, meta: DocumentMeta): string {
 <div class="brand">MIRA·L</div>
 <h1>Preinforme de análisis de RM lumbar</h1>
 <div class="draft-badge">${escapeHtml(DRAFT_BANNER)}</div>
-${meta.stale ? `<div class="note warn"><strong>Basado en datos anteriores:</strong> las correcciones o el contexto del estudio cambiaron después de generar este borrador. El contenido no se actualizó.</div>` : ""}
+${meta.stale ? `<div class="note warn"><strong>Basado en datos anteriores:</strong> ${escapeHtml(meta.staleNote ?? "las correcciones o el contexto del estudio cambiaron después de generar este borrador. El contenido no se actualizó.")}</div>` : ""}
 <dl class="meta">
 <div><dt>Estudio</dt><dd>${escapeHtml(model.study.caseId)}</dd></div>
 <div><dt>Referencia de paciente</dt><dd>${escapeHtml(model.study.subjectRef ?? "No informada")}</dd></div>

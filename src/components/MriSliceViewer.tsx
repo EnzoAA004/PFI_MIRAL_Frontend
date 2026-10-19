@@ -1119,7 +1119,7 @@ export function MriSliceViewer({
               <span className="mask-swatch" style={{ background: group.color }} />
               <span>{group.label}</span>
             </label>
-          )) : <span className="muted">Máscara por clase no informada.</span>}
+          )) : <span className="muted">Esta corrida no publicó las clases de la segmentación (clase, etiqueta y color): los colores que se ven no se pueden interpretar. La imagen se muestra tal cual.</span>}
         </div>
         {!classMasks.ready && groups.length > 0 && (
           <p className="viewer-limit-note">Esta corrida guardó la segmentación como una sola imagen compuesta, así que solo se puede mostrar u ocultar entera. Las corridas nuevas guardan una máscara por clase.</p>

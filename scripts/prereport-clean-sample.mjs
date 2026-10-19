@@ -74,7 +74,7 @@ for (const [caseId, tag] of CASES) {
   for (const [variant, prefix] of [["brief", "PREINFORME"], ["full", "PREINFORME-CON-ANEXOS"]]) {
     await page.getByTestId("prereport-variant").selectOption(variant);
     await page.waitForTimeout(500);
-    const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("prereport-export-html").click()]);
+    const [download] = await Promise.all([page.waitForEvent("download"), (async () => { await page.getByTestId("prereport-export-html").click(); const go = page.getByTestId("prereport-export-confirm-go"); if (await go.waitFor({ state: "visible", timeout: 6000 }).then(() => true).catch(() => false)) await go.click(); })()]);
     const file = `${OUT}/${prefix}_${tag}_vista-previa-sin-guardar.html`;
     await download.saveAs(file);
     const doc = await context.newPage();

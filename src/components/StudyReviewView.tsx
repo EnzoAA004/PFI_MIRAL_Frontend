@@ -1,4 +1,5 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { canonicalMasksForPlane } from "../features/reading/canonicalMasks";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { exportReviewReport, getRunAnnotations, saveRunAnnotations } from "../api";
 import { resolvePersistedPlaneWorkspace, type PersistedPlaneWorkspace } from "../appDataGuards";
 import type { AiModelArtifact, AiRunResponse, AgentQuality, AuditEvent, Measurement, ReviewStatus, ReviewStatusResponse, StudyDetailResponse, StudyLandmark, StudyMask, StudyMetadataInput, StudySeries, StudyArchiveSeries } from "../appTypes";
@@ -747,39 +748,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
    * nivel legacy de `run`: leer solo ahí dejaba la leyenda de segmentación vacía en
    * la sala de lectura aunque el estudio tuviera sus tres clases.
    */
-  const canonicalMasksFor = (plane: "sagittal" | "axial"): StudyMask[] => {
-    const canonicalPlane = asRecord(asRecord(displayRun.canonicalRun?.planes)?.[plane]);
-    const value = canonicalPlane?.masks;
-    if (!Array.isArray(value)) return [];
-    // El plano canónico identifica la clase con `classKey`, no con `label` ni
-    // `className`, que es lo que busca el view model: sin traducirlo la leyenda
-    // mostraba el id del asset ("mask-sagittal-vertebra-group") como nombre de la
-    // estructura, y ese id no sirve para resolver la máscara de la clase.
-    return value.flatMap((raw) => {
-      const mask = asRecord(raw);
-      const classKey = typeof mask?.classKey === "string" ? mask.classKey : undefined;
-      if (!mask || !classKey) return [];
-      // El contorno viaja en `geometry.points`, en la base del coordinateSpace.
-      const geometry = asRecord(mask.geometry);
-      const rawPoints = Array.isArray(geometry?.points) ? geometry.points : [];
-      const points = rawPoints.flatMap((entry) => {
-        const point = asRecord(entry);
-        return typeof point?.x === "number" && typeof point?.y === "number" ? [{ x: point.x, y: point.y }] : [];
-      });
-      return [{
-        id: String(mask.id ?? classKey),
-        label: classKey,
-        className: classKey,
-        color: typeof mask.color === "string" ? mask.color : "",
-        level: typeof mask.level === "string" ? mask.level : undefined,
-        confidence: typeof mask.confidence === "number" ? mask.confidence : undefined,
-        enabled: mask.enabled !== false,
-        contours: points.length >= 3
-          ? [{ seriesId: String(mask.id ?? classKey), sliceIndex: Number(geometry?.sliceIndex ?? 0), points }]
-          : undefined,
-      } satisfies StudyMask];
-    });
-  };
+  const canonicalMasksFor = (plane: "sagittal" | "axial"): StudyMask[] => canonicalMasksForPlane(displayRun.canonicalRun, plane);
   const masks = demoMode
     ? hasPipelineVisualContract && Array.isArray(run.masks) ? run.masks : Array.isArray(studyReview?.masks) && studyReview.masks.length ? studyReview.masks : fallbackMasks
     : Array.isArray(run.masks) && run.masks.length ? run.masks : canonicalMasksFor(activePlano);

@@ -110,11 +110,18 @@ const frame = () => page.frameLocator('[data-testid="prereport-frame"]');
 const frameText = async () => (await frame().locator("body").innerText()).replace(/\s+/g, " ");
 const allImagesLoaded = async () => frame().locator("img").evaluateAll((nodes) => nodes.length > 0 && nodes.every((n) => n.complete && n.naturalWidth > 0));
 
+/** Pulsa «Guardar HTML»; si el editor advierte evidencia visual faltante, confirma «Exportar igual». */
+async function clickExportHtml(page) {
+  await page.getByTestId("prereport-export-html").click();
+  const confirm = page.getByTestId("prereport-export-confirm-go");
+  if (await confirm.waitFor({ state: "visible", timeout: 6000 }).then(() => true).catch(() => false)) await confirm.click();
+}
+
 /** Exporta una variante («brief» | «full») y devuelve el HTML guardado, el PDF y lo que tiene. */
 async function exportVariant(tag, variant) {
   await page.getByTestId("prereport-variant").selectOption(variant);
   await page.waitForTimeout(500);
-  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("prereport-export-html").click()]);
+  const [download] = await Promise.all([page.waitForEvent("download"), clickExportHtml(page)]);
   const file = `${OUT}/${tag}.html`;
   await download.saveAs(file);
   const doc = await context.newPage();
@@ -218,10 +225,12 @@ try {
   const failText = await frameText();
   check("evidencia faltante: imagen no disponible conserva el resultado textual y dice el motivo", /Imagen no disponible/.test(failText) && /Abombamiento discal/.test(failText));
   check("evidencia faltante: región inválida conserva la clasificación sin localización y se informa", /Sin región evaluada/.test(failText) && /región inválida/.test(failText) && /sin localización/.test(failText));
-  const before = dialogs.length;
   await page.getByTestId("prereport-export-html").click();
-  await page.waitForTimeout(2500);
-  check("evidencia faltante: antes de exportar se informa qué falta", dialogs.length > before && /falta evidencia visual/.test(dialogs.at(-1)) && /región inválida/.test(dialogs.at(-1)), dialogs.at(-1)?.slice(0, 200));
+  const banner = page.getByTestId("prereport-export-confirm");
+  await banner.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
+  const bannerText = (await banner.innerText().catch(() => "")) ?? "";
+  check("evidencia faltante: antes de exportar se informa qué falta, dentro del editor y sin diálogo nativo", /Falta evidencia visual/.test(bannerText) && /región inválida/.test(bannerText), bannerText.slice(0, 200));
+  await page.getByTestId("prereport-export-confirm-cancel").click();
   await page.screenshot({ path: `${OUT}/05-evidencia-faltante.png` });
   await page.unroute(/\/api\/ai\/series\/.*\/slices\//);
   await page.unroute(PREREPORT, invalidRegion);

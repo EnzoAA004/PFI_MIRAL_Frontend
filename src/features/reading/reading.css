@@ -2382,8 +2382,22 @@
   .chat-message-user { background: var(--surface-subtle); align-self: flex-end; }
   .chat-message-assistant { background: transparent; }
   .chat-suggested-questions { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
-  .chat-input-row textarea { flex: 1; min-height: 44px; font: inherit; }
+  .chat-input-row { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+  .chat-input-row textarea {
+    width: 100%;
+    min-width: 0;
+    min-height: 72px;
+    max-height: 160px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font: inherit;
+    line-height: 1.45;
+    resize: vertical;
+  }
+  .chat-input-row textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .chat-input-row .rr-more-action { width: 100%; min-height: 40px; }
 
   /* ---- Marcado del receso subarticular ---- */
   .rr-roi {
@@ -3623,6 +3637,9 @@
   .pre-notice-ok { color: var(--ok, #1b7f4b); }
   .pre-stale { margin: 8px 14px; padding: 8px 12px; border: 1px solid var(--border-warning); background: var(--surface-warm); color: var(--text); border-radius: 8px; }
   .pre-stale p { margin: 2px 0; }
+  .pre-export-confirm { margin: 8px 14px; padding: 8px 12px; border: 1px solid var(--border-warning); background: var(--surface-warm); color: var(--text); border-radius: 8px; }
+  .pre-export-confirm p { margin: 2px 0; }
+  .pre-export-confirm ul { margin: 4px 0; padding-left: 20px; font-size: 12px; }
   .pre-stale-actions { display: flex; gap: 8px; margin: 6px 0; }
   .pre-changes { margin: 4px 0; padding-left: 18px; max-height: 160px; overflow: auto; font-size: var(--fs-small, 12px); }
   .pre-diff { color: var(--text-muted, #64748b); }

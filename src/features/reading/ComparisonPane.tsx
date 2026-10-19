@@ -10,6 +10,7 @@ import { PlaneViewport } from "./PlaneViewport";
 import type { MeasurementFigure } from "./MeasurementLayer";
 import { resolveAnalyzedSliceSource } from "./analyzedSliceSource";
 import { parseSegmentation } from "./segmentation";
+import { canonicalMasksForPlane } from "./canonicalMasks";
 import { parseSlicePixelsMeta } from "./pixels";
 import type { ComparisonSideState } from "./useComparisonSide";
 import { describeAnalysis, formatStudyDate } from "./initialComparisonDisplay";
@@ -76,6 +77,10 @@ export function ComparisonPane({ side, summary, sideState, state, onChange, over
   const segmentation = useMemo(() => parseSegmentation(canonicalPlane?.segmentation), [canonicalPlane]);
   const slicePixels = useMemo(() => parseSlicePixelsMeta(asRecord(canonicalPlane?.quality)?.slicePixels), [canonicalPlane]);
 
+  /* Clases, etiquetas y colores de ESTA corrida y plano (la leyenda de cada lado se lee de su propia corrida; no se supone paleta común).
+   * Una serie del archivo que no es la analizada no trae máscaras: la leyenda no se inventa. */
+  const masks = useMemo(() => (ready && !archive ? canonicalMasksForPlane(ready.run.canonicalRun, state.plane) : []), [archive, ready, state.plane]);
+
   const model = useMemo(() => {
     if (!ready || !workspace) return null;
     const series = archive
@@ -86,10 +91,10 @@ export function ComparisonPane({ side, summary, sideState, state, onChange, over
       plane: state.plane,
       planeRunId: archive ? undefined : workspace.planeRunId ?? undefined,
       series: series as never,
-      masks: [],
+      masks,
       landmarks: [],
     });
-  }, [analyzed, archive, ready, state.plane, workspace]);
+  }, [analyzed, archive, masks, ready, state.plane, workspace]);
 
   const nav = useMemo<SliceNavigation | undefined>(() => {
     if (!view || !ready) return undefined;
