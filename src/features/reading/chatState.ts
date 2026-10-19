@@ -34,7 +34,27 @@ export type ChatDisplayMessage = {
   fingerprint?: string | null;
   references?: ChatReference[];
   warnings?: string[];
+  /**
+   * De dónde sale una respuesta del asistente:
+   *  - `supported`: modo acotado, armada con datos registrados y sus referencias;
+   *  - `out_of_scope`: modo acotado, la consulta quedó fuera del alcance (no cita datos);
+   *  - `legacy`: texto libre de un modelo (modo anterior), NO verificado por el modo acotado.
+   */
+  origin?: AnswerOrigin;
+  /** Cuántos elementos se muestran y cuántos hay (modo acotado). */
+  shown?: number | null;
+  total?: number | null;
 };
+
+export type AnswerOrigin = "supported" | "out_of_scope" | "legacy";
+
+/** Versión de prompt de las respuestas del modo acotado: lo que no la lleva es texto libre del modo anterior. */
+export const STRUCTURED_PROMPT_PREFIX = "pfi.chat-structured";
+
+export function originOfStoredAnswer(promptVersion: string | null, references: ChatReference[]): AnswerOrigin {
+  if (!promptVersion || !promptVersion.startsWith(STRUCTURED_PROMPT_PREFIX)) return "legacy";
+  return references.length > 0 ? "supported" : "out_of_scope";
+}
 
 export type ChatUiState = {
   phase: ChatPhase;
@@ -83,6 +103,9 @@ export function answerReceived(state: ChatUiState, response: ChatResponse): Chat
         fingerprint: response.contextFingerprint,
         references: response.references,
         warnings: response.warnings,
+        origin: response.mode === "structured" ? (response.answerSupported ? "supported" : "out_of_scope") : "legacy",
+        shown: response.shownCount,
+        total: response.totalCount,
       },
     ],
   };
@@ -115,6 +138,7 @@ export function conversationLoaded(state: ChatUiState, detail: ChatConversationD
       content: message.content,
       fingerprint: message.role === "ASSISTANT" ? message.contextFingerprint : undefined,
       references: message.references,
+      origin: message.role === "ASSISTANT" ? originOfStoredAnswer(message.promptVersion, message.references) : undefined,
     })),
   };
 }

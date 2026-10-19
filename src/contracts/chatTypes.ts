@@ -68,7 +68,24 @@ export type ChatResponse = {
   completionTokens: number | null;
   /** El proveedor cortó la respuesta por el límite de longitud: puede estar incompleta. */
   truncated: boolean;
+  /**
+   * `structured`: respuesta armada por el servidor con plantillas sobre datos registrados (el modelo solo eligió la consulta).
+   * `free`: texto libre de un modelo (modo anterior, no verificado por el modo acotado).
+   */
+  mode: ChatMode;
+  /** Consulta soportada que se respondió (modo acotado). */
+  intent: string | null;
+  /** Cuántos elementos se muestran y cuántos hay en el ámbito pedido (modo acotado). */
+  shownCount: number | null;
+  totalCount: number | null;
+  /** La respuesta está respaldada por datos registrados: false si la consulta quedó fuera del alcance. */
+  answerSupported: boolean;
 };
+
+export type ChatMode = "structured" | "free";
+
+/** Una consulta que el asistente responde; el texto exacto se resuelve sin consultar al modelo. */
+export type ChatSuggestedQuestion = { text: string; intent: string };
 
 export type ChatProviderStatus = { enabled: boolean; available: boolean; model: string };
 
@@ -82,6 +99,8 @@ export type ChatContextInfo = {
   elementCount: number;
   contextText: string;
   provider: ChatProviderStatus;
+  mode: ChatMode;
+  suggestedQuestions: ChatSuggestedQuestion[];
 };
 
 export type ChatConversationSummary = {

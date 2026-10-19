@@ -8,11 +8,17 @@ import {
   CHAT_EMPTY_STATE_TEXT,
   CHAT_NEW_CONVERSATION_LABEL,
   CHAT_NO_FINDINGS_COMPARISON_TEXT,
+  CHAT_ORIGIN_LABELS,
   CHAT_SENDING_TEXT,
   CHAT_STALE_TEXT,
+  CHAT_SUGGESTED_HINT,
+  CHAT_SUGGESTED_TITLE,
   connectionLabel,
   displayContextSource,
   displayConversationLabel,
+  modelAvailabilityNote,
+  shownOfTotalLabel,
+  sourceLabel,
   suggestedQuestions,
 } from "./chatDisplay";
 
@@ -70,6 +76,8 @@ function ChatPanelBody({ scope }: Props) {
         {connectionLabel(connection.kind, connection.kind === "ready" || connection.kind === "offline" ? connection.model : "")}
         {connection.kind === "scope_error" && `: ${connection.message}`}
       </p>
+      <p className="rr-note" data-testid="assistant-source">{sourceLabel(info)}</p>
+      {modelAvailabilityNote(connection.kind) && <p className="rr-note" data-testid="assistant-model-note">{modelAvailabilityNote(connection.kind)}</p>}
 
       {pair && info && !info.scope.findingsComparable && (
         <p className="rr-note" data-testid="assistant-no-findings-note">{CHAT_NO_FINDINGS_COMPARISON_TEXT}</p>
@@ -81,7 +89,7 @@ function ChatPanelBody({ scope }: Props) {
 
       {info && (
         <details className="chat-context" data-testid="assistant-context-details">
-          <summary>Ver los datos que recibe el modelo ({info.elementCount} elementos citables)</summary>
+          <summary>Ver los datos registrados que usa el asistente ({info.elementCount} elementos citables)</summary>
           <pre className="chat-context-text">{info.contextText}</pre>
         </details>
       )}
@@ -110,7 +118,14 @@ function ChatPanelBody({ scope }: Props) {
         {state.messages.length === 0 && <p className="rr-findings-empty">{CHAT_EMPTY_STATE_TEXT}</p>}
         {state.messages.map((message) => (
           <article key={message.id} className={`chat-message chat-message-${message.role.toLowerCase()}`} data-testid={`assistant-message-${message.role.toLowerCase()}`}>
-            <p>{message.content}</p>
+            {message.content.split("\n").map((line, index) => <p className="chat-line" key={index}>{line}</p>)}
+            {message.role === "ASSISTANT" && message.origin && (
+              <p className={`rr-note chat-origin chat-origin-${message.origin}`} data-testid="assistant-origin" data-origin={message.origin}>
+                {CHAT_ORIGIN_LABELS[message.origin]}
+                {message.origin === "supported" && message.references && message.references.length > 0 ? ` · ${message.references.length} ${message.references.length === 1 ? "referencia" : "referencias"}` : ""}
+                {shownOfTotalLabel(message.shown, message.total) ? ` · ${shownOfTotalLabel(message.shown, message.total)}` : ""}
+              </p>
+            )}
             {isStaleAnswer(message, currentFingerprint) && <p className="rr-note chat-stale" data-testid="assistant-stale">{CHAT_STALE_TEXT}</p>}
             {message.references && message.references.length > 0 && (
               <ul className="chat-references" data-testid="assistant-references">
@@ -134,11 +149,13 @@ function ChatPanelBody({ scope }: Props) {
 
       {state.messages.length === 0 && (
         <div className="chat-suggested-questions" data-testid="assistant-suggestions">
+          <p className="rr-note chat-suggested-title">{CHAT_SUGGESTED_TITLE}</p>
           {questions.map((question) => (
-            <button key={question} className="rr-more-action" type="button" disabled={!canSend || !modelReady} onClick={() => void ask(question)}>
+            <button key={question} className="rr-more-action" type="button" disabled={!canSend} onClick={() => void ask(question)}>
               {question}
             </button>
           ))}
+          <p className="rr-note">{CHAT_SUGGESTED_HINT}</p>
         </div>
       )}
 

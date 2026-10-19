@@ -28,7 +28,7 @@ const state = load(["src/features/reading/chatState.ts"], [
 ]);
 const display = load(["src/features/reading/chatState.ts", "src/features/reading/chatDisplay.ts"], [
   "CHAT_DISCLAIMER", "CHAT_NO_FINDINGS_COMPARISON_TEXT", "suggestedQuestions", "classifyChatError", "displayContextSource", "displayConversationLabel",
-  "displayElapsed", "connectionLabel",
+  "displayElapsed", "connectionLabel", "modelAvailabilityNote", "sourceLabel", "shownOfTotalLabel", "CHAT_ORIGIN_LABELS",
 ]);
 
 let passed = 0;
@@ -63,6 +63,11 @@ function chatResponse(overrides = {}) {
     elapsedMs: 4200,
     promptTokens: 3000,
     completionTokens: 40,
+    mode: "structured",
+    intent: "LIST_MEASUREMENTS",
+    shownCount: 1,
+    totalCount: 1,
+    answerSupported: true,
     ...overrides,
   };
 }
@@ -77,9 +82,21 @@ function contextInfo(overrides = {}) {
     elementCount: 12,
     contextText: "ÁMBITO: un único estudio",
     provider: { enabled: true, available: true, model: "qwen3-4b-instruct-2507" },
+    mode: "structured",
+    suggestedQuestions: [
+      { text: "Resumí los datos registrados de este estudio", intent: "SUMMARY" },
+      { text: "¿Qué clasificaciones predijo el modelo como presentes?", intent: "LIST_FINDINGS" },
+      { text: "¿Qué datos faltan?", intent: "LIST_MISSING_DATA" },
+    ],
     ...overrides,
   };
 }
+
+const PAIR_QUESTIONS_FROM_SERVER = [
+  { text: "¿Qué diferencias se registraron entre A y B?", intent: "LIST_DIFFERENCES" },
+  { text: "¿Cambió alguna clasificación entre A y B?", intent: "LIST_FINDING_CHANGES" },
+  { text: "¿Qué resultados no se pudieron comparar y por qué?", intent: "LIST_NOT_COMPARABLE" },
+];
 
 /* ------------------------------------------------------------------ contrato */
 
@@ -196,14 +213,80 @@ check("no se promete comparación de hallazgos si el par no tiene P10.7 en los d
   assert.equal(state.promisesFindingsComparison(PAIR, without), false);
   assert.equal(state.promisesFindingsComparison(PAIR, null), false);
   assert.equal(state.promisesFindingsComparison(STUDY, withFindings), false);
-  assert.equal(display.suggestedQuestions(PAIR, without).some((q) => /clasificaci/i.test(q)), false);
-  assert.equal(display.suggestedQuestions(PAIR, withFindings).some((q) => /clasificaci/i.test(q)), true);
+  const pairWith = api.parseChatContextInfo(contextInfo({ scope: scope("pair", true), suggestedQuestions: PAIR_QUESTIONS_FROM_SERVER }));
+  const pairWithout = api.parseChatContextInfo(contextInfo({ scope: scope("pair", false), suggestedQuestions: PAIR_QUESTIONS_FROM_SERVER }));
+  assert.equal(display.suggestedQuestions(PAIR, pairWithout).some((q) => /clasificaci/i.test(q)), false);
+  assert.equal(display.suggestedQuestions(PAIR, pairWith).some((q) => /clasificaci/i.test(q)), true);
   assert.match(display.CHAT_NO_FINDINGS_COMPARISON_TEXT, /no hay comparación de hallazgos/);
 });
 
-check("las preguntas sugeridas son las acordadas, para el estudio y para el par", () => {
-  assert.deepEqual(Array.from(display.suggestedQuestions(STUDY, null)), ["Resumí los resultados de este estudio", "¿Qué resultados faltan o requieren especial revisión?"]);
-  assert.equal(display.suggestedQuestions(PAIR, null)[0], "¿Qué diferencias se registraron entre A y B?");
+check("las consultas disponibles las define el servidor y coinciden con el alcance del asistente", () => {
+  assert.deepEqual(Array.from(display.suggestedQuestions(STUDY, null)), [], "sin información no se sugiere nada");
+  const study = api.parseChatContextInfo(contextInfo());
+  assert.deepEqual(Array.from(display.suggestedQuestions(STUDY, study)), [
+    "Resumí los datos registrados de este estudio", "¿Qué clasificaciones predijo el modelo como presentes?", "¿Qué datos faltan?",
+  ]);
+  // Ninguna consulta pide un juicio sobre los valores ni una interpretación clínica.
+  for (const question of display.suggestedQuestions(STUDY, study)) assert.doesNotMatch(question, /normal|grave|elevad|reducid|diagn[oó]stic|causa|mejor|empeor/i);
+  const pair = api.parseChatContextInfo(contextInfo({ scope: scope("pair", true), suggestedQuestions: PAIR_QUESTIONS_FROM_SERVER }));
+  assert.equal(display.suggestedQuestions(PAIR, pair)[0], "¿Qué diferencias se registraron entre A y B?");
+});
+
+check("modelo conectado, fuente disponible y respuesta respaldada son tres cosas distintas", () => {
+  const info = api.parseChatContextInfo(contextInfo());
+  assert.match(display.connectionLabel("ready", "qwen"), /Modelo local conectado/);
+  assert.match(display.sourceLabel(info), /Datos registrados disponibles \(12 elementos citables\)/);
+  assert.match(display.sourceLabel(api.parseChatContextInfo(contextInfo({ elementCount: 0 }))), /No hay datos registrados disponibles/);
+  assert.match(display.sourceLabel(null), /Comprobando/);
+  // Con el modelo apagado la fuente sigue disponible y las consultas disponibles siguen funcionando.
+  assert.match(display.modelAvailabilityNote("offline"), /consultas disponibles siguen funcionando sin el modelo/);
+  assert.match(display.modelAvailabilityNote("disabled"), /preguntas escritas necesitan/);
+  assert.equal(display.modelAvailabilityNote("ready"), null);
+  assert.equal(display.CHAT_ORIGIN_LABELS.supported, "Respuesta respaldada por datos registrados");
+  assert.match(display.CHAT_ORIGIN_LABELS.legacy, /no verificada con el modo acotado/);
+  assert.notEqual(display.CHAT_ORIGIN_LABELS.supported, display.connectionLabel("ready", ""));
+});
+
+check("la respuesta lleva su origen: respaldada, fuera de alcance o texto libre anterior no verificado", () => {
+  const sent = state.questionSent(state.initialChatUiState(), "¿Qué datos faltan?");
+  const supported = state.answerReceived(sent, api.parseChatResponse(chatResponse()));
+  assert.equal(supported.messages.at(-1).origin, "supported");
+  const out = state.answerReceived(sent, api.parseChatResponse(chatResponse({ answerSupported: false, intent: "UNSUPPORTED", references: [] })));
+  assert.equal(out.messages.at(-1).origin, "out_of_scope");
+  const free = state.answerReceived(sent, api.parseChatResponse(chatResponse({ mode: "free", intent: null, answerSupported: true })));
+  assert.equal(free.messages.at(-1).origin, "legacy", "el texto libre no se presenta como respaldado");
+  // Sin la marca explícita del servidor no se presenta como respaldada (fail-closed).
+  const unmarked = chatResponse();
+  delete unmarked.answerSupported;
+  assert.equal(api.parseChatResponse(unmarked).answerSupported, false);
+  const noMode = chatResponse();
+  delete noMode.mode;
+  assert.equal(api.parseChatResponse(noMode).mode, "free");
+});
+
+check("las conversaciones guardadas identifican su origen: lo anterior de texto libre queda como no verificado", () => {
+  const detail = (promptVersion, references) => ({
+    conversationId: "c", caseId: "CASO-1", createdAt: "2026-10-17T12:00:00Z", scopeKey: "run:run-1", runId: "run-1", referenceRunId: null,
+    messages: [
+      { id: "u1", role: "USER", content: "Resumí", createdAt: "2026-10-17T12:00:00Z", model: null, provider: null, promptVersion: null, contextFingerprint: null, references: [] },
+      { id: "a1", role: "ASSISTANT", content: "texto", createdAt: "2026-10-17T12:00:01Z", model: "m", provider: "p", promptVersion, contextFingerprint: "ctx-aaaa", references },
+    ],
+  });
+  const originOf = (promptVersion, references) => state.conversationLoaded(state.initialChatUiState(), api.parseChatConversationDetail(detail(promptVersion, references))).messages.at(-1).origin;
+  assert.equal(originOf("pfi.chat-system-prompt.v3", [{ ref: "M1", label: "x" }]), "legacy");
+  assert.equal(originOf("pfi.chat-system-prompt.v2", []), "legacy");
+  assert.equal(originOf(null, []), "legacy");
+  assert.equal(originOf("pfi.chat-structured.v1", [{ ref: "M1", label: "x" }]), "supported");
+  assert.equal(originOf("pfi.chat-structured.v1", []), "out_of_scope");
+  const loaded = state.conversationLoaded(state.initialChatUiState(), api.parseChatConversationDetail(detail("pfi.chat-structured.v1", [])));
+  assert.equal(loaded.messages[0].origin, undefined, "la pregunta del usuario no tiene origen");
+});
+
+check("cuando se muestra un subconjunto, se dice cuántos de cuántos", () => {
+  assert.equal(display.shownOfTotalLabel(40, 49), "Se muestran 40 de 49");
+  assert.equal(display.shownOfTotalLabel(49, 49), null);
+  assert.equal(display.shownOfTotalLabel(null, 49), null);
+  assert.equal(display.shownOfTotalLabel(0, 0), null);
 });
 
 check("el estado de conexión distingue conectado, apagado, sin modelo y error de contexto", () => {
@@ -243,6 +326,7 @@ check("el aviso de revisión profesional y de que no ve imágenes está siempre"
   assert.match(display.CHAT_DISCLAIMER, /no ve las imágenes/);
   assert.match(display.CHAT_DISCLAIMER, /revisión profesional/);
   assert.match(display.CHAT_DISCLAIMER, /no es un diagnóstico/);
+  assert.match(display.CHAT_DISCLAIMER, /cifras, niveles y referencias salen del sistema/);
 });
 
 check("etiquetas: fuentes desconocidas no rompen y las latencias se leen bien", () => {

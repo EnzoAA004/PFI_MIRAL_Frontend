@@ -10,6 +10,8 @@ import type {
   ChatResponse,
   ChatResponseScope,
   ChatScope,
+  ChatMode,
+  ChatSuggestedQuestion,
 } from "./contracts/chatTypes";
 
 /**
@@ -59,6 +61,19 @@ function nullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function parseMode(value: unknown): ChatMode {
+  return value === "structured" ? "structured" : "free";
+}
+
+function parseSuggested(value: unknown): ChatSuggestedQuestion[] {
+  const result: ChatSuggestedQuestion[] = [];
+  for (const item of asArray(value)) {
+    const raw = asRecord(item);
+    if (raw && typeof raw.text === "string" && raw.text.trim() && typeof raw.intent === "string") result.push({ text: raw.text, intent: raw.intent });
+  }
+  return result;
+}
+
 function parseReferences(value: unknown): ChatReference[] {
   const references: ChatReference[] = [];
   for (const item of asArray(value)) {
@@ -104,6 +119,12 @@ export function parseChatResponse(value: unknown): ChatResponse {
     promptTokens: nullableNumber(raw.promptTokens),
     completionTokens: nullableNumber(raw.completionTokens),
     truncated: raw.truncated === true,
+    mode: parseMode(raw.mode),
+    intent: nullableText(raw.intent),
+    shownCount: nullableNumber(raw.shownCount),
+    totalCount: nullableNumber(raw.totalCount),
+    // Fail-closed: sin la marca explícita del servidor, la respuesta no se presenta como respaldada.
+    answerSupported: raw.answerSupported === true,
   };
 }
 
@@ -125,6 +146,8 @@ export function parseChatContextInfo(value: unknown): ChatContextInfo {
       available: requiredBoolean(provider.available, "provider.available"),
       model: typeof provider.model === "string" ? provider.model : "",
     },
+    mode: parseMode(raw.mode),
+    suggestedQuestions: parseSuggested(raw.suggestedQuestions),
   };
 }
 
