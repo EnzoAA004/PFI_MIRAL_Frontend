@@ -111,12 +111,13 @@ test("la lista corrige una página que ya no existe y no depende del almacenamie
   assert.match(readFileSync(join(root, "src/App.tsx"), "utf8"), /forgetWorklistView\(\)/, "se descarta al cerrar sesión");
 });
 
-test("sin una corrida abierta el menú lateral no afirma «sincronizado» ni «modo degradado»", () => {
+test("el menú lateral no afirma «sincronizado» ni «modo degradado» sin una comprobación propia y actual", () => {
   const side = readFileSync(join(root, "src/components/Sidebar.tsx"), "utf8");
-  assert.match(side, /systemOnline === null \? "" :/);
+  assert.match(side, /systemOnline === null \? "" :/, "con null solo se muestra la versión");
+  assert.match(side, /systemOnline = null/, "el valor por defecto es «sin dato», no «sincronizado»");
   const shell = readFileSync(join(root, "src/components/AppShell.tsx"), "utf8");
-  assert.match(shell, /aiModuleAvailable === undefined \? null/);
-  assert.match(readFileSync(join(root, "src/App.tsx"), "utf8"), /aiModuleAvailable=\{safeRun\?\.aiModuleAvailable\}/, "ya no se fuerza false cuando no hay corrida");
+  assert.match(shell, /systemOnline=\{null\}/, "el marco no deriva el estado de la corrida de un estudio abierto antes");
+  assert.doesNotMatch(readFileSync(join(root, "src/App.tsx"), "utf8"), /aiModuleAvailable=\{safeRun\?\.aiModuleAvailable \?\? false\}/, "ya no se fuerza false cuando no hay corrida");
 });
 
 test("accesos retirados: Review Analytics, controles sin función y exportación JSON del historial", () => {

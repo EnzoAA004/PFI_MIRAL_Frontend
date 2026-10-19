@@ -85,7 +85,7 @@ for (const [w, h] of [[1366, 768], [1920, 1080]]) {
     await page.getByRole("button", { name: /Pacientes/ }).first().click();
     await page.waitForURL(/\/pacientes/);
     const listPac = await bodyText(page);
-    check(`[${tag}] pacientes: sin «Modo degradado» y sin etiquetas técnicas`, !/Modo degradado|postgres-domain|measurementsByPlane/.test(listPac));
+    check(`[${tag}] pacientes: sin «Modo degradado» ni «Sincronizado» y sin etiquetas técnicas`, !/Modo degradado|Sincronizado|postgres-domain|measurementsByPlane/.test(listPac));
     await page.goto(`${WEB}/pacientes/OSF-ID10`, { waitUntil: "networkidle" });
     await page.waitForTimeout(2000);
     const hist = await bodyText(page);
@@ -126,6 +126,10 @@ for (const [w, h] of [[1366, 768], [1920, 1080]]) {
     const toggle = page.locator("button[aria-label*='tema' i], button[title*='tema' i]").first();
     if (await toggle.count()) { await toggle.click(); await page.waitForTimeout(500); }
     const after = await viewerState();
+    // Se vuelve al tema original para que el resto del recorrido (y sus capturas) corresponda al tema indicado en la etiqueta.
+    const themeAfterToggle = await page.evaluate(() => window.localStorage.getItem("pfi.theme"));
+    check(`[${tag}] el cambio de tema se aplicó y quedó guardado`, themeAfterToggle !== null && themeAfterToggle !== scheme, `${scheme} → ${themeAfterToggle}`);
+    if (await toggle.count()) { await toggle.click(); await page.waitForTimeout(500); }
     check(`[${tag}] cambiar de pestaña, abrir herramientas y cambiar de tema no reinicia corte, zoom ni W/L`, before.corners === after.corners && before.zoom === after.zoom && before.corners.length > 0, `${before.corners} / ${before.zoom}`);
 
     /* ---------- diálogos: Esc cierra y el foco vuelve al control que los abrió */
@@ -156,6 +160,7 @@ for (const [w, h] of [[1366, 768], [1920, 1080]]) {
     await page.getByRole("menuitem", { name: /Mi perfil/ }).click();
     await page.waitForTimeout(800);
     const settings = await bodyText(page);
+    check(`[${tag}] ajustes: el menú no afirma «Sincronizado» aunque se haya abierto un estudio antes`, !/Sincronizado|Modo degradado/.test(settings));
     check(`[${tag}] ajustes: solo lo que funciona (sin contraseña, notificaciones, idioma ni densidad)`, !/Cambiar contraseña|Notificaciones|Idioma|Densidad|Edición de perfil pendiente/.test(settings) && /Doble verificación/.test(settings) && /Cerrar sesión/.test(settings));
     await page.screenshot({ path: `${OUT}/ajustes-${tag}.png` });
     await page.getByRole("tab", { name: /Ayuda y alcance/ }).click();

@@ -49,8 +49,9 @@ export function AppShell({ activeView, activeNavView, onChangeView, children, ai
           activeNavView={activeNavView}
           onChangeView={onChangeView}
           reviewQueueCount={reviewQueueCount}
-          // Sin una corrida abierta no hay comprobación del módulo de IA: no se afirma ni «sincronizado» ni «modo degradado».
-          systemOnline={aiModuleAvailable === undefined ? null : aiModuleAvailable && !degradedMode}
+          // El menú lateral no tiene una comprobación propia y actual del módulo de IA (la corrida de un estudio abierto antes no lo
+          // es): no afirma ni «sincronizado» ni «modo degradado», solo la versión. El estado de la IA se informa en el visor.
+          systemOnline={null}
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((value) => !value)}
           identity={<Header activeView={activeView} onChangeView={onChangeView} currentRunId={currentRunId} userName={userName} onLogout={onLogout} />}
