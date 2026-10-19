@@ -122,7 +122,7 @@ test("P8-E2.1 A subjectRef null queda editable en metadata", () => {
 
 test("P8-E2.1 B subjectRef existente queda readOnly con aviso de inmutabilidad", () => {
   const dialog = readFileSync(join(root, "src/components/StudyMetadataDialog.tsx"), "utf8");
-  assert.match(dialog, /La referencia de-identificada ya fue asignada y no puede reemplazarse/);
+  assert.match(dialog, /La referencia de paciente ya fue asignada y no puede reemplazarse/);
   assert.match(dialog, /Esto evita vincular estudios de personas distintas/);
 });
 
@@ -131,7 +131,7 @@ test("P8-E2.1 C no se envia PUT para reemplazar solo subjectRef existente", () =
   const saveFunction = source.slice(source.indexOf("async function saveStudyMetadata"), source.indexOf("function panelVisible"));
   assert.doesNotMatch(saveFunction, /window\.confirm/);
   assert.match(saveFunction, /payload\.subjectRef = currentSubjectRef/);
-  assert.match(saveFunction, /La referencia de-identificada ya fue asignada y no puede reemplazarse/);
+  assert.match(saveFunction, /La referencia de paciente ya fue asignada y no puede reemplazarse/);
 });
 
 test("P8-E2.1 D [actualizado Stage 85] la lista de Pacientes SI agrupa por subjectRef via la proyeccion del Backend, deliberadamente", () => {

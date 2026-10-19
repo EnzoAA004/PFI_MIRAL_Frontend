@@ -289,7 +289,8 @@ function App() {
       resetProtectedState();
     }
     function handleLoggedOutElsewhere() {
-      setSessionNotice("Cerraste la sesión en otra pestaña. Ingresá de nuevo para continuar.");
+      // Si la sesión se perdió por vencimiento, ese aviso (más específico) se conserva.
+      setSessionNotice((current) => current ?? "Cerraste la sesión en otra pestaña. Ingresá de nuevo para continuar.");
       setSession(null);
       resetProtectedState();
     }

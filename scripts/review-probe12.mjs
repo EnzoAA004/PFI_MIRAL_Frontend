@@ -1,0 +1,30 @@
+import { chromium } from "playwright";
+const WEB = "http://localhost:8288", S = process.env.OUT_DIR;
+const browser = await chromium.launch({ headless: true });
+const page = await (await browser.newContext({ viewport: { width: 1366, height: 768 } })).newPage();
+const log = (...a) => console.log(...a);
+const writes = [];
+page.on("request", (r) => { if (r.method() !== "GET" && /8280/.test(r.url())) writes.push(`${r.method()} ${r.url().replace(/^https?:\/\/[^/]+/, "")}`); });
+await page.goto(`${WEB}/`, { waitUntil: "networkidle" });
+// Registro
+await page.getByRole("tab", { name: "Registro" }).or(page.getByRole("button", { name: "Registro" })).first().click();
+await page.waitForTimeout(500);
+log("REGISTRO:", (await page.locator("body").innerText()).replace(/\n+/g, " | ").slice(0, 500));
+await page.screenshot({ path: `${S}/registro.png` });
+await page.getByRole("tab", { name: "Ingresar" }).or(page.getByRole("button", { name: "Ingresar" })).first().click();
+// credenciales inválidas
+await page.getByLabel(/Contraseña/).fill("incorrecta");
+await page.locator("button.primary-button").click();
+await page.waitForTimeout(1500);
+log("LOGIN inválido:", (await page.locator("body").innerText()).replace(/\n+/g, " | ").slice(250, 600));
+await page.getByRole("button", { name: /Entrar con doctor demo/ }).click();
+await page.getByRole("button", { name: "Nuevo estudio" }).waitFor();
+await page.getByRole("button", { name: "Nuevo estudio" }).click();
+await page.getByPlaceholder("CASE-XXXX").fill("REVFIN-ZIPMALO");
+await page.getByRole("button", { name: "Continuar", exact: true }).click();
+await page.locator('.ns-zip input[type="file"]').setInputFiles(`${S}/falso.zip`);
+await page.waitForTimeout(2500);
+log("ZIP falso:", (await page.locator("[role=alert], .wl-drawer-error, .ns-failure").allInnerTexts()).join(" | ").slice(0, 400), "| hint:", await page.locator("#ns-run-hint").innerText());
+await page.screenshot({ path: `${S}/zip-falso.png` });
+log("escrituras bloqueadas:", writes);
+await browser.close();

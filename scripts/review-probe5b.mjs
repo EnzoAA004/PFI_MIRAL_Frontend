@@ -1,0 +1,58 @@
+import { mkdirSync } from "node:fs";
+import { chromium } from "playwright";
+const WEB = "http://localhost:8288", OUT = process.env.OUT_DIR, CASE = process.env.CASE;
+mkdirSync(OUT, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+const page = await ctx.newPage();
+const log = (...a) => console.log(...a);
+const writes = [], issues = [];
+page.on("console", (m) => { if (m.type() === "error") issues.push(m.text().slice(0, 200)); });
+page.on("request", (r) => { if (r.method() !== "GET" && /8280/.test(r.url())) writes.push(`${r.method()} ${r.url().replace(/^https?:\/\/[^/]+/, "")}`); });
+const panel = async () => (await page.locator("aside.rr-panel").innerText()).replace(/\n+/g, " | ");
+const open = async () => {
+  await page.goto(`${WEB}/estudio/${CASE}`, { waitUntil: "networkidle" });
+  await page.locator("aside.rr-panel").waitFor({ timeout: 90000 });
+  await page.waitForTimeout(2500);
+  await page.getByRole("tab", { name: "Revisión" }).click();
+};
+await page.goto(`${WEB}/`, { waitUntil: "networkidle" });
+await page.getByRole("button", { name: /Entrar con doctor demo/ }).click();
+await page.getByRole("button", { name: "Nuevo estudio" }).waitFor();
+await open();
+await page.getByPlaceholder(/Observaciones generales/).fill("Nota de prueba REVFIN: revisión de entrega.");
+await page.getByRole("button", { name: "Agregar anotación" }).click();
+await page.waitForTimeout(800);
+log("ANOTACIÓN (formulario):", (await panel()).slice(0, 1200));
+await page.screenshot({ path: `${OUT}/r-anot.png` });
+const textarea = page.locator("aside.rr-panel textarea");
+log("textareas:", await textarea.count());
+await page.getByRole("button", { name: "Guardar borrador", exact: true }).click();
+await page.getByText(/Borrador guardado correctamente/).first().waitFor({ timeout: 20000 }).catch(() => log("NO confirmó guardado"));
+log("tras guardar:", (await panel()).slice(0, 300));
+// recarga
+await open();
+log("RECARGA → notas:", await page.getByPlaceholder(/Observaciones generales/).inputValue(), "| estado:", await page.locator("select[aria-label='Estado de la revisión'], select").last().inputValue().catch(() => "?"));
+// navegación sin guardar
+await page.getByPlaceholder(/Observaciones generales/).fill("Cambio SIN guardar");
+await page.getByRole("button", { name: /Estudios/ }).first().click();
+await page.waitForTimeout(1200);
+log("Salir con nota sin guardar → url:", page.url(), "| diálogo:", (await page.locator("[role=alertdialog],[role=dialog]").allInnerTexts()).join("|").slice(0, 200));
+await open();
+log("reabre → notas:", await page.getByPlaceholder(/Observaciones generales/).inputValue());
+// finalizar
+await page.locator("aside.rr-panel select").last().selectOption({ label: "Finalizado" });
+await page.waitForTimeout(500);
+log("al elegir Finalizado:", (await page.getByTestId("confirm-reason").innerText().catch(() => "—")), "| botones:", await page.locator(".rr-review-footer button").allInnerTexts());
+await page.screenshot({ path: `${OUT}/r-fin-antes.png` });
+await page.getByRole("button", { name: "Confirmar estado", exact: true }).click().catch((e) => log("sin Confirmar estado"));
+await page.waitForTimeout(2500);
+log("tras finalizar:", (await page.locator(".rr-review-footer").innerText()).replace(/\n+/g, " | "), "| estado barra:", (await page.locator("header, [class*=topbar]").first().innerText()).replace(/\n+/g, " ").slice(0, 200));
+await page.screenshot({ path: `${OUT}/r-fin-despues.png` });
+await open();
+log("RECARGA finalizado → panel:", (await panel()).slice(0, 900));
+log("controles editables:", await page.locator("aside.rr-panel textarea, aside.rr-panel select").evaluateAll((els) => els.map((e) => `${e.tagName}${e.disabled ? ":disabled" : ""}`)));
+await page.screenshot({ path: `${OUT}/r-fin-recarga.png` });
+log("escrituras:", writes.join(" ; "));
+log("errores:", issues);
+await browser.close();

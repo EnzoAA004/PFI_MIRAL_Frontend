@@ -1,0 +1,34 @@
+import { mkdirSync } from "node:fs";
+import { chromium } from "playwright";
+const WEB = "http://localhost:8288", OUT = process.env.OUT_DIR;
+mkdirSync(OUT, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+const page = await ctx.newPage();
+const log = (...a) => console.log(...a);
+const aborted = [], issues = [];
+page.on("console", (m) => { if (m.type() === "error") issues.push(m.text().slice(0, 200)); });
+await page.route(/localhost:8280\/api\/(?!auth)/, (route) => { const r = route.request(); if (r.method() === "GET") return route.continue(); aborted.push(`${r.method()} ${r.url().replace(/^https?:\/\/[^/]+/, "")}`); return route.abort(); });
+await page.goto(`${WEB}/`, { waitUntil: "networkidle" });
+await page.getByRole("button", { name: /Entrar con doctor demo/ }).click();
+await page.getByRole("button", { name: "Nuevo estudio" }).waitFor();
+await page.getByRole("button", { name: "Nuevo estudio" }).click();
+await page.waitForTimeout(1200);
+const dlg = page.locator("[role=dialog], aside.wl-drawer, .ns-drawer, .wl-drawer").first();
+const t = async () => (await dlg.innerText().catch(() => page.locator("body").innerText())).replace(/\n+/g, " | ").slice(0, 1100);
+log("PASO 1:", await t());
+await page.screenshot({ path: `${OUT}/n-1.png` });
+log("botones:", (await dlg.getByRole("button").allInnerTexts()).filter(Boolean).join(" / "));
+const disabled = await dlg.getByRole("button").evaluateAll((els) => els.filter((e) => e.disabled).map((e) => e.innerText.trim()));
+log("deshabilitados:", disabled);
+log("hint pie:", (await page.locator("#ns-run-hint").innerText().catch(() => "—")));
+// intento de avanzar sin datos
+const next = dlg.getByRole("button", { name: /Siguiente|Continuar|Avanzar/ }).first();
+log("siguiente existe:", await next.count(), "deshabilitado:", await next.isDisabled().catch(() => "?"));
+// salir con confirmación
+await page.keyboard.press("Escape");
+await page.waitForTimeout(500);
+log("Esc →", (await page.locator("body").innerText()).includes("Seguir editando") ? "pide confirmación" : "cerró/ignoró");
+await page.screenshot({ path: `${OUT}/n-esc.png` });
+log("aborted", aborted, "errores", issues);
+await browser.close();
