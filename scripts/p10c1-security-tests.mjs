@@ -144,10 +144,13 @@ test("17 los modulos HTTP adjuntan un traceId generado por el modulo centralizad
 // Roles y autorizacion en UI (P10-C.1 S5) - 3 tests
 // ---------------------------------------------------------------------------
 
-test("18 las preferencias locales del profesional (idioma/densidad/notificaciones) nunca incluyen un campo de rol", () => {
+test("18 los ajustes del profesional no guardan ni fabrican en el cliente un campo de rol ni preferencias locales", () => {
   const settings = src("src/components/ProfessionalSettingsView.tsx");
-  assert.match(settings, /type PreferenceState = \{\s*language: string;\s*density: string;\s*notifications: boolean;\s*\};/);
-  assert.ok(!/PreferenceState[\s\S]{0,120}role/i.test(settings), "PreferenceState no debe incluir un campo de rol fabricado en el cliente");
+  // Los ajustes muestran solo lo que funciona (cuenta en lectura, doble verificación y cierre de sesión): no hay un estado
+  // de preferencias locales (idioma/densidad/notificaciones) ni nada que el cliente invente sobre el rol.
+  assert.ok(!/PreferenceState|localStorage/.test(settings), "no debe haber preferencias locales sin funcionamiento");
+  assert.ok(!/role\s*:/i.test(settings), "los ajustes no deben fabricar un campo de rol en el cliente");
+  assert.match(settings, /user\.roles/);
 });
 
 test("19 pendingApproval/needsOnboarding en App.tsx se derivan solo de session.user (respuesta de backend), nunca de storage local editable", () => {
@@ -239,7 +242,7 @@ test("26 StudyReviewView sigue usando SpineReconstructionPreview con el proxy ex
 
 test("27 App.tsx sigue mostrando AuthView cuando no hay sesion (cierre de sesion no debe dejar pantallas protegidas visibles)", () => {
   const app = src("src/App.tsx");
-  assert.match(app, /if \(!session\) return <AuthView onAuthenticated=\{setSession\} \/>;/);
+  assert.match(app, /if \(!session\) return <AuthView onAuthenticated=\{\(next\) => \{ setSessionNotice\(null\); setSession\(next\); \}\} notice=\{sessionNotice\} \/>;/);
 });
 
 test("28 App.tsx sigue bloqueando el acceso mientras la cuenta esta pendiente de aprobacion", () => {
@@ -280,7 +283,7 @@ test("32 App.tsx se suscribe a la invalidacion de sesion en background y a la si
   const app = src("src/App.tsx");
   assert.match(app, /import \{ SESSION_INVALIDATED_EVENT, onCrossTabSessionSync \} from "\.\/security\/sessionCleanup";/);
   assert.match(app, /window\.addEventListener\(SESSION_INVALIDATED_EVENT, handleSessionLost\);/);
-  assert.match(app, /const unsubscribeCrossTab = onCrossTabSessionSync\(handleSessionLost\);/);
+  assert.match(app, /const unsubscribeCrossTab = onCrossTabSessionSync\(handleLoggedOutElsewhere\);/);
 });
 
 console.log(`P10-C.1 security/session/observability tests passed: ${count}`);

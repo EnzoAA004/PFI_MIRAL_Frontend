@@ -49,7 +49,8 @@ export function AppShell({ activeView, activeNavView, onChangeView, children, ai
           activeNavView={activeNavView}
           onChangeView={onChangeView}
           reviewQueueCount={reviewQueueCount}
-          systemOnline={aiModuleAvailable && !degradedMode}
+          // Sin una corrida abierta no hay comprobación del módulo de IA: no se afirma ni «sincronizado» ni «modo degradado».
+          systemOnline={aiModuleAvailable === undefined ? null : aiModuleAvailable && !degradedMode}
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((value) => !value)}
           identity={<Header activeView={activeView} onChangeView={onChangeView} currentRunId={currentRunId} userName={userName} onLogout={onLogout} />}

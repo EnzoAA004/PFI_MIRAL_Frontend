@@ -5,14 +5,53 @@ import { clearAllProtectedData, notifySessionInvalidated } from "./security/sess
 import { generateTraceId } from "./security/traceId";
 import type { AuthLoginResponse, AuthPendingResponse, AuthSession, AuthSettingsRequest, AuthTokenResponse, AuthUser, RegisterRequest } from "./appTypes";
 
+/**
+ * Error de una llamada de autenticación. `message` es lo que se le muestra a la persona (en español, según qué falló);
+ * `status` y `detail` quedan para diagnóstico y no se exponen como explicación principal.
+ */
+export class AuthRequestError extends Error {
+  status: number | null;
+  detail: string;
+
+  constructor(message: string, status: number | null, detail: string) {
+    super(message);
+    this.name = "AuthRequestError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+/** Mensaje comprensible según el motivo: credenciales inválidas, sesión inválida, permisos, límite de intentos o servicio caído. */
+export function authFailureMessage(status: number | null, path: string): string {
+  if (status === null) return "No se pudo conectar con el servicio. Verificá tu conexión e intentá de nuevo.";
+  if (path.endsWith("/login")) {
+    if (status === 401 || status === 400) return "Correo o contraseña incorrectos.";
+  }
+  if (path.includes("/verify-")) {
+    if (status === 400 || status === 401) return "El código es inválido o venció. Pedí uno nuevo e intentá de nuevo.";
+  }
+  if (status === 401) return "Tu sesión no es válida. Ingresá de nuevo.";
+  if (status === 403) return "Tu cuenta no tiene permiso para esta acción o todavía no fue aprobada.";
+  if (status === 409) return "Ya existe una cuenta con esos datos.";
+  if (status === 423 || status === 429) return "Hubo demasiados intentos. Esperá unos minutos antes de volver a intentar.";
+  if (status === 400 || status === 422) return "Revisá los datos ingresados e intentá de nuevo.";
+  if (status >= 500) return "El servicio no respondió. Reintentá en unos minutos.";
+  return "No se pudo completar la solicitud.";
+}
+
 async function authRequest<T>(path: string, body?: unknown, method = "POST", includeAuth = false): Promise<T> {
   const traceId = generateTraceId("frontend-auth");
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...(includeAuth ? authHeaders() : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(`Backend respondio ${response.status}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...(includeAuth ? authHeaders() : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new AuthRequestError(authFailureMessage(null, path), null, "sin conexión");
+  }
+  if (!response.ok) throw new AuthRequestError(authFailureMessage(response.status, path), response.status, `HTTP ${response.status}`);
   return (await response.json()) as T;
 }
 

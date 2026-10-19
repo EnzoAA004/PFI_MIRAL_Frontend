@@ -6,7 +6,7 @@ interface OnboardingTutorialProps {
 const steps = [
   {
     title: "1. Lista de trabajo de estudios",
-    detail: "Revisá casos de-identificados, prioridad, estado del modelo y estado de revisión profesional.",
+    detail: "Revisá los estudios, su prioridad y su estado de revisión profesional.",
   },
   {
     title: "2. Workspace de revisión",
@@ -48,7 +48,7 @@ export function OnboardingTutorial({ onComplete, saving }: OnboardingTutorialPro
         </div>
         <div className="verification-panel">
           <strong>Recordatorio</strong>
-          <p>Trabajá únicamente con datos de-identificados y usá la salida del modelo como apoyo revisable.</p>
+          <p>No cargues identificadores directos del paciente en notas ni descripciones, y usá la salida del modelo como apoyo revisable.</p>
         </div>
         <button className="primary-button" disabled={saving} onClick={onComplete} type="button">
           {saving ? "Guardando..." : "Entendido, comenzar"}

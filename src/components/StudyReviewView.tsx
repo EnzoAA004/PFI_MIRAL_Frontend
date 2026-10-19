@@ -1751,7 +1751,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
       if (nextSubjectKey && nextSubjectKey !== currentSubjectKey) {
         payload.subjectRef = currentSubjectRef;
         if (metadataPayloadEqual(payload, currentMetadataDraft)) {
-          setMetadataError("La referencia de-identificada ya fue asignada y no puede reemplazarse.");
+          setMetadataError("La referencia de paciente ya fue asignada y no puede reemplazarse.");
           return;
         }
       } else {

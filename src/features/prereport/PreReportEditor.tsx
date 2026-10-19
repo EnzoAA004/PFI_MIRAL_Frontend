@@ -25,6 +25,7 @@ import type { PreReportEdits, PreReportFinding, PreReportGenerated, PreReportMea
 import { usePreReport } from "./usePreReport";
 import { useUnsavedChanges } from "../navigation/useUnsavedChanges";
 import { requestLeave } from "../navigation/unsavedChanges";
+import { useModalDialog } from "../navigation/useModalDialog";
 
 type Props = {
   caseId: string;
@@ -166,8 +167,11 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
     requestLeave(onClose, { scope: "prereport" });
   }
 
+  // Esc equivale a «Volver al visor» (con la pregunta por cambios sin guardar); el foco vuelve a «Preparar preinforme».
+  const dialogRef = useModalDialog<HTMLDivElement>(close);
+
   return (
-    <div aria-label="Preparar preinforme" className="pre-overlay" data-testid="prereport-editor" role="dialog">
+    <div aria-label="Preparar preinforme" aria-modal="true" className="pre-overlay" data-testid="prereport-editor" ref={dialogRef} role="dialog">
       <header className="pre-bar">
         <div className="pre-bar-title">
           <strong>{DRAFT_BANNER}</strong>

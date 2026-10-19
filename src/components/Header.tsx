@@ -1,6 +1,6 @@
 import type { ViewKey } from "../appTypes";
 import { fetchTechnicalReportPayload } from "../technicalReportApi";
-import { BarChart3, ChevronDown, LogOut, UserCircle, UserCog } from "lucide-react";
+import { ChevronDown, LogOut, UserCircle, UserCog } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const TECHNICAL_REPORT_ENTRY_VISIBLE = false;
@@ -207,11 +207,6 @@ export function Header({ activeView, onChangeView, currentRunId, userName, onLog
     onChangeView("settings");
   }
 
-  function openReviewAnalytics() {
-    setProfileMenuOpen(false);
-    onChangeView("analytics");
-  }
-
   function logoutFromMenu() {
     setProfileMenuOpen(false);
     onLogout?.();
@@ -228,8 +223,7 @@ export function Header({ activeView, onChangeView, currentRunId, userName, onLog
           </button>
           {profileMenuOpen && (
             <div className="profile-menu-panel" role="menu" aria-label="Menú de perfil">
-              <button onClick={openProfileSettings} role="menuitem" type="button"><UserCog aria-hidden size={16} />Ver / editar perfil</button>
-              <button onClick={openReviewAnalytics} role="menuitem" type="button"><BarChart3 aria-hidden size={16} />Review Analytics</button>
+              <button onClick={openProfileSettings} role="menuitem" type="button"><UserCog aria-hidden size={16} />Mi perfil y ajustes</button>
               <button onClick={logoutFromMenu} role="menuitem" type="button"><LogOut aria-hidden size={16} />Cerrar sesión</button>
             </div>
           )}

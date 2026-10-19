@@ -1,15 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { updateDoctorSettings } from "../authClient";
 import type { AuthUser } from "../appTypes";
 import { ToggleSwitch } from "./ToggleSwitch";
-
-type PreferenceState = {
-  language: string;
-  density: string;
-  notifications: boolean;
-};
-
-const LOCAL_SETTINGS_KEY = "lumbar-mri-professional-settings-v1";
 
 interface ProfessionalSettingsViewProps {
   user: AuthUser;
@@ -17,39 +9,32 @@ interface ProfessionalSettingsViewProps {
   onLogout: () => void;
 }
 
-function loadLocalPreferences(): PreferenceState {
-  try {
-    const raw = window.localStorage.getItem(LOCAL_SETTINGS_KEY);
-    if (!raw) return { language: "es", density: "comfortable", notifications: false };
-    return { language: "es", density: "comfortable", notifications: false, ...JSON.parse(raw) } as PreferenceState;
-  } catch {
-    return { language: "es", density: "comfortable", notifications: false };
-  }
-}
-
+/**
+ * Ajustes de la cuenta. Solo muestra lo que funciona: los datos de la cuenta (lectura), la doble verificación (el backend la
+ * guarda y la exige al ingresar) y el cierre de sesión. El tema claro/oscuro se cambia desde la barra lateral.
+ *
+ * Las preferencias de idioma, densidad visual y notificaciones, y el cambio de contraseña, no tienen funcionamiento detrás y
+ * no se ofrecen. Si el backend no confirma un cambio, el interruptor vuelve a su valor anterior: no se muestra un cambio que
+ * no se guardó.
+ */
 export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: ProfessionalSettingsViewProps) {
-  const [preferences, setPreferences] = useState<PreferenceState>(() => loadLocalPreferences());
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(Boolean(user.twoFactorEnabled));
   const [savingTwoFactor, setSavingTwoFactor] = useState(false);
-  const [message, setMessage] = useState("");
-  const roles = useMemo(() => user.roles.length ? user.roles.join(", ") : "sin rol informado", [user.roles]);
-
-  useEffect(() => {
-    window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(preferences));
-  }, [preferences]);
+  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const roles = useMemo(() => (user.roles.length ? user.roles.join(", ") : "sin rol informado"), [user.roles]);
 
   async function toggleTwoFactor() {
-    const next = !twoFactorEnabled;
+    const previous = twoFactorEnabled;
     setSavingTwoFactor(true);
-    setMessage("");
+    setMessage(null);
     try {
-      const updated = await updateDoctorSettings({ twoFactorEnabled: next });
+      const updated = await updateDoctorSettings({ twoFactorEnabled: !previous });
       setTwoFactorEnabled(Boolean(updated.twoFactorEnabled));
       onUserUpdated(updated);
-      setMessage("Seguridad actualizada en backend.");
+      setMessage({ kind: "ok", text: updated.twoFactorEnabled ? "Doble verificación activada: se pedirá un código al ingresar." : "Doble verificación desactivada." });
     } catch {
-      setTwoFactorEnabled(next);
-      setMessage("No se pudo confirmar en backend; cambio visible localmente hasta la próxima sesión.");
+      setTwoFactorEnabled(previous);
+      setMessage({ kind: "error", text: "No se pudo guardar el cambio. La doble verificación sigue como estaba." });
     } finally {
       setSavingTwoFactor(false);
     }
@@ -57,52 +42,27 @@ export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: Prof
 
   return (
     <div className="professional-settings-view">
-
-      {message && <div className="toast info" role="status">{message}</div>}
+      {message && <div className={`toast ${message.kind === "ok" ? "info" : "error"}`} role="status">{message.text}</div>}
 
       <section className="settings-grid">
         <article className="panel-card compact-card settings-section">
-          <div className="section-title"><h2>Perfil</h2><span>Lectura de sesión</span></div>
+          <div className="section-title"><h2>Mi perfil</h2><span>Solo lectura</span></div>
           <dl className="settings-details">
-            <div><dt>Nombre</dt><dd>{user.fullName || "sin datos"}</dd></div>
+            <div><dt>Nombre</dt><dd>{user.fullName || "No informado"}</dd></div>
             <div><dt>Rol</dt><dd>{roles}</dd></div>
-            <div><dt>Matrícula / credencial</dt><dd>{user.licenseNumber || "sin datos"}</dd></div>
-            <div><dt>Centro / institución</dt><dd>{user.institution || "sin datos"}</dd></div>
+            <div><dt>Matrícula / credencial</dt><dd>{user.licenseNumber || "No informada"}</dd></div>
+            <div><dt>Centro / institución</dt><dd>{user.institution || "No informado"}</dd></div>
             <div><dt>Correo</dt><dd>{user.email}</dd></div>
           </dl>
-          <p className="settings-persistence-note">Edición de perfil pendiente de endpoint backend. Los datos visibles vienen de la sesión autenticada.</p>
+          <p className="settings-persistence-note">Estos datos son los de tu cuenta autenticada. Para corregirlos, avisá al equipo responsable.</p>
         </article>
 
         <article className="panel-card compact-card settings-section">
-          <div className="section-title"><h2>Preferencias</h2><span>Guardado local</span></div>
-          <div className="settings-form-grid">
-            <label>
-              <span>Idioma</span>
-              <select value={preferences.language} onChange={(event) => setPreferences((current) => ({ ...current, language: event.target.value }))}>
-                <option value="es">Español</option>
-                <option value="en">Inglés</option>
-              </select>
-            </label>
-            <label>
-              <span>Densidad visual</span>
-              <select value={preferences.density} onChange={(event) => setPreferences((current) => ({ ...current, density: event.target.value }))}>
-                <option value="comfortable">Cómoda</option>
-                <option value="compact">Compacta</option>
-              </select>
-            </label>
-          </div>
-          <ToggleSwitch checked={preferences.notifications} label="Notificaciones" description="Preferencia local. El envío de notificaciones todavía no está disponible." onChange={() => setPreferences((current) => ({ ...current, notifications: !current.notifications }))} />
-          <p className="settings-persistence-note">Preferencias guardadas en este navegador; persistencia backend pendiente.</p>
-        </article>
-
-        <article className="panel-card compact-card settings-section">
-          <div className="section-title"><h2>Cuenta / sesión</h2><span>Seguridad</span></div>
-          <ToggleSwitch checked={twoFactorEnabled} disabled={savingTwoFactor} label="Doble verificación" description="Este campo usa el endpoint existente de settings cuando el backend responde." onChange={() => void toggleTwoFactor()} />
+          <div className="section-title"><h2>Seguridad de la cuenta</h2></div>
+          <ToggleSwitch checked={twoFactorEnabled} disabled={savingTwoFactor} label="Doble verificación" description="Pide un código además de la contraseña al ingresar." onChange={() => void toggleTwoFactor()} />
           <div className="account-actions">
-            <button className="ghost-button" disabled title="Cambio de contraseña pendiente de endpoint backend" type="button">Cambiar contraseña</button>
             <button className="ghost-button" onClick={onLogout} type="button">Cerrar sesión</button>
           </div>
-          <p className="settings-persistence-note">Contraseña: pendiente backend. Cerrar sesión usa el flujo existente.</p>
         </article>
       </section>
     </div>

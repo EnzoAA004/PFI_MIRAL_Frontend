@@ -4,6 +4,8 @@ import type { AuthPendingResponse, AuthSession, RegisterRequest } from "../appTy
 
 interface AuthViewProps {
   onAuthenticated: (session: AuthSession) => void;
+  /** Por qué se volvió al acceso (sesión vencida, cierre en otra pestaña…), si no fue una decisión de quien usa el sistema. */
+  notice?: string | null;
 }
 
 type Mode = "login" | "register";
@@ -18,7 +20,7 @@ function isSession(value: AuthPendingResponse | AuthSession): value is AuthSessi
   return typeof (value as AuthSession).accessToken === "string";
 }
 
-export function AuthView({ onAuthenticated }: AuthViewProps) {
+export function AuthView({ onAuthenticated, notice }: AuthViewProps) {
   const [mode, setMode] = useState<Mode>("login");
   const [form, setForm] = useState<RegisterRequest>({
     fullName: "Dra. Demo Revisora",
@@ -139,6 +141,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
             <button className="ghost-button" onClick={() => setChallengeState(null)} type="button">Volver</button>
           </div>
         )}
+        {notice && !error && <div className="toast info" data-testid="auth-notice" role="status">{notice}</div>}
         {message && !challengeState && <div className="toast info">{message}</div>}
         {error && <div className="toast error">{error}</div>}
       </section>

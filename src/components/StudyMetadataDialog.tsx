@@ -1,4 +1,5 @@
 import { displayReviewPriority } from "../clinicalDisplay";
+import { useModalDialog } from "../features/navigation/useModalDialog";
 import type { StudyMetadataDraft } from "../studyMetadata";
 
 interface StudyMetadataDialogProps {
@@ -26,13 +27,15 @@ export function StudyMetadataDialog({
   onSave,
   onSubjectRefBlur,
 }: StudyMetadataDialogProps) {
+  // Esc cierra (si no se está guardando), Tab queda dentro del diálogo y el foco vuelve a «Editar datos» al cerrar.
+  const dialogRef = useModalDialog<HTMLElement>(onCancel, !saving);
   return (
     <div className="rr-dialog-backdrop" role="presentation">
-      <section className="rr-dialog" role="dialog" aria-modal="true" aria-labelledby="metadata-dialog-title">
+      <section className="rr-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="metadata-dialog-title">
         <h2 id="metadata-dialog-title">Editar datos del estudio</h2>
         <div className="rr-dialog-grid">
           <label className="rr-field rr-span-all">
-            <span>Referencia de paciente de-identificada</span>
+            <span>Referencia de paciente</span>
             <input
               value={subjectRefLocked ? currentSubjectRef : draft.subjectRef}
               readOnly={subjectRefLocked}
@@ -46,7 +49,7 @@ export function StudyMetadataDialog({
               aria-invalid={Boolean(error)}
             />
           </label>
-          {subjectRefLocked && <p className="rr-note rr-span-all">La referencia de-identificada ya fue asignada y no puede reemplazarse. Esto evita vincular estudios de personas distintas.</p>}
+          {subjectRefLocked && <p className="rr-note rr-span-all">La referencia de paciente ya fue asignada y no puede reemplazarse. Esto evita vincular estudios de personas distintas.</p>}
           <label className="rr-field">
             <span>Fecha del estudio</span>
             <input type="date" value={draft.studyDate} onChange={(event) => onDraftChange({ ...draft, studyDate: event.target.value })} />

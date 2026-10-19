@@ -5,9 +5,12 @@ import { hydrateAuthSession, loadAuthSession } from "./authStorage";
 import { frontendLogger } from "./security/frontendLogger";
 import { SESSION_INVALIDATED_EVENT, onCrossTabSessionSync } from "./security/sessionCleanup";
 import { AppShell } from "./components/AppShell";
+import { forgetWorklistView } from "./features/worklist/worklistViewMemory";
 import { UnsavedChangesGuard } from "./features/navigation/UnsavedChangesGuard";
 import { requestLeave } from "./features/navigation/unsavedChanges";
 import { AuthView } from "./components/AuthView";
+import { LoadFailureState } from "./features/errors/LoadFailureState";
+import { classifyLoadFailure, contractIssueFailure, noRunsFailure, type LoadFailure } from "./features/errors/loadFailure";
 import { OnboardingTutorial } from "./components/OnboardingTutorial";
 import { PatientHistoryPage } from "./components/PatientHistoryPage";
 import { PatientsView } from "./components/PatientsView";
@@ -90,6 +93,7 @@ function App() {
   // /pacientes/:id (sin pasar por un Study) simplemente no marca ninguno, sin romper la página.
   const [patientHistoryCurrentCaseId, setPatientHistoryCurrentCaseId] = useState<string | null>(null);
   const [health, setHealth] = useState("consultando");
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [models, setModels] = useState<AiModel[]>([]);
   const [backendStudies, setBackendStudies] = useState<StudyRow[]>([]);
   const [studiesBackendAvailable, setStudiesBackendAvailable] = useState(false);
@@ -129,6 +133,8 @@ function App() {
   const [info, setInfo] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [reviewFailure, setReviewFailure] = useState<LoadFailure | null>(null);
+  const [loadNonce, setLoadNonce] = useState(0);
   const [bootstrapRetryNonce, setBootstrapRetryNonce] = useState(0);
 
   const reviewRunState = useMemo(() => normalizeSelectedRunForReview(selectedRun, isDemoDataMode, normalizeRun), [selectedRun]);
@@ -258,14 +264,16 @@ function App() {
     setMeasurements([]);
     setAuditTrail([]);
     setSelectedStudy(null);
+    forgetWorklistView();
     setStudiesError("");
-    setReviewError("");
+    setReviewError(""); setReviewFailure(null);
     setError("");
     setInfo("");
   }
 
   function logout() {
     void logoutDoctor().finally(() => {
+      setSessionNotice(null);
       setSession(null);
       resetProtectedState();
     });
@@ -276,11 +284,17 @@ function App() {
   // remain reachable once the session is gone anywhere (P10-C.1 §3/§4).
   useEffect(() => {
     function handleSessionLost() {
+      setSessionNotice("Tu sesión venció. Ingresá de nuevo para continuar; lo que ya estaba guardado se conserva.");
+      setSession(null);
+      resetProtectedState();
+    }
+    function handleLoggedOutElsewhere() {
+      setSessionNotice("Cerraste la sesión en otra pestaña. Ingresá de nuevo para continuar.");
       setSession(null);
       resetProtectedState();
     }
     window.addEventListener(SESSION_INVALIDATED_EVENT, handleSessionLost);
-    const unsubscribeCrossTab = onCrossTabSessionSync(handleSessionLost);
+    const unsubscribeCrossTab = onCrossTabSessionSync(handleLoggedOutElsewhere);
     return () => {
       window.removeEventListener(SESSION_INVALIDATED_EVENT, handleSessionLost);
       unsubscribeCrossTab();
@@ -324,7 +338,7 @@ function App() {
     setSelectedRun(null);
     setMeasurements([]);
     setStudyReview(null);
-    setReviewError("");
+    setReviewError(""); setReviewFailure(null);
     setReviewLoading(true);
     navigate(pathForStudy(study.caseId));
     void fetchStudyDetail(study).then((detail) => {
@@ -338,8 +352,7 @@ function App() {
       }
       setSelectedRun(reviewableRun);
     }).catch((detailError) => {
-      const detail = detailError instanceof Error ? detailError.message : "Error desconocido";
-      setReviewError(`No se pudo cargar el detalle del estudio. Detalle: ${detail}`);
+      setReviewFailure(classifyLoadFailure(detailError, "estudio", study.caseId));
     }).finally(() => {
       setReviewLoading(false);
     });
@@ -362,7 +375,7 @@ function App() {
     setSelectedRun(null);
     setMeasurements([]);
     setStudyReview(null);
-    setReviewError("");
+    setReviewError(""); setReviewFailure(null);
     setReviewLoading(true);
     void fetchStudyDetail({ caseId: routeCaseId }).then((detail) => {
       if (cancelled) return;
@@ -377,13 +390,19 @@ function App() {
       setSelectedRun(reviewableRun);
     }).catch((detailError) => {
       if (cancelled) return;
-      const detail = detailError instanceof Error ? detailError.message : "Error desconocido";
-      setReviewError(`No se pudo cargar el estudio ${routeCaseId}. Detalle: ${detail}`);
+      setReviewFailure(classifyLoadFailure(detailError, "estudio", routeCaseId));
     }).finally(() => {
       if (!cancelled) setReviewLoading(false);
     });
     return () => { cancelled = true; };
-  }, [routeCaseId, session]);
+  }, [routeCaseId, session, loadNonce]);
+
+  /** Reintenta cargar el estudio de la ruta (el efecto de carga vuelve a correr aunque el caso sea el mismo). */
+  function retryStudyLoad() {
+    requestedCaseIdRef.current = undefined;
+    setReviewFailure(null);
+    setLoadNonce((value) => value + 1);
+  }
 
   const routePatientId = patientIdFromPath(location.pathname);
 
@@ -495,11 +514,11 @@ function App() {
   const worklistNavView: ViewKey = isWorklistView || activeView === "review" ? "dashboard" : activeView === "history" ? "patients" : activeView;
 
   if (authBootstrapping) return <LoadingState title="Restaurando sesión" detail="Validando credenciales guardadas." />;
-  if (!session) return <AuthView onAuthenticated={setSession} />;
+  if (!session) return <AuthView onAuthenticated={(next) => { setSessionNotice(null); setSession(next); }} notice={sessionNotice} />;
   if (pendingApproval) return <PendingApprovalView session={session} onLogout={logout} />;
 
   return (
-    <AppShell activeView={activeView} activeNavView={worklistNavView} onChangeView={changeView} health={health} modelCount={models.length} aiModuleAvailable={safeRun?.aiModuleAvailable ?? false} degradedMode={safeRun?.degradedMode ?? false} currentRunId={safeRun?.runId} userName={session.user.fullName} onLogout={() => { requestLeave(logout); }} reviewQueueCount={reviewQueueCount} immersive={activeView === "review"}>
+    <AppShell activeView={activeView} activeNavView={worklistNavView} onChangeView={changeView} health={health} modelCount={models.length} aiModuleAvailable={safeRun?.aiModuleAvailable} degradedMode={safeRun?.degradedMode ?? false} currentRunId={safeRun?.runId} userName={session.user.fullName} onLogout={() => { requestLeave(logout); }} reviewQueueCount={reviewQueueCount} immersive={activeView === "review"}>
       {needsOnboarding && <OnboardingTutorial saving={onboardingSaving} onComplete={() => void completeOnboarding()} />}
       {error && (
         <div className="toast error app-error-toast" role="alert">
@@ -518,7 +537,7 @@ function App() {
       {reviewSnapshotStatus === "error" && <div className="toast warning">No se pudo consultar el snapshot de revisión; no bloquea la lista de trabajo.</div>}
       {info && <div className="toast info">{info}</div>}
       {isWorklistView && <Worklist studies={realStudyRows} loading={shouldShowDataLoading} onOpenReview={handleOpenReview} onAnalysisReady={handleViewSavedAnalysis} />}
-      {activeView === "review" && (reviewLoading ? <LoadingState title="Cargando corrida" detail={`Consultando corridas persistidas para ${selectedStudy?.caseId ?? "el estudio seleccionado"}.`} /> : contractIssue ? <ContractErrorState detail={`${contractIssue.message}${contractIssue.path ? ` (${contractIssue.path})` : ""}${contractIssue.traceId ? ` · trace ${contractIssue.traceId}` : ""}`} onBackToStudies={() => changeView(lastStudyNavView)} /> : reviewError ? <ContractErrorState detail={reviewError} onBackToStudies={() => changeView(lastStudyNavView)} /> : safeRun ? <StudyReviewView run={safeRun} initialDualReference={pendingCompare && pendingCompare.caseId === safeRun.caseId ? pendingCompare.referenceCaseId : null} onInitialDualConsumed={() => setPendingCompare(null)} studyReview={studyReview} measurements={measurements} auditTrail={auditTrail} saving={saving} onBackToStudies={() => changeView(lastStudyNavView)} onMeasurementsChange={handleMeasurementsChange} onSaveReview={handleSaveReview} onStudyMetadataUpdated={handleStudyMetadataUpdated} selectedDetail={selectedDetail} onOpenPatientHistory={(subjectRef) => { setPatientHistoryCurrentCaseId(safeRun?.caseId ?? null); navigate(pathForPatient(subjectRef)); }} /> : <EmptyReviewState onBackToStudies={() => changeView(lastStudyNavView)} />)}
+      {activeView === "review" && (reviewLoading ? <LoadingState title="Cargando corrida" detail={`Consultando corridas persistidas para ${selectedStudy?.caseId ?? "el estudio seleccionado"}.`} /> : reviewFailure ? <LoadFailureState failure={reviewFailure} backLabel="Volver a estudios" onBack={() => changeView(lastStudyNavView)} onRetry={retryStudyLoad} /> : contractIssue ? <LoadFailureState failure={contractIssueFailure(`${contractIssue.message}${contractIssue.path ? ` (${contractIssue.path})` : ""}${contractIssue.traceId ? ` · traza ${contractIssue.traceId}` : ""}`)} backLabel="Volver a estudios" onBack={() => changeView(lastStudyNavView)} onRetry={retryStudyLoad} /> : reviewError ? <LoadFailureState failure={noRunsFailure(selectedStudy?.caseId ?? routeCaseId ?? "")} backLabel="Volver a estudios" onBack={() => changeView(lastStudyNavView)} /> : safeRun ? <StudyReviewView run={safeRun} initialDualReference={pendingCompare && pendingCompare.caseId === safeRun.caseId ? pendingCompare.referenceCaseId : null} onInitialDualConsumed={() => setPendingCompare(null)} studyReview={studyReview} measurements={measurements} auditTrail={auditTrail} saving={saving} onBackToStudies={() => changeView(lastStudyNavView)} onMeasurementsChange={handleMeasurementsChange} onSaveReview={handleSaveReview} onStudyMetadataUpdated={handleStudyMetadataUpdated} selectedDetail={selectedDetail} onOpenPatientHistory={(subjectRef) => { setPatientHistoryCurrentCaseId(safeRun?.caseId ?? null); navigate(pathForPatient(subjectRef)); }} /> : <EmptyReviewState onBackToStudies={() => changeView(lastStudyNavView)} />)}
       {activeView === "patients" && <PatientsView onOpenPatient={(patientId) => navigate(pathForPatient(patientId))} />}
       {activeView === "history" && (routePatientId ? (
         <PatientHistoryPage
@@ -531,7 +550,7 @@ function App() {
       ) : (
         <section className="panel-card clinical-empty-state">
           <h2>Paciente no encontrado</h2>
-          <p>El enlace no corresponde a una referencia de-identificada válida.</p>
+          <p>El enlace no corresponde a una referencia de paciente válida.</p>
           <button className="ghost-button" onClick={() => navigate(pathForView("patients"))} type="button">Volver a pacientes</button>
         </section>
       ))}

@@ -21,6 +21,7 @@ import {
 } from "./studyFilters";
 import { OperationsPageHeader } from "../../components/OperationsPageHeader";
 import { PriorityBadge, ReviewBadge } from "../../components/StatusBadge";
+import { recalledWorklistView, rememberWorklistView, type SortDirection, type SortKey } from "./worklistViewMemory";
 
 /**
  * Worklist — the entry point of the application.
@@ -36,8 +37,6 @@ import { PriorityBadge, ReviewBadge } from "../../components/StatusBadge";
 const PAGE_SIZES = [10, 25, 50];
 const PAGE_SIZE_STORAGE_KEY = "pfi.worklist.pageSize";
 
-type SortKey = "caseId" | "subjectRef" | "studyDate" | "modality" | "reviewStatus" | "priority";
-type SortDirection = "asc" | "desc";
 
 const reviewWeight: Record<ReviewStatus, number> = { observado: 0, pendiente: 1, aceptado: 2, descartado: 3 };
 const priorityWeight: Record<Priority, number> = { alta: 0, media: 1, baja: 2 };
@@ -105,14 +104,16 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
   const [drawerOpen, setDrawerOpen] = useState(false);
   const newStudyButtonRef = useRef<HTMLButtonElement | null>(null);
   const returnFocusRef = useRef(false);
-  const [filters, setFilters] = useState<WorklistFilters>(EMPTY_FILTERS);
-  const [filtersOpen, setFiltersOpen] = useState(true);
-  const [query, setQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("studyDate");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [page, setPage] = useState(0);
+  // Al volver del visor se recupera la vista que se dejó (filtros, búsqueda, orden, página y estudio elegido).
+  const recalled = useMemo(() => recalledWorklistView(), []);
+  const [filters, setFilters] = useState<WorklistFilters>(recalled?.filters ?? EMPTY_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(recalled?.filtersOpen ?? true);
+  const [query, setQuery] = useState(recalled?.query ?? "");
+  const [sortKey, setSortKey] = useState<SortKey>(recalled?.sortKey ?? "studyDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>(recalled?.sortDirection ?? "desc");
+  const [page, setPage] = useState(recalled?.page ?? 0);
   const [pageSize, setPageSize] = useState(readStoredPageSize);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(recalled?.selectedKey ?? null);
 
   /* Al volver de "Nuevo estudio" el foco regresa al control que lo abrió. */
   useEffect(() => {
@@ -139,6 +140,11 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
   const visible = rows.slice(firstIndex, firstIndex + pageSize);
   const activeCount = activeFilterCount(filters);
   const selectedStudy = selectedKey ? rows.find((study) => rowKey(study) === selectedKey) ?? null : null;
+
+  // Si la página guardada ya no existe (por ejemplo, hay menos estudios), se usa la última válida.
+  useEffect(() => {
+    rememberWorklistView({ filters, filtersOpen, query, sortKey, sortDirection, page: safePage, selectedKey });
+  }, [filters, filtersOpen, query, sortKey, sortDirection, safePage, selectedKey]);
 
   function updateFilter<K extends keyof WorklistFilters>(key: K, value: WorklistFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));

@@ -21,7 +21,8 @@ interface SidebarProps {
   activeNavView?: ViewKey;
   onChangeView: (view: ViewKey) => void;
   reviewQueueCount: number;
-  systemOnline?: boolean;
+  /** `true`/`false` solo cuando hay una comprobación real del módulo de IA; `null` = sin dato (se muestra solo la versión). */
+  systemOnline?: boolean | null;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   /** Identidad de quien firma la revisión. Vive al pie del nav, no en una
@@ -55,7 +56,7 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-export function Sidebar({ activeView, activeNavView = activeView, onChangeView, reviewQueueCount, systemOnline = true, collapsed = false, onToggleCollapsed, identity }: SidebarProps) {
+export function Sidebar({ activeView, activeNavView = activeView, onChangeView, reviewQueueCount, systemOnline = null, collapsed = false, onToggleCollapsed, identity }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -88,9 +89,9 @@ export function Sidebar({ activeView, activeNavView = activeView, onChangeView, 
             si el módulo de IA está respondiendo, y qué versión de la aplicación se está
             usando. Antes sólo se veía la versión, con el color del ícono como única
             señal del estado, que es la señal que nadie mira. */}
-        <span className={systemOnline ? "system-status is-online" : "system-status is-degraded"}>
+        <span className={systemOnline === null ? "system-status" : systemOnline ? "system-status is-online" : "system-status is-degraded"}>
           <ShieldCheck aria-hidden size={16} />
-          <span className="side-nav-label">{systemOnline ? "Sincronizado" : "Modo degradado"} · v1.3.2</span>
+          <span className="side-nav-label">{systemOnline === null ? "" : systemOnline ? "Sincronizado · " : "Modo degradado · "}v1.3.2</span>
         </span>
         <ThemeToggle collapsed={collapsed} />
         {onToggleCollapsed && (

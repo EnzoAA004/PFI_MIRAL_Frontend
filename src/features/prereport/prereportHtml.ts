@@ -159,7 +159,7 @@ function header(model: PreReportGenerated, meta: DocumentMeta): string {
 ${meta.stale ? `<div class="note warn"><strong>Basado en datos anteriores:</strong> las correcciones o el contexto del estudio cambiaron después de generar este borrador. El contenido no se actualizó.</div>` : ""}
 <dl class="meta">
 <div><dt>Estudio</dt><dd>${escapeHtml(model.study.caseId)}</dd></div>
-<div><dt>Referencia de sujeto (de-identificada)</dt><dd>${escapeHtml(model.study.subjectRef ?? "No informada")}</dd></div>
+<div><dt>Referencia de paciente</dt><dd>${escapeHtml(model.study.subjectRef ?? "No informada")}</dd></div>
 <div><dt>Fecha del estudio</dt><dd>${escapeHtml(dateText(model.study.studyDate))}</dd></div>
 <div><dt>Fecha de generación</dt><dd>${escapeHtml(dateTimeText(meta.generatedAt))}</dd></div>
 <div><dt>Edad al estudio</dt><dd>${escapeHtml(age)}</dd></div>
@@ -356,7 +356,7 @@ ${model.omitted.map((o) => `<li><strong>${escapeHtml(o.what)}</strong>: ${escape
 </tbody></table></div>
 <div class="keep"><h2>Anexo D · Alcance, limitaciones y correspondencia anatómica</h2>
 <ul class="plain small">${model.limitations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>
-<p class="footer-note">Uso académico y de investigación. Datos de-identificados. Para corregir una medición use el flujo de revisión del estudio: editar este preinforme no modifica predicciones ni correcciones.</p></div>
+<p class="footer-note">Uso académico y de investigación. El documento no incluye identificadores directos del paciente. Para corregir una medición use el flujo de revisión del estudio: editar este preinforme no modifica predicciones ni correcciones.</p></div>
 </section>`;
 }
 

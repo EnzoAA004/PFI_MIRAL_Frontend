@@ -4423,3 +4423,26 @@ body,
   gap: var(--sp-2);
   justify-content: flex-end;
 }
+
+/* Pantallas de fallo de carga: acciones y detalle técnico plegado. */
+@layer components {
+  .clinical-empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    margin-top: var(--sp-3);
+  }
+  .load-failure-detail {
+    margin-top: var(--sp-3);
+    color: var(--text-muted);
+    font-size: var(--fs-small);
+  }
+  .load-failure-detail summary {
+    cursor: pointer;
+  }
+  .load-failure-detail p {
+    margin: var(--sp-1) 0 0;
+    overflow-wrap: anywhere;
+    font-family: var(--font-mono);
+  }
+}
