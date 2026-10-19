@@ -1,6 +1,12 @@
 /**
  * Rangos de referencia de las mediciones lumbares.
  *
+ * DESACTIVADO (REFERENCE_RANGE_FLAGS_ENABLED = false): los umbrales de este archivo no tienen una fuente documentada y
+ * verificable dentro del producto, así que ninguna pantalla debe etiquetar valores como «bajo», «alto» o «en rango», ni
+ * pintar con color un valor por esa comparación. Las mediciones se muestran con su valor, unidad, trazo, corrección y
+ * procedencia. El código se conserva sin cambios para reactivarlo cuando exista una fuente citada y validada; no se
+ * sustituyen los umbrales por otros.
+ *
  * Marcar un valor como fuera de rango es una afirmación, así que cada umbral viene
  * con la fuente que lo sostiene y con el texto que se muestra al lado del número. Un
  * umbral suelto en el código es un número mágico: nadie sabe de dónde salió, nadie
@@ -51,6 +57,9 @@ export const REFERENCE_RANGES: Record<string, ReferenceRange> = {
   },
 };
 
+/** Interruptor único: ver el comentario del encabezado. Mientras sea false, `checkRange` no devuelve veredictos. */
+export const REFERENCE_RANGE_FLAGS_ENABLED = false;
+
 export type RangeVerdict = {
   status: "below" | "above" | "within";
   /** Texto descriptivo, nunca un nombre de patología. */
@@ -64,6 +73,7 @@ export type RangeVerdict = {
  * con píxeles daría un veredicto sobre una escala que la corrida no informó.
  */
 export function checkRange(labelKey: string, value: number, unit: string): RangeVerdict | null {
+  if (!REFERENCE_RANGE_FLAGS_ENABLED) return null;
   const range = REFERENCE_RANGES[labelKey];
   if (!range || unit !== range.unit || !Number.isFinite(value)) return null;
   if (range.min !== undefined && value < range.min) {

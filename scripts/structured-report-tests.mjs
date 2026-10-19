@@ -78,15 +78,13 @@ check("no aplica a un nivel y no se pudo asignar se informan aparte", () => {
   assert.equal(informe.unassigned.length, 1);
 });
 
-check("un valor fuera de rango se cuenta en su nivel y en el total", () => {
-  const informe = buildStructuredReport([medicion({ level: "L4-L5", aiValue: 9.8 })]);
-  assert.equal(informe.levels.find((item) => item.level === "L4-L5").flagged, 1);
-  assert.equal(informe.flaggedTotal, 1);
-});
-
-check("un valor dentro de rango no se marca", () => {
-  const informe = buildStructuredReport([medicion({ level: "L4-L5", aiValue: 18 })]);
-  assert.equal(informe.flaggedTotal, 0);
+check("los umbrales sin fuente documentada no generan ningún veredicto (ni fuera ni dentro de rango)", () => {
+  for (const aiValue of [9.8, 18, 5, 40]) {
+    const informe = buildStructuredReport([medicion({ level: "L4-L5", aiValue })]);
+    assert.equal(informe.flaggedTotal, 0);
+    assert.equal(informe.levels.find((item) => item.level === "L4-L5").flagged, 0);
+    assert.equal(informe.levels.find((item) => item.level === "L4-L5").entries[0].verdict, null);
+  }
 });
 
 check("el informe usa el valor del revisor y deja el de la IA al lado", () => {
@@ -96,7 +94,7 @@ check("el informe usa el valor del revisor y deja el de la IA al lado", () => {
   assert.equal(entrada.attribution, "revisor");
   assert.equal(entrada.aiValue, 9.8);
   assert.match(entryText(entrada), /corregido por el revisor; IA 9\.8/);
-  assert.equal(informe.flaggedTotal, 0, "corregido a 13.2 ya no está fuera de rango");
+  assert.equal(informe.flaggedTotal, 0);
 });
 
 check("una medición sin rango se informa sin veredicto", () => {
@@ -109,13 +107,12 @@ check("una medición sin rango se informa sin veredicto", () => {
   assert.ok(!entryText(entrada).includes("rango de referencia"));
 });
 
-check("el texto de una entrada no nombra patologías", () => {
+check("el texto de una entrada no nombra patologías ni valora el valor", () => {
   const informe = buildStructuredReport([medicion({ level: "L4-L5", aiValue: 9.8 })]);
   const texto = entryText(informe.levels.find((item) => item.level === "L4-L5").entries[0]);
-  for (const palabra of ["estenosis", "hernia", "protrusión", "compresión"]) {
+  for (const palabra of ["estenosis", "hernia", "protrusión", "compresión", "rango de referencia", "bajo", "alto", "normal"]) {
     assert.ok(!texto.toLowerCase().includes(palabra), `el informe no puede decir "${palabra}": ${texto}`);
   }
-  assert.match(texto, /por debajo del rango de referencia/);
 });
 
 check("una medición sin valor se informa como tal y no como cero", () => {
