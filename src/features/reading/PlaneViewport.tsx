@@ -96,6 +96,12 @@ export type PlaneViewportProps = {
   /** Por qué la serie que se está viendo no tiene segmentación. Vacío si la tiene. */
   unsegmentedReason: string;
   onSelectSeries: (inputId: string | null) => void;
+  /**
+   * Si la IA se ve sobre la imagen. El estado vive afuera (estudio o lado de la comparación) y
+   * siempre arranca apagado: la primera lectura se hace sobre la imagen original.
+   */
+  aiVisible: boolean;
+  onToggleAi: () => void;
 };
 
 /**
@@ -115,6 +121,7 @@ export function PlaneViewport({
   selectedMeasurementId, highlightedMeasurementId, onSelectMeasurement,
   segmentation, slicePixels, pixelsBaseUrl, hiddenInstances, onToggleInstance,
   seriesChoices, viewedSeriesId, analyzedSeriesName, unsegmentedReason, onSelectSeries,
+  aiVisible, onToggleAi,
 }: PlaneViewportProps) {
   /*
    * Cine: recorrer la serie sola, que es como se lee un stack cuando se busca por
@@ -148,6 +155,22 @@ export function PlaneViewport({
     return () => clearInterval(timer);
   }, [cineOn, current, step, total]);
 
+  /*
+   * Fuera de la anatomía, en la barra de corte. Es un interruptor (aria-pressed) y no cambia
+   * corte, zoom, ventana ni resultados: solo retira o devuelve lo que la IA dibuja encima.
+   */
+  const aiToggle = (
+    <button
+      aria-pressed={aiVisible}
+      className={`rr-slice-ai-toggle${aiVisible ? " is-on" : ""}`}
+      data-testid="ai-toggle"
+      onClick={onToggleAi}
+      title={aiVisible ? "Retirar de la imagen lo que dibuja la IA" : "Mostrar sobre la imagen lo que dibuja la IA"}
+      type="button"
+    >
+      {aiVisible ? "Ocultar IA" : "Mostrar IA"}
+    </button>
+  );
   const sliceLabel = slice ? `corte ${slice.current + 1}/${slice.total}` : "corte único";
   return (
     <section className={`rr-plane${active ? " is-active" : ""}`} onPointerDownCapture={onActivate}>
@@ -204,7 +227,7 @@ export function PlaneViewport({
             </span>
           )}
         </div>
-        {segmentation && segmentation.instances.length > 0 && (
+        {aiVisible && segmentation && segmentation.instances.length > 0 && (
           <details className="rr-instances-panel">
             <summary>Estructuras ({segmentation.instances.length})</summary>
             <ul className="rr-instances" aria-label={`Estructuras segmentadas en ${plane}`}>
@@ -248,6 +271,8 @@ export function PlaneViewport({
           onAddLandmark={onAddLandmark}
           onLandmarkAddComplete={onLandmarkAddComplete}
           overlayEnabled
+          aiVisible={aiVisible}
+          evidenceMeasurementIds={selectedMeasurementId ? [selectedMeasurementId] : undefined}
           onOverlayAvailableChange={onOverlayAvailableChange}
           onImageFailedChange={onImageFailedChange}
           slice={slice}
@@ -274,6 +299,12 @@ export function PlaneViewport({
           pixelsBaseUrl={pixelsBaseUrl}
         />
       </div>
+      {!slice && (
+        <div className="rr-slicebar">
+          <span className="rr-slice-track" />
+          {aiToggle}
+        </div>
+      )}
       {slice && (
         <div className="rr-slicebar">
           <button className="rr-slice-step" type="button" onClick={() => slice.onStep(-1)} disabled={slice.current <= 0} aria-label={`Corte anterior en ${plane}`}>‹</button>
@@ -314,6 +345,7 @@ export function PlaneViewport({
           >
             {cineOn ? "■" : "▶"} cine
           </button>
+          {aiToggle}
           <button
             className="rr-slice-ai"
             type="button"

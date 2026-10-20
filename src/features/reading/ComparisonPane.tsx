@@ -58,9 +58,12 @@ type Props = {
   /** Región evaluada por el modelo del hallazgo seleccionado en este lado, o `null` si no hay un hallazgo seleccionado. */
   region?: RegionOverlay | null;
   onReturnRegion?: () => void;
+  /** La IA de ESTE lado sobre la imagen: cada lado tiene el suyo y los dos arrancan apagados. */
+  aiVisible: boolean;
+  onToggleAi: () => void;
 };
 
-export function ComparisonPane({ side, summary, sideState, state, onChange, overlay, figureLabel, context, onReturn, region: requestedRegion = null, onReturnRegion }: Props) {
+export function ComparisonPane({ side, summary, sideState, state, onChange, overlay, figureLabel, context, onReturn, region: requestedRegion = null, onReturnRegion, aiVisible, onToggleAi }: Props) {
   /* Si la imagen base de la serie no cargó, no se anuncia una región sobre nada: se conserva la comparación textual. */
   const [imageFailed, setImageFailed] = useState(false);
   const region: RegionOverlay | null = requestedRegion?.state === "draw" && imageFailed
@@ -212,6 +215,8 @@ export function ComparisonPane({ side, summary, sideState, state, onChange, over
           <PlaneViewport
             active={false}
             addMode={false}
+            aiVisible={aiVisible}
+            onToggleAi={onToggleAi}
             aiMeasurableCount={figures.length}
             aiMeasurements={figures}
             analyzedSeriesName={analyzed ? "Serie analizada" : null}

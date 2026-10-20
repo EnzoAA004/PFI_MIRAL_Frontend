@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { chromium } from "playwright";
+import { autoOpenAiResults } from "./lib/auto-open-ai-results.mjs";
 
 /**
  * Panel derecho del visor (etapas 1 y 2) contra el stack local real, con datos sintéticos.
@@ -42,6 +43,7 @@ function ok(message) {
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width, height } });
+await autoOpenAiResults(context);
 await context.addInitScript((value) => { try { localStorage.setItem("pfi.theme", value); } catch { /* sin almacenamiento */ } }, theme);
 const page = await context.newPage();
 

@@ -70,6 +70,11 @@ async function bannerVisible() {
 
 await page.goto(`${demoUrl}/`, { waitUntil: "load" });
 await page.getByTestId("dual-comparison").waitFor({ timeout: 30000 });
+{
+  /* Primera lectura sin IA: los resultados comparados se abren con una acción explícita. */
+  const gate = page.locator('[data-testid="dual-results-open"]:visible');
+  if (await gate.count()) await gate.click();
+}
 await page.getByTestId("dual-findings-comparison").waitFor({ timeout: 30000 });
 await page.waitForTimeout(2500);
 

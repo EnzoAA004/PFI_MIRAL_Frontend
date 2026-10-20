@@ -70,6 +70,16 @@ function analyzedInfo(state: ComparisonSideState) {
   return { sagittal: info("sagittal"), axial: info("axial") };
 }
 
+/** Estado inicial compacto de los resultados comparados: se abren a pedido, no al entrar. */
+function ResultsGate({ onOpen, what }: { onOpen: () => void; what: string }) {
+  return (
+    <div className="rr-ai-gate" data-testid="dual-results-gate">
+      <p>Los resultados de la IA de esta comparación están ocultos para empezar la lectura sobre las imágenes. Contienen {what}.</p>
+      <button className="rr-link" data-testid="dual-results-open" onClick={onOpen} type="button">Mostrar resultados comparados</button>
+    </div>
+  );
+}
+
 function figureLabel(value: ComparisonValue, unit: string) {
   return `${formatValue(value.effectiveValue)} ${displayUnit(unit)}`.trim();
 }
@@ -88,6 +98,13 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
   const [findingKey, setFindingKey] = useState<string | null>(null);
   const [findingFilterChoice, setFindingFilterChoice] = useState<FindingsFilter | null>(null);
   const [panes, setPanes] = useState<Record<Side, PaneState>>({ reference: INITIAL_PANE, current: INITIAL_PANE });
+  /*
+   * Primera lectura sin IA: cada lado arranca sin superposiciones y se prende por separado. Y los
+   * resultados comparados (diferencias y hallazgos) no se muestran hasta pedirlos. Nada de esto
+   * se recupera de una preferencia guardada: abrir la comparación otra vez vuelve a empezar así.
+   */
+  const [aiBySide, setAiBySide] = useState<Record<Side, boolean>>({ reference: false, current: false });
+  const [resultsOpen, setResultsOpen] = useState(false);
 
   // La referencia pedida desde la herramienta se resuelve una sola vez al abrir.
   useEffect(() => {
@@ -138,6 +155,8 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
     setFindingKey(null);
     setFindingFilterChoice(null);
     setPanes((current) => ({ ...current, reference: INITIAL_PANE }));
+    setAiBySide((current) => ({ ...current, reference: false }));
+    setResultsOpen(false);
   }, [referenceCaseId]);
 
   const rows = comparison?.comparisons ?? [];
@@ -297,7 +316,9 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
             }
             return (
               <ComparisonPane
+                aiVisible={aiBySide[side]}
                 context={EMPTY_FIGURES}
+                onToggleAi={() => setAiBySide((current) => ({ ...current, [side]: !current[side] }))}
                 figureLabel={value && selectedRow ? figureLabel(value, selectedRow.unit) : ""}
                 key={side}
                 onChange={(next) => setPanes((current) => ({ ...current, [side]: next }))}
@@ -333,6 +354,8 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
               ))}
             </div>
             <div aria-labelledby="rr-dual-tab-differences" hidden={rightTab !== "differences"} id="rr-dual-panel-differences" role="tabpanel">
+              {!resultsOpen && <ResultsGate onOpen={() => setResultsOpen(true)} what="las diferencias entre las mediciones" />}
+              <div hidden={!resultsOpen}>
               <DifferencesPanel
                 filter={filter}
                 onFilterChange={setFilter}
@@ -340,8 +363,11 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
                 result={comparison}
                 selectedKey={selectedKey}
               />
+              </div>
             </div>
             <div aria-labelledby="rr-dual-tab-findings" hidden={rightTab !== "findings"} id="rr-dual-panel-findings" role="tabpanel">
+              {!resultsOpen && <ResultsGate onOpen={() => setResultsOpen(true)} what="la comparación de hallazgos degenerativos" />}
+              <div hidden={!resultsOpen}>
               <DualFindingsPanel
                 current={comparison.current}
                 currentState={currentSide}
@@ -354,6 +380,7 @@ export function DualComparisonView({ caseId, run, archiveSeries, currentRunId, i
                 selectedKey={findingKey}
                 targets={regionTargets}
               />
+              </div>
             </div>
             <div aria-labelledby="rr-dual-tab-assistant" hidden={rightTab !== "assistant"} id="rr-dual-panel-assistant" role="tabpanel">
               {assistantOpened && (comparison.current.runId && comparison.reference.runId ? (

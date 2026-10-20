@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
+import { autoOpenAiResults } from "./lib/auto-open-ai-results.mjs";
 import { chromium } from "playwright";
 import {
   correctionCountOf,
@@ -110,6 +111,7 @@ const browser = await chromium.launch({ headless: true });
 let isoCreated = null;
 if (!isoCaseGiven) {
   const setupContext = await browser.newContext({ viewport: { width, height } });
+  await autoOpenAiResults(setupContext);
   const setupPage = await setupContext.newPage();
   const setupMutations = [];
   setupContext.on("request", (request) => {
@@ -134,6 +136,7 @@ if (!isoCaseGiven) {
   ok(`caso propio ${isoCase} creado por «Nuevo estudio» con su corrección ${ISO_CORRECTED} (IA ${isoCreated.original}): persistida en la base y restaurada tras recargar`);
 }
 const context = await browser.newContext({ viewport: { width, height } });
+await autoOpenAiResults(context);
 await context.addInitScript((value) => { try { localStorage.setItem("pfi.theme", value); } catch { /* sin almacenamiento */ } }, theme);
 const page = await context.newPage();
 
@@ -199,6 +202,9 @@ async function openDualFromTool(reference) {
   }
   await page.getByTestId("open-dual-comparison").click();
   await dual().waitFor();
+  /* Primera lectura sin IA: los resultados comparados se abren con una acción explícita. */
+  const gate = page.locator('[data-testid="dual-results-open"]:visible');
+  if (await gate.count()) await gate.click();
   if (reference) await page.getByTestId("dual-differences").waitFor();
   await page.waitForTimeout(3200);
 }

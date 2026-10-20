@@ -199,10 +199,19 @@ async function openDual(page, current, referenceCase) {
   }
   await page.getByTestId("open-dual-comparison").click();
   await page.getByTestId("dual-comparison").waitFor();
+  /* Primera lectura sin IA: los resultados comparados se abren con una acción explícita. */
+  const gate = page.locator('[data-testid="dual-results-open"]:visible');
+  if (await gate.count()) await gate.click();
   await page.waitForTimeout(1800);
+}
+/* Primera lectura sin IA: cambiar de referencia vuelve a cerrar los resultados comparados; se abren con una acción explícita. */
+async function openComparedResults(page) {
+  const gate = page.locator('[data-testid="dual-results-open"]:visible');
+  if (await gate.count()) await gate.click();
 }
 async function findingsTab(page) {
   await page.getByTestId("dual-tab-findings").click();
+  await openComparedResults(page);
   await page.getByTestId("dual-findings-comparison").waitFor();
 }
 const rowByKey = (page, key) => page.locator(`[data-testid="dual-finding-row"][data-row-key="${key}"]`);
@@ -416,6 +425,7 @@ async function counts(page) {
   // Referencia sin hallazgos persistidos: todo no comparable, nunca «Ausente».
   await page.getByTestId("dual-reference-select").selectOption("FXDF-NODATA");
   await page.waitForTimeout(1800);
+  await openComparedResults(page);
   await page.getByTestId("dual-findings-filter-all").click();
   const noData = clean(await page.getByTestId("dual-findings-comparison").innerText());
   assertTruthy(/no tiene hallazgos discales persistidos/.test(noData) && /Sin datos no hay «Ausente»/.test(noData), "lado sin datos");
@@ -425,6 +435,7 @@ async function counts(page) {
   // Región inválida: no elimina resultados válidos ni afecta a los demás discos. Clasificación inválida: no comparable.
   await page.getByTestId("dual-reference-select").selectOption("FXDF-INVALID");
   await page.waitForTimeout(1800);
+  await openComparedResults(page);
   await page.getByTestId("dual-findings-filter-all").click();
   assertEqual(await rowByKey(page, "L4-L5|disc_bulging").getAttribute("data-status"), "unchanged", "la clasificación con región inválida se compara igual (presente en ambos)");
   assertEqual(await rowByKey(page, "L5-S1|disc_bulging").getAttribute("data-status"), "unchanged", "otro disco sigue comparable");

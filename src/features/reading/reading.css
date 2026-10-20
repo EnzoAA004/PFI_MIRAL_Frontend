@@ -1325,6 +1325,50 @@
   .rr-slice-ai:hover:not(:disabled) { color: var(--text-primary-strong); border-color: var(--border-info); }
   .rr-slice-ai:disabled { opacity: .4; cursor: default; }
 
+  /* Interruptor de la IA: mismo cuerpo que «corte IA»; encendido se distingue por borde y color, sin animación. */
+  .rr-slice-ai-toggle {
+    height: 22px;
+    padding: 0 var(--sp-2);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-btn);
+    color: var(--text-muted);
+    font-size: var(--fs-micro);
+    font-family: var(--font-mono);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .rr-slice-ai-toggle:hover { color: var(--text-primary-strong); border-color: var(--border-info); }
+  .rr-slice-ai-toggle.is-on { color: var(--text-primary-strong); border-color: var(--border-info); background: var(--surface-info, transparent); }
+  .rr-slice-ai-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  /* Estado de la evidencia elegida con la IA oculta: fila propia bajo la tira de Capas, siempre a la vista. */
+  .viewer-ai-state {
+    order: 4;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 2px var(--sp-3);
+    font-size: var(--fs-micro);
+    color: var(--text-muted);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+
+  /* Estado inicial compacto de los resultados de la IA: se abren con una acción explícita. */
+  .rr-ai-gate {
+    margin: var(--sp-3);
+    padding: var(--sp-3);
+    border: 1px dashed var(--border-strong, var(--border));
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    display: grid;
+    gap: var(--sp-2);
+  }
+  .rr-ai-gate p { margin: 0; color: var(--text-muted); font-size: var(--fs-body); }
+  .rr-ai-gate button { justify-self: start; }
+
   /* Cine: mismo cuerpo que el botón del corte IA, encendido bien visible porque
      mientras corre la imagen cambia sola y hay que poder ver de un vistazo por qué. */
   .rr-slice-cine {

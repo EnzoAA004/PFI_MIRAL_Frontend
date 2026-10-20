@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 import { createIsolatedCorrectionCase } from "./lib/isolated-correction-case.mjs";
+import { autoOpenAiResults } from "./lib/auto-open-ai-results.mjs";
 
 /**
  * Preinforme visual probado desde la interfaz de 8288, con el stack real.
@@ -29,6 +30,7 @@ const check = (name, ok, note) => {
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1366, height: 768 }, acceptDownloads: true });
+await autoOpenAiResults(context);
 const page = await context.newPage();
 const dialogs = [];
 page.on("dialog", async (dialog) => {

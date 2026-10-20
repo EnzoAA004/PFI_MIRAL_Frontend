@@ -523,6 +523,22 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     modelKey: run.modelKey ?? selectedDetail?.study?.modelKey ?? undefined,
     review: run.review ?? selectedDetail?.review,
   };
+  /*
+   * Primera lectura sin IA. Al abrir o recargar un estudio nada de lo que produjo la IA se ve sobre la imagen
+   * ni en el panel de resultados: se activa con una acción explícita. El estado vive acá, por encima de las
+   * pestañas, así que cambiar de pestaña lo conserva; y va atado al estudio y la corrida, así que otro estudio
+   * (o recargar) empieza siempre apagado. No se guarda en ningún almacenamiento: no hay preferencia que recuperar.
+   */
+  const aiStudyKey = `${displayRun.caseId}|${displayRun.runId ?? ""}`;
+  const [aiState, setAiState] = useState({ key: aiStudyKey, overlays: false, results: false });
+  const aiVisible = aiState.key === aiStudyKey && aiState.overlays;
+  const aiResultsOpen = aiState.key === aiStudyKey && aiState.results;
+  const toggleAiOverlays = () => setAiState((current) => (current.key === aiStudyKey
+    ? { ...current, overlays: !current.overlays }
+    : { key: aiStudyKey, overlays: true, results: false }));
+  const openAiResults = () => setAiState((current) => (current.key === aiStudyKey
+    ? { ...current, results: true }
+    : { key: aiStudyKey, overlays: false, results: true }));
   const [studyReport, setStudyReport] = useState<StudyReport | null>(null);
   const [studyReportPhase, setStudyReportPhase] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [studyReportError, setStudyReportError] = useState("");
@@ -2127,6 +2143,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
               return (
                 <PlaneViewport
                   key={binding.id}
+                  aiVisible={aiVisible}
+                  onToggleAi={toggleAiOverlays}
                   plane={planeName}
                   caseLabel={caseLabel}
                   seriesName={data.series.name}
@@ -2275,6 +2293,16 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
           width={inspectorWidth}
         >
           <ReviewInspectorPanel activeTab={toolsOpen ? null : panelTab} tab="results">
+            {!aiResultsOpen && (
+              <div className="rr-ai-gate" data-testid="ai-results-gate">
+                <p>
+                  Los resultados de la IA (mediciones y hallazgos) están ocultos para empezar la lectura sobre la imagen
+                  original. Abrirlos no cambia el corte, el zoom ni la ventana.
+                </p>
+                <button className="rr-link" data-testid="ai-results-open" onClick={openAiResults} type="button">Mostrar resultados de la IA</button>
+              </div>
+            )}
+            <div hidden={!aiResultsOpen}>
             <div aria-label="Vistas de resultados" className="rr-subnav" role="tablist">
               <button
                 aria-controls="rr-results-measurements"
@@ -2411,6 +2439,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                 />
                 {!demoMode && <ActivationMapPanel inputId={axialInputId()} roiDraft={roiDraft} />}
               </section>
+            </div>
             </div>
           </ReviewInspectorPanel>
 

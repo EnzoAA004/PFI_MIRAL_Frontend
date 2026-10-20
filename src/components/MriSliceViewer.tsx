@@ -117,6 +117,18 @@ type Props = {
   /** Espaciado del pixel en mm, para la barra de escala. Sin esto no se dibuja. */
   pixelSpacingMm?: [number, number] | null;
   overlayEnabled?: boolean;
+  /**
+   * Interruptor general de lo que produjo la IA sobre la imagen: segmentación, mediciones,
+   * derivadas, puntos de referencia y leyenda. Apagado, la imagen se ve tal cual; no toca
+   * el corte, el zoom, la ventana ni ningún resultado guardado. Las anotaciones del
+   * profesional no dependen de él. Por defecto está prendido para no cambiar a otros usos.
+   */
+  aiVisible?: boolean;
+  /**
+   * Figuras (por `id` o `measurementId`) que el usuario eligió mirar a propósito. Se dibujan
+   * aunque la IA esté oculta, con su estado a la vista y la posibilidad de ocultarlas.
+   */
+  evidenceMeasurementIds?: string[];
   overlayOpacity?: number;
   onOverlayAvailableChange?: (available: boolean) => void;
   /** Avisa si la imagen base de la serie no se pudo cargar, para que quien la usa no ofrezca una marca sobre nada. */
@@ -361,6 +373,8 @@ export function MriSliceViewer({
   onDisplayParamsChange,
   pixelSpacingMm = null,
   overlayEnabled = true,
+  aiVisible = true,
+  evidenceMeasurementIds,
   overlayOpacity = initialOverlayOpacity,
   onOverlayAvailableChange,
   onImageFailedChange,
@@ -609,11 +623,22 @@ export function MriSliceViewer({
    * Las de la IA van primero para que las del revisor queden encima: si se pisan, lo
    * que tiene que quedar legible es lo que el médico afirmó, no la propuesta.
    */
+  const [evidenceHidden, setEvidenceHidden] = useState(false);
+  /* Una selección nueva vuelve a mostrar su evidencia: se compara por contenido, no por identidad del objeto. */
+  const evidenceKey = `${(evidenceMeasurementIds ?? []).join("|")}#${findingMarker ? JSON.stringify(findingMarker) : ""}`;
+  useEffect(() => {
+    setEvidenceHidden(false);
+  }, [evidenceKey]);
+  const evidenceFigures = aiVisible || evidenceHidden || !evidenceMeasurementIds?.length
+    ? []
+    : aiMeasurements.filter((figure) => evidenceMeasurementIds.includes(figure.id) || (figure.measurementId !== undefined && evidenceMeasurementIds.includes(figure.measurementId)));
+  const evidenceActive = !aiVisible && !evidenceHidden && (evidenceFigures.length > 0 || Boolean(findingMarker));
   const visibleMeasures: MeasurementFigure[] = [
-    ...(aiMeasuresVisible ? aiMeasurements : []),
-    ...(derivedVisible ? derivedMeasurements : []),
+    ...(aiVisible ? (aiMeasuresVisible ? aiMeasurements : []) : evidenceFigures),
+    ...(aiVisible && derivedVisible ? derivedMeasurements : []),
     ...(myMeasuresVisible ? annotations : []),
   ];
+  const markerShown = aiVisible || !evidenceHidden ? findingMarker : null;
   const groups = useMemo(() => maskGroups(model.masks), [model.masks]);
   const classNames = useMemo(() => groups.map((group) => group.technicalName), [groups]);
   const classMasks = useClassMaskLayers(onAiSlice ? inputUrl : undefined, classNames);
@@ -623,8 +648,8 @@ export function MriSliceViewer({
    * un contorno sobre otro corte marcaria anatomia que no es la que se midio.
    */
   const contours = useMemo(
-    () => (onAiSlice ? model.masks.filter((mask) => (mask.points?.length ?? 0) >= 3 && !hiddenClasses.includes(mask.labelKey)) : []),
-    [model.masks, onAiSlice, hiddenClasses],
+    () => (onAiSlice && aiVisible ? model.masks.filter((mask) => (mask.points?.length ?? 0) >= 3 && !hiddenClasses.includes(mask.labelKey)) : []),
+    [model.masks, onAiSlice, aiVisible, hiddenClasses],
   );
   const imageLoaded = inputState === "loaded";
   const overlayLoaded = overlayState === "loaded";
@@ -1037,15 +1062,15 @@ export function MriSliceViewer({
       <div className="plane-controls-panel">
         <strong className="layers-title">Capas</strong>
         <label className="toggle-row">
-          <input checked={overlayVisible} disabled={!overlayLoaded} onChange={(event) => setOverlayVisible(event.target.checked)} type="checkbox" />
+          <input checked={overlayVisible && aiVisible} disabled={!overlayLoaded || !aiVisible} onChange={(event) => setOverlayVisible(event.target.checked)} type="checkbox" />
           <span>Segmentación</span>
         </label>
         <label className="opacity-control">
           <span>Opacidad</span>
-          <input aria-label="Opacidad de segmentación" disabled={!overlayLoaded} max="1" min="0" onChange={(event) => setOverlayAlpha(Number(event.target.value))} step="0.01" type="range" value={overlayAlpha} />
+          <input aria-label="Opacidad de segmentación" disabled={!overlayLoaded || !aiVisible} max="1" min="0" onChange={(event) => setOverlayAlpha(Number(event.target.value))} step="0.01" type="range" value={overlayAlpha} />
         </label>
         <label className="toggle-row" title={aiMeasurableCount ? "Se dibujan las del nivel que esté seleccionado en el panel de hallazgos" : "Esta corrida no guardó los extremos de sus mediciones"}>
-          <input checked={aiMeasuresVisible} disabled={!aiMeasurableCount} onChange={(event) => setAiMeasuresVisible(event.target.checked)} type="checkbox" />
+          <input checked={aiMeasuresVisible && aiVisible} disabled={!aiMeasurableCount || !aiVisible} onChange={(event) => setAiMeasuresVisible(event.target.checked)} type="checkbox" />
           <span>Mediciones IA{aiMeasurements.length ? ` (${aiMeasurements.length})` : ""}</span>
         </label>
         {/*
@@ -1053,7 +1078,7 @@ export function MriSliceViewer({
           tapan la anatomía. Se dice por qué está vacío en vez de dejar la capa
           prendida sin efecto visible, que se lee como que no funciona.
         */}
-        {aiMeasuresVisible && aiMeasurableCount > 0 && !aiMeasurements.length && (
+        {aiVisible && aiMeasuresVisible && aiMeasurableCount > 0 && !aiMeasurements.length && (
           <p className="viewer-limit-note">Elegí un nivel en Hallazgos para ver sus mediciones sobre la imagen.</p>
         )}
         <label
@@ -1062,7 +1087,7 @@ export function MriSliceViewer({
             ? "Ángulo segmentario y listesis, calculados a partir de los ejes de dos vértebras vecinas. El modelo no fue entrenado para producirlas."
             : "Esta corrida no trae mediciones derivadas"}
         >
-          <input checked={derivedVisible} disabled={!derivedMeasurableCount} onChange={(event) => setDerivedVisible(event.target.checked)} type="checkbox" />
+          <input checked={derivedVisible && aiVisible} disabled={!derivedMeasurableCount || !aiVisible} onChange={(event) => setDerivedVisible(event.target.checked)} type="checkbox" />
           <span>Derivadas{derivedMeasurements.length ? ` (${derivedMeasurements.length})` : ""}<em> exp</em></span>
         </label>
         <label className="toggle-row">
@@ -1083,8 +1108,8 @@ export function MriSliceViewer({
         */}
         <label className="toggle-row" title={landmarks.length ? undefined : "Esta corrida no generó landmarks."}>
           <input
-            checked={landmarksVisible && landmarks.length > 0}
-            disabled={landmarks.length === 0}
+            checked={aiVisible && landmarksVisible && landmarks.length > 0}
+            disabled={landmarks.length === 0 || !aiVisible}
             onChange={(event) => setLandmarksVisible(event.target.checked)}
             type="checkbox"
           />
@@ -1097,6 +1122,27 @@ export function MriSliceViewer({
         un tercio del visor a la anatomia, que es justo lo que hay que mirar; se abren
         cuando hacen falta y el resto del tiempo ocupan una linea.
       */}
+      {/*
+        Estado de la evidencia elegida cuando la IA está oculta. Va en su propia fila, fuera de la tira de Capas
+        (de altura fija): dentro de ella el texto se montaba sobre los controles.
+      */}
+      {!aiVisible && (evidenceActive || (evidenceHidden && (Boolean(evidenceMeasurementIds?.length) || Boolean(findingMarker)))) && (
+        <div className="viewer-ai-state" data-testid={evidenceActive ? "evidence-visible-note" : "evidence-hidden-note"}>
+          {evidenceActive ? (
+            <>
+              <span>IA oculta · se muestra solo la evidencia que elegiste.</span>
+              <button className="rr-link" onClick={() => setEvidenceHidden(true)} type="button">Ocultar evidencia</button>
+            </>
+          ) : (
+            <>
+              <span>IA oculta · la evidencia elegida está oculta.</span>
+              <button className="rr-link" onClick={() => setEvidenceHidden(false)} type="button">Mostrar evidencia</button>
+            </>
+          )}
+        </div>
+      )}
+
+      {aiVisible && (
       <details className="segmentation-legend-panel">
         <summary>Leyenda de segmentación</summary>
         <div className="segmentation-legend-list">
@@ -1125,6 +1171,7 @@ export function MriSliceViewer({
           <p className="viewer-limit-note">Esta corrida guardó la segmentación como una sola imagen compuesta, así que solo se puede mostrar u ocultar entera. Las corridas nuevas guardan una máscara por clase.</p>
         )}
       </details>
+      )}
 
       {/*
         La nota decía que W/L era un filtro de brillo sobre un PNG de 8 bits y que el
@@ -1227,13 +1274,13 @@ export function MriSliceViewer({
               segmentó. Cuando el mapa no viaja —corridas anteriores a este cambio—
               se cae al overlay compuesto, que es lo que esa corrida produjo.
             */}
-            {overlayVisible && segmentation && onAiSlice ? (
+            {aiVisible && overlayVisible && segmentation && onAiSlice ? (
               <canvas className="mri-segmentation-canvas" ref={paintSegmentationCanvas} style={{ opacity: overlayAlpha }} />
-            ) : overlayVisible && onAiSlice && overlayLoaded && overlayAsset.url ? (
+            ) : aiVisible && overlayVisible && onAiSlice && overlayLoaded && overlayAsset.url ? (
               <img alt={`${seriesName} recurso de superposicion IA`} className="mri-overlay-img" draggable={false} src={overlayAsset.url} style={{ opacity: overlayAlpha, transform: "translateZ(0)" }} />
             ) : null}
             <MeasurementLayer
-              marker={findingMarker ?? null}
+              marker={markerShown ?? null}
               referenceLine={referenceVisible ? referenceLine : null}
               editable={!(measurementsReadonly ?? readonly) && Boolean(onMoveMeasurePoint)}
               figures={visibleMeasures}
@@ -1250,7 +1297,7 @@ export function MriSliceViewer({
               selectedId={selectedMeasurementId ?? null}
               zoom={zoom}
             />
-            {landmarksVisible && landmarks.map((landmark) => {
+            {aiVisible && landmarksVisible && landmarks.map((landmark) => {
               const displayLabel = displayLandmarkLabel(landmark.labelKey);
               const selected = selectedLandmarkId === landmark.id;
               return (
@@ -1287,9 +1334,9 @@ export function MriSliceViewer({
       </div>
 
       <div className="viewer-footer real-viewer-footer">
-        <span>{overlayLoaded ? "overlay.png disponible" : overlayState === "failed" ? "overlay.png no disponible" : "superposición pendiente"}</span>
-        <span>{overlayVisible && overlayLoaded ? `${Math.round(overlayAlpha * 100)}% opacidad` : "Segmentación IA deshabilitada si falta el recurso"}</span>
-        <span>{landmarksVisible ? `${landmarks.length} puntos visibles` : "Puntos de referencia ocultos"}</span>
+        <span>{!aiVisible ? "IA oculta" : overlayLoaded ? "overlay.png disponible" : overlayState === "failed" ? "overlay.png no disponible" : "superposición pendiente"}</span>
+        <span>{aiVisible && overlayVisible && overlayLoaded ? `${Math.round(overlayAlpha * 100)}% opacidad` : "Segmentación IA deshabilitada si falta el recurso"}</span>
+        <span>{aiVisible && landmarksVisible ? `${landmarks.length} puntos visibles` : "Puntos de referencia ocultos"}</span>
         <span>{!readonly && canEditLandmarks ? "Edicion de landmarks del revisor" : "Corte unico servido"}</span>
       </div>
       {overlayState === "failed" && <div className="panel-hidden-placeholder">overlay.png no disponible desde backend. Se muestra input.png sin superposición simulada.</div>}

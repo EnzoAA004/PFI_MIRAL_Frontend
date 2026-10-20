@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import { chromium } from "playwright";
+import { autoOpenAiResults } from "./lib/auto-open-ai-results.mjs";
 
 /**
  * Comparación entre estudios sobre el análisis inicial REAL, contra el stack local (8288/8280).
@@ -73,6 +74,7 @@ function latestRunId(caseId) {
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width, height } });
+await autoOpenAiResults(context);
 await context.addInitScript((value) => { try { localStorage.setItem("pfi.theme", value); } catch { /* sin almacenamiento */ } }, theme);
 const page = await context.newPage();
 
