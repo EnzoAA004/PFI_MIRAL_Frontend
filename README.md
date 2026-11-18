@@ -115,3 +115,13 @@ El recorrido equivalente por API está en [docs/api-examples.md del backend](htt
 - Toda salida requiere revisión profesional.
 
 Los documentos `P9_*`, `P10_*`, `*_EVIDENCE.md` y briefs de diseño se conservan como historial y evidencia. Para operación actual usar este README, `.env.example` y la documentación del backend.
+
+## Versiones verificadas el 18 de noviembre de 2026
+
+| Entorno de este componente | Referencia de código | Digest observado |
+|---|---|---|
+| Código fuente de partida en GitHub, rama main | 3d7995714c139191359c92228e045890219d4678 | Depende del build local |
+| Docker local con imagen publicada en GHCR | 86991d7e391fd9ef964bc74c4b05c434e96225cb (etiqueta OCI de revisión) | sha256:ccfe290b183396e7cd92228e8419098058955778acea7cbcaba6bf801dd95d68 |
+| Cloud Run E2E con tráfico en us-central1 | sha-3d7995714c139191359c92228e045890219d4678 (tag de Artifact Registry) | sha256:f6eb2fc89d2c90c8c6a3d39c4f744818b1967ff908fa845a0c4cd096629ca589 |
+
+Para reproducir la modalidad desde fuente, clonar los tres repositorios hermanos y usar el Compose local del backend. Para reproducir un despliegue publicado, fijar el digest individual de cada servicio. La etiqueta latest puede cambiar. Volver a verificar la revisión con tráfico y su digest en cada evaluación cloud.
