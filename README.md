@@ -10,7 +10,7 @@ El frontend consume exclusivamente el backend. No conoce ni llama directamente a
 
 ## Requisitos
 
-- Node.js 22 recomendado, igual que CI;
+- Node.js 24 recomendado, igual que CI;
 - npm y `package-lock.json`;
 - backend disponible o modo mock explícito para trabajo de UI.
 
