@@ -16,6 +16,11 @@ El frontend consume exclusivamente el backend. No conoce ni llama directamente a
 
 La imagen Docker compila con Node 24 y sirve el bundle mediante Nginx.
 
+## Autores académicos
+
+- Enzo Andrea Asplanatti.
+- Francisco Ezequiel Fabrello.
+
 ## Desarrollo
 
 ```bash

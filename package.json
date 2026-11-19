@@ -1,6 +1,7 @@
 {
   "name": "pfi-mvptest-enzo-frontend",
   "version": "0.1.0",
+  "author": "Enzo Andrea Asplanatti and Francisco Ezequiel Fabrello",
   "private": true,
   "type": "module",
   "scripts": {
