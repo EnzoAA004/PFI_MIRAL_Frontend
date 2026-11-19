@@ -14,5 +14,5 @@ EOF
 # so this never collides with $uri/$document_root/etc.) rewritten in place
 # here, same "generate a runtime file from an env var" pattern already used
 # above for env.js.
-NGINX_PORT_VALUE="${PORT:-80}"
+NGINX_PORT_VALUE="${PORT:-8080}"
 sed -i "s/__PFI_NGINX_PORT__/$NGINX_PORT_VALUE/" /etc/nginx/conf.d/default.conf
