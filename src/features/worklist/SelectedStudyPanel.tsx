@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { PanelRightClose, ScanLine } from "lucide-react";
 import type { Plane, StudyArchiveSeries, StudyDetailResponse, StudyRow } from "../../appTypes";
 import { displayModality, displayPlane, displayReviewStatus } from "../../clinicalDisplay";
-import { displayStudyDate, displaySubjectRef } from "../../studyDisplay";
+import { displayOptionalSubjectRef, displayStudyDate } from "../../studyDisplay";
 import { fetchStudyDetail } from "../../studyApi";
 import { aiAssetUrl } from "../../multiplanarApi";
 import { useAuthenticatedImageUrl } from "../../authenticatedAssets";
@@ -97,7 +97,10 @@ export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPane
   return (
     <aside className="wl-panel" aria-label={`Estudio seleccionado ${study.caseId}`}>
       <header className="wl-panel-head">
-        <h2>Estudio seleccionado</h2>
+        <div>
+          <h2>Resumen del estudio</h2>
+          <span className="wl-panel-case-id">{study.caseId}</span>
+        </div>
         <button className="wl-panel-close" onClick={onClose} type="button" aria-label="Cerrar el panel del estudio">
           <PanelRightClose aria-hidden size={16} />
         </button>
@@ -105,8 +108,9 @@ export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPane
 
       <div className="wl-panel-body">
         <dl className="wl-panel-facts">
-          <div><dt>ID estudio</dt><dd>{study.caseId}</dd></div>
-          <div><dt>Paciente</dt><dd>{displaySubjectRef(study.subjectRef)}</dd></div>
+              <div><dt>Paciente</dt><dd>{study.patientName || displayOptionalSubjectRef(study.patientCode || study.subjectRef)}</dd></div>
+              {study.patientName && study.patientCode ? <div><dt>Código</dt><dd>{study.patientCode}</dd></div> : null}
+              {study.ageAtStudy !== null && study.ageAtStudy !== undefined ? <div><dt>Edad al estudio</dt><dd>{study.ageAtStudy} años</dd></div> : null}
           <div><dt>Fecha</dt><dd>{displayStudyDate(study.studyDate)}</dd></div>
           <div><dt>Modalidad</dt><dd>{displayModality(study.modality)}</dd></div>
           {study.description ? <div><dt>Descripción</dt><dd>{study.description}</dd></div> : null}
@@ -118,15 +122,18 @@ export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPane
         </div>
 
         <section className="wl-panel-section">
-          <h3>Revisión</h3>
+          <h3>Revisión profesional</h3>
           {state === "loading" ? <p className="wl-panel-note" role="status">Consultando el estudio…</p> : null}
           {state === "failed" ? <p className="wl-panel-note">No se pudo consultar el detalle del estudio.</p> : null}
           {state === "ready" ? (
             <dl className="wl-panel-facts">
               <div><dt>Estado</dt><dd>{displayReviewStatus(review?.status ?? study.reviewStatus)}</dd></div>
-              <div><dt>Revisor</dt><dd>{review?.reviewer?.trim() ? review.reviewer : "Sin revisor asignado"}</dd></div>
-              <div><dt>Última revisión</dt><dd>{review?.reviewedAt?.trim() ? new Date(review.reviewedAt).toLocaleString("es-AR") : "Sin revisiones"}</dd></div>
+              {review?.reviewer?.trim() ? <div><dt>Profesional</dt><dd>{review.reviewer}</dd></div> : null}
+              {review?.reviewedAt?.trim() ? <div><dt>Fecha de aceptación</dt><dd>{new Date(review.reviewedAt).toLocaleString("es-AR")}</dd></div> : null}
             </dl>
+          ) : null}
+          {state === "ready" && (review?.status === "aceptado" || study.reviewStatus === "aceptado") ? (
+            <p className="wl-panel-accepted" role="status">Informe aceptado por el profesional.</p>
           ) : null}
         </section>
 

@@ -45,9 +45,9 @@ test("el placeholder ya no parece un dataset técnico", () => {
  * una línea qué se hace ahí.
  */
 test("el flujo explica paciente, estudio, imágenes y análisis", () => {
-  assert.match(drawer, /Seleccioná el paciente, completá los datos del estudio, cargá las imágenes y ejecutá el análisis/);
-  assert.match(drawer, /<h3 className="wl-section-title">Datos del estudio<\/h3>/);
-  assert.match(drawer, /<h3 className="wl-section-title">Imágenes<\/h3>/);
+  assert.match(drawer, /Ingresá el ID del estudio, cargá las imágenes y, si corresponde, asociá un paciente para el seguimiento/);
+  assert.match(drawer, /<h2 className="ns-card-title" id="new-study-data-title">Datos del estudio<\/h2>/);
+  assert.match(drawer, /<h2 className="ns-card-title" id="new-study-images-title">Imágenes<\/h2>/);
   assert.doesNotMatch(drawer, /aria-hidden="true">0\d<\/span>/);
 });
 
@@ -61,8 +61,16 @@ test("el análisis muestra progreso honesto sin porcentaje inventado", () => {
 
 test("doble submit queda bloqueado de forma síncrona", () => {
   assert.match(drawer, /runInFlightRef\.current/);
-  assert.match(drawer, /if \(!sagittalReady \|\| running \|\| runInFlightRef\.current\) return/);
-  assert.match(drawer, /disabled=\{!sagittalReady \|\| running\}/);
+  assert.match(drawer, /if \(!sagittalReady \|\| uploading \|\| running \|\| runInFlightRef\.current\) return/);
+  assert.match(drawer, /disabled=\{Boolean\(analyzeBlocker\) \|\| running\}/);
+});
+
+test("cambiar el ID invalida las cargas previas y descarta respuestas obsoletas", () => {
+  assert.match(drawer, /caseIdGenerationRef\.current \+= 1/);
+  assert.match(drawer, /setUploads\(emptyUploads\)/);
+  assert.match(drawer, /setStudyUpload\(\{ status: "idle" \}\)/);
+  assert.match(drawer, /generation !== caseIdGenerationRef\.current/);
+  assert.match(drawer, /requestId !== planeUploadRequestRef\.current\[plane\]/);
 });
 
 test("éxito completo abre automáticamente el Study creado con subjectRef", () => {
@@ -93,6 +101,14 @@ test("el estudio se crea con el subjectRef elegido en un único request", () => 
 test("Study Review conserva la ruta funcional por caseId", () => {
   assert.match(routes, /return `\$\{ROUTES\.study\}\/\$\{encodeURIComponent\(caseId\)\}`/);
   assert.match(routes, /study: "\/estudio"/);
+});
+
+test("el drawer gestiona foco de diálogo y mantiene el pie separado del scroll", () => {
+  assert.match(drawer, /previousActiveElementRef/);
+  assert.match(drawer, /backButtonRef\.current\?\.focus/);
+  assert.match(drawer, /aria-labelledby="new-analysis-title"/);
+  const css = readFileSync("src/features/worklist/worklist.css", "utf8");
+  assert.match(css, /\.wl-drawer-foot\s*\{[\s\S]*?flex: none;/);
 });
 
 console.log(`UI-PR2 study creation tests: ${count} passed`);

@@ -214,8 +214,8 @@ async function installBackendMocks(page, { failRun = false } = {}) {
 }
 
 async function openPreparedDrawer(page) {
-  await page.getByRole("heading", { name: "Lista de estudios" }).waitFor({ timeout: 10_000 });
-  await page.getByRole("button", { name: /Nuevo análisis/ }).click();
+  await page.getByRole("heading", { name: "Estudios" }).waitFor({ timeout: 10_000 });
+  await page.getByRole("button", { name: /Cargar estudio/ }).click();
   // Stage 86: el paciente/subjectRef es opcional -- este flujo prueba el caso "sin
   // asociar" a propósito, para confirmar que ya no depende de una selección previa.
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);
@@ -250,10 +250,10 @@ async function runSuccess(browser) {
   await seedSession(page);
   assertTruthy(await page.getByRole("columnheader", { name: "Modelo" }).count() === 0, "Worklist no debe mostrar Modelo");
   await openPreparedDrawer(page);
-  await page.getByLabel("Paciente nuevo").check();
+  await page.getByLabel("Nueva referencia").check();
   assertTruthy(await page.getByText("Referencia interna del estudio (opcional)").count() === 1, "debe mostrar el copy operativo");
   assertTruthy(await page.getByPlaceholder("EST-2026-001").count() === 1, "debe mostrar el placeholder operativo");
-  await page.getByLabel("Paciente existente").check();
+  await page.getByLabel("Referencia existente").check();
   for (const [width, height] of [[1920, 1080], [1366, 768], [390, 844]]) await capture(page, "new-analysis", width, height);
 
   const analyze = page.getByRole("button", { name: "Analizar" });

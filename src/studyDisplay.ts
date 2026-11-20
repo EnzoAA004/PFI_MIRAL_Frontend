@@ -5,6 +5,10 @@ export function displaySubjectRef(value: string | null | undefined) {
   return value && value.trim() ? value : "Referencia de paciente no informada";
 }
 
+export function displayOptionalSubjectRef(value: string | null | undefined) {
+  return value && value.trim() ? value : "Sin paciente asociado";
+}
+
 export function displayStudyDate(value: string | null | undefined) {
   return value && value.trim() ? value : "Fecha no informada";
 }

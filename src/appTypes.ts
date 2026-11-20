@@ -12,10 +12,18 @@ export type HistoryTarget =
 
 export type StudyMetadataInput = {
   subjectRef: string | null;
+  patientId?: string | null;
   studyDate: string | null;
   modality: string | null;
   description: string | null;
   reviewPriority: "low" | "medium" | "high";
+  ageAtStudy?: number | null;
+  ageProvenance?: "calculated" | "reported" | "imported" | "unknown" | null;
+  clinicalReason?: string | null;
+  symptoms?: string | null;
+  symptomDuration?: string | null;
+  relevantHistory?: string | null;
+  contextVersion?: string | null;
 };
 
 export type PipelineRunRequest = {
@@ -393,6 +401,9 @@ export type StudyRow = {
   patientId?: string | null;
   plane?: Plane | null;
   runId?: string | null;
+  patientCode?: string | null;
+  patientName?: string | null;
+  ageAtStudy?: number | null;
 };
 
 export type StudyRun = {

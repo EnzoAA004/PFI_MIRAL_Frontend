@@ -52,8 +52,8 @@ test("Worklist usa el page header operativo reutilizable", () => {
  * el texto decorativo que lo acompañaba.
  */
 test("el header identifica la pantalla y ofrece la acción primaria", () => {
-  assert.match(worklist, /title="Lista de estudios"/);
-  assert.match(worklist, /Nuevo análisis/);
+  assert.match(worklist, /title="Estudios"/);
+  assert.match(worklist, /Cargar estudio/);
   assert.doesNotMatch(worklist, /eyebrow=/);
 });
 

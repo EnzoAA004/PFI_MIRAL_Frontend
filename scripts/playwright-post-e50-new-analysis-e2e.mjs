@@ -74,21 +74,21 @@ async function main() {
   console.log("ok 1 - la lista de trabajo abre contra el Backend real");
 
   // 2. "Nuevo análisis" abre el drawer.
-  await page.getByRole("button", { name: /Nuevo análisis/ }).click();
-  await page.locator('.wl-drawer[aria-label="Nuevo análisis"]').waitFor({ state: "visible", timeout: 10000 });
-  console.log("ok 2 - el drawer 'Nuevo análisis' abre");
+  await page.getByRole("button", { name: /Cargar estudio/ }).click();
+  await page.locator('.wl-drawer[role="dialog"]').waitFor({ state: "visible", timeout: 10000 });
+  console.log("ok 2 - el drawer 'Cargar y analizar estudio' abre");
 
   // 3. El selector de paciente carga subjects reales desde GET /api/subjects (nunca /api/patients).
-  await page.waitForSelector("text=Paciente existente ·", { timeout: 10000 });
+  await page.waitForSelector("text=Referencia existente ·", { timeout: 10000 });
   const drawerText = await page.locator(".wl-drawer").innerText();
-  assertTruthy(drawerText.includes("Paciente existente ·"), "el selector no mostró ningún subject existente");
+  assertTruthy(drawerText.includes("Referencia existente ·"), "el selector no mostró ninguna referencia existente");
   assertTruthy(!drawerText.includes("PAT-86-A") && !drawerText.includes("PAT-86-B") && !drawerText.includes("PAT-86-C"), "el subjectRef crudo se imprimió en pantalla (86-F)");
   console.log("ok 3 - el selector muestra subjects reales con etiquetas seguras, sin subjectRef crudo");
 
   // 4. Seleccionar un paciente existente (el de 3 estudios, PAT-86-A).
   await page.getByRole("button", { name: /3 estudios/ }).click();
-  await page.waitForSelector("text=Paciente seleccionado", { timeout: 10000 });
-  console.log("ok 4 - seleccionar un paciente existente muestra 'Paciente seleccionado'");
+  await page.waitForSelector("text=Referencia asociada", { timeout: 10000 });
+  console.log("ok 4 - seleccionar una referencia existente muestra 'Referencia asociada'");
 
   // 5. Cambiar de paciente vuelve al selector (sin llamar a ningún endpoint de asociación).
   await page.getByRole("button", { name: "Cambiar", exact: true }).click();
@@ -96,10 +96,10 @@ async function main() {
   console.log("ok 5 - 'Cambiar' vuelve al selector");
 
   // 6. Modo "Paciente nuevo" permite declarar un subjectRef manual (86-E opción A).
-  await page.getByLabel("Paciente nuevo").check();
+  await page.getByLabel("Nueva referencia").check();
   await page.waitForSelector("text=Referencia interna del estudio (opcional)", { timeout: 10000 });
-  console.log("ok 6 - el modo 'Paciente nuevo' está disponible para declarar un subjectRef manual");
-  await page.getByLabel("Paciente existente").check();
+  console.log("ok 6 - el modo 'Nueva referencia' está disponible para declarar un subjectRef manual");
+  await page.getByLabel("Referencia existente").check();
 
   // 7. Un caseId nuevo se puede escribir sin bloquear el formulario (subject sigue opcional, 86-N).
   await page.getByPlaceholder("CASE-XXXX").fill("CASE-86-E2E-PROBE");

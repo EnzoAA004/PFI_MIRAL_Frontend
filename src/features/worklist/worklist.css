@@ -27,6 +27,29 @@
     gap: var(--sp-2);
   }
 
+  .wl-status-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    color: var(--text-muted);
+    font-size: var(--fs-micro);
+  }
+
+  .wl-status-filter select {
+    height: var(--control-h);
+    padding: 0 var(--sp-2);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 4px);
+    color: var(--text);
+    font: inherit;
+  }
+
+  .wl-status-filter select:focus-visible {
+    outline: 2px solid var(--clinical-accent);
+    outline-offset: 1px;
+  }
+
   .wl-search {
     display: flex;
     align-items: center;
@@ -477,17 +500,22 @@
     font-weight: var(--fw-medium);
   }
 
-  @media (max-width: 900px) {
+@media (max-width: 900px) {
 
     .wl-actions { width: 100%; }
     .wl-search { flex: 1; min-width: 0; }
+    .wl-status-filter { flex: 1; }
+    .wl-status-filter select { flex: 1; min-width: 0; }
   }
 
   @media (max-width: 700px) {
     .wl { gap: var(--sp-3); }
     .wl-actions { align-items: stretch; flex-direction: column; }
     .wl-search,
-    .wl-primary { min-width: 0; width: 100%; }
+    .wl-primary,
+    .wl-status-filter,
+    .wl-filters-toggle { min-width: 0; width: 100%; }
+    .wl-status-filter { justify-content: space-between; }
 
     .wl-table-wrap {
       background: transparent;
@@ -574,6 +602,13 @@
   }
 
   .wl-drawer-head h2 { font-size: var(--fs-body); font-weight: var(--fw-semibold); margin: 0; }
+
+  .wl-drawer-close:focus-visible,
+  .wl-drawer-cancel:focus-visible,
+  .wl-drawer-run:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
 
   .wl-drawer-close {
     background: transparent;
@@ -938,6 +973,7 @@
   }
 
   .wl-drawer-foot {
+    flex: none;
     display: flex;
     justify-content: flex-end;
     gap: var(--sp-2);
@@ -1135,6 +1171,14 @@
     color: var(--text-muted);
   }
 
+  .wl-panel-case-id {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--fs-micro);
+  }
+
   .wl-panel-close {
     display: grid;
     place-items: center;
@@ -1179,6 +1223,13 @@
     font-size: var(--fs-small);
     font-variant-numeric: tabular-nums;
     word-break: break-word;
+  }
+
+  .wl-panel-accepted {
+    margin: 0;
+    color: var(--success);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-semibold);
   }
 
   .wl-panel-badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
@@ -1370,4 +1421,133 @@
     padding-top: var(--sp-2);
     background: var(--operations-canvas, var(--bg-app));
   }
+}
+
+/* Nuevo estudio: vista dedicada. Todo lo de abajo cuelga de .wl-new-study(-page) o
+   lleva prefijo ns-, así que no toca el drawer ni otras pantallas.
+
+   Estructura: encabezado + .ns-layout con dos columnas (.ns-col) independientes,
+   cada una con su propio flujo vertical. Antes los bloques eran hijos directos de una
+   grilla de dos columnas y solo declaraban grid-column: las filas se compartían, y
+   el alto del contexto clínico estiraba la fila de "Datos del estudio" y dejaba el
+   hueco entre título y contenido. Con dos columnas flex no hay filas compartidas. */
+.wl-new-study-page {
+  min-height: 100%;
+  padding: var(--sp-6) clamp(var(--sp-4), 4vw, var(--sp-8)) 0;
+}
+.wl-secondary-line { display: block; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--fs-micro); margin-top: 2px; }
+.wl-new-study {
+  width: min(1200px, 100%);
+  min-height: calc(100vh - 64px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+.wl-new-study .ns-head {
+  display: grid;
+  gap: var(--sp-1);
+  justify-content: stretch;
+  padding: 0 0 var(--sp-4);
+  border-bottom: 0;
+}
+.wl-new-study .ns-head h2 { margin: 0; font-size: var(--fs-h2, 22px); font-weight: var(--fw-semibold); }
+.ns-head-desc { margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
+.ns-back { justify-self: start; border: 0; background: transparent; color: var(--text-muted); padding: 2px 0; font: inherit; font-size: var(--fs-small); cursor: pointer; }
+.ns-back:hover:not(:disabled) { color: var(--primary); }
+.ns-back:disabled { cursor: not-allowed; opacity: .5; }
+.ns-back:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+
+.wl-new-study .wl-drawer-body { display: block; flex: 1; overflow: visible; padding: 0 0 var(--sp-6); }
+.ns-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
+.ns-col { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+
+.ns-card, .ns-patient-block, .ns-selected-patient {
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: var(--sp-4);
+  box-shadow: var(--shadow-sm);
+}
+.ns-card-title, .ns-section-heading h2 { margin: 0; font-size: var(--fs-body); font-weight: var(--fw-semibold); color: var(--text); }
+.ns-section-heading { display: grid; gap: var(--sp-1); }
+.ns-section-heading p, .ns-help, .ns-muted { margin: 0; color: var(--text-muted); font-size: var(--fs-micro); line-height: 1.45; }
+
+/* Controles: una sola receta de etiqueta, altura y tipografía para todos. */
+.wl-new-study .wl-field,
+.ns-patient-search label,
+.ns-patient-create label { display: flex; flex-direction: column; gap: 4px; margin: 0; font-size: var(--fs-micro); color: var(--text-muted); }
+.wl-new-study .wl-field > span { font-size: var(--fs-micro); color: var(--text-muted); }
+.wl-new-study input:not([type="file"]):not([type="radio"]):not([type="checkbox"]),
+.wl-new-study select,
+.wl-new-study textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+  height: auto;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: var(--fs-small);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+.wl-new-study input:disabled:not([type="file"]), .wl-new-study select:disabled, .wl-new-study textarea:disabled { opacity: .6; cursor: not-allowed; }
+.wl-new-study textarea { min-height: 76px; resize: vertical; }
+.ns-two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); align-items: start; }
+.ns-optional { color: var(--text-muted); }
+.ns-error { color: var(--danger); font-size: var(--fs-micro); margin: 0; }
+.ns-context-warning { margin: 0; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--warning); border-radius: 6px; font-size: var(--fs-micro); }
+
+/* Paciente */
+.ns-patient-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.ns-patient-actions button { min-height: 36px; border: 1px solid var(--border-subtle); background: var(--surface); color: var(--text); border-radius: 6px; padding: 0 12px; font: inherit; font-size: var(--fs-small); cursor: pointer; }
+.ns-patient-actions button.is-active { border-color: var(--primary); color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.ns-patient-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.ns-patient-search, .ns-patient-create { display: grid; gap: var(--sp-3); }
+.ns-patient-search p, .ns-patient-create p { margin: 0; }
+.ns-patient-search ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ns-patient-search li button { width: 100%; min-height: 36px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border-subtle); background: var(--surface); color: var(--text); padding: 0 10px; border-radius: 6px; font: inherit; font-size: var(--fs-small); text-align: left; cursor: pointer; }
+.ns-patient-search li span, .ns-selected-patient span { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--fs-micro); }
+.ns-selected-patient { flex-direction: row; justify-content: space-between; align-items: center; border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--surface)); }
+.ns-selected-patient div { display: grid; gap: 4px; }
+.ns-selected-patient button, .ns-primary-small { min-height: 36px; border: 0; border-radius: 6px; background: var(--primary); color: #fff; padding: 0 14px; font: inherit; font-size: var(--fs-small); cursor: pointer; }
+.ns-primary-small { align-self: flex-start; }
+.ns-patient-actions button:focus-visible, .ns-patient-search li button:focus-visible, .ns-selected-patient button:focus-visible, .ns-primary-small:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Contexto clínico: edad siempre visible; los textos largos van plegados. */
+.ns-clinical-details { border: 1px solid var(--border-subtle); border-radius: 8px; }
+.ns-clinical-details > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 40px; padding: 0 var(--sp-3); cursor: pointer; font-size: var(--fs-small); font-weight: var(--fw-semibold); }
+.ns-clinical-details > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 8px; }
+.ns-clinical-details > summary em { margin-left: auto; font-style: normal; font-weight: 400; font-size: var(--fs-micro); color: var(--text-muted); }
+.ns-clinical-details > summary em.is-filled { color: var(--success); }
+.ns-clinical-fields { display: flex; flex-direction: column; gap: var(--sp-3); padding: 0 var(--sp-3) var(--sp-3); }
+
+/* Imágenes: el ZIP es la acción principal. El input real sigue en el DOM (accesible
+   por teclado y lector de pantalla); la etiqueta es lo que se ve como botón. */
+.wl-new-study .wl-upload { border: 1px solid var(--border-subtle); border-radius: 8px; padding: var(--sp-3); }
+.ns-zip { border-style: dashed; }
+.ns-file-button { position: relative; display: inline-flex; align-items: center; justify-content: center; align-self: flex-start; min-height: 38px; padding: 0 18px; border-radius: 6px; background: var(--primary); color: #fff; font-size: var(--fs-small); font-weight: var(--fw-semibold); cursor: pointer; }
+.ns-file-button.is-disabled { opacity: .5; cursor: not-allowed; }
+.ns-file-button:focus-within { outline: 2px solid var(--primary); outline-offset: 3px; }
+.ns-file-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
+.ns-blocker { margin: 0; padding: var(--sp-2) var(--sp-3); border-radius: 6px; font-size: var(--fs-micro); color: var(--text); background: color-mix(in srgb, var(--warning) 14%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent); }
+
+/* Pie de acciones: pegado al borde inferior mientras se hace scroll, dentro del flujo
+   (no superpuesto), así que no tapa campos ni mensajes. */
+.wl-new-study .ns-foot { position: sticky; bottom: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: 0 calc(-1 * clamp(var(--sp-4), 4vw, var(--sp-8))); padding: var(--sp-3) clamp(var(--sp-4), 4vw, var(--sp-8)); background: var(--surface); border-top: 1px solid var(--border-subtle); box-shadow: 0 -6px 16px rgb(0 0 0 / .06); }
+.ns-foot-hint { margin: 0; font-size: var(--fs-small); color: var(--text-muted); }
+.ns-foot-actions { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; }
+
+@media (max-width: 900px) {
+  .wl-new-study-page { padding: var(--sp-4) var(--sp-4) 0; }
+  .ns-layout { grid-template-columns: 1fr; }
+  .ns-two-fields { grid-template-columns: 1fr; }
+  .wl-new-study .ns-foot { margin: 0 calc(-1 * var(--sp-4)); padding: var(--sp-3) var(--sp-4); flex-direction: column; align-items: stretch; }
+  .ns-foot-actions { margin-left: 0; justify-content: flex-end; }
 }

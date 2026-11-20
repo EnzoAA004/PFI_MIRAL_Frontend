@@ -128,7 +128,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   const errors = await installBackendMocks(page);
   await seedSession(page);
-  await page.getByRole("heading", { name: "Lista de estudios" }).waitFor({ timeout: 10_000 });
+  await page.getByRole("heading", { name: "Estudios" }).waitFor({ timeout: 10_000 });
   assertTruthy(await page.getByText("CASE-023").count() === 1, "debe mostrar estudios persistidos");
   assertTruthy(await page.locator(".study-status-pendiente").count() === 4, "debe mostrar estado visible para cada estudio pendiente");
 

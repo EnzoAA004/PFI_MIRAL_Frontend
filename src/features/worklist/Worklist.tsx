@@ -4,7 +4,7 @@ import { SelectedStudyPanel } from "./SelectedStudyPanel";
 import { ChevronDown, ChevronUp, ChevronsUpDown, Plus, Search, SlidersHorizontal } from "lucide-react";
 import type { Priority, ReviewStatus, StudyRow } from "../../appTypes";
 import { displayModality, displayReviewStatus } from "../../clinicalDisplay";
-import { displayStudyDate, displaySubjectRef } from "../../studyDisplay";
+import { displayOptionalSubjectRef, displayStudyDate } from "../../studyDisplay";
 import {
   ANY,
   DATE_RANGES,
@@ -104,7 +104,7 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
    */
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filters, setFilters] = useState<WorklistFilters>(EMPTY_FILTERS);
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("studyDate");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -175,10 +175,23 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
     );
   }
 
+  /* Cargar un estudio reemplaza el contenido de la lista (la navegación lateral
+     queda): el formulario no se apila debajo de la tabla. Los filtros y la página
+     viven en este componente, así que al volver la lista está como se dejó. */
+  if (drawerOpen) {
+    return (
+      <NewAnalysisDrawer
+        onAnalysisReady={(caseId) => { setDrawerOpen(false); onAnalysisReady(caseId); }}
+        onClose={() => setDrawerOpen(false)}
+        dedicated
+      />
+    );
+  }
+
   return (
     <div className="wl">
       <OperationsPageHeader
-        title="Lista de estudios"
+        title="Estudios"
         meta={<span className="wl-total">{rows.length} de {studies.length}</span>}
         actions={(
           <div className="wl-actions">
@@ -192,6 +205,15 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
                 aria-label="Buscar estudios"
               />
             </label>
+            <label className="wl-status-filter">
+              <span>Estado</span>
+              <select value={filters.reviewStatus} onChange={(event) => updateFilter("reviewStatus", event.target.value)} aria-label="Filtrar por estado">
+                <option value={ANY}>Todos los estados</option>
+                {REVIEW_STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>{displayReviewStatus(status)} ({statusCounts[status]})</option>
+                ))}
+              </select>
+            </label>
             <button
               className={`wl-filters-toggle${filtersOpen ? " is-open" : ""}`}
               onClick={() => setFiltersOpen((open) => !open)}
@@ -200,10 +222,10 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
               aria-controls="wl-filterbar"
             >
               <SlidersHorizontal aria-hidden size={15} />
-              Filtros
+              Más filtros
               {activeCount ? <em>{activeCount}</em> : null}
             </button>
-            <button className="wl-primary" onClick={() => setDrawerOpen(true)} type="button"><Plus aria-hidden size={15} />Nuevo análisis</button>
+            <button className="wl-primary" onClick={() => setDrawerOpen(true)} type="button"><Plus aria-hidden size={15} />Cargar estudio</button>
           </div>
         )}
       />
@@ -221,15 +243,6 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
             <span>Fecha</span>
             <select value={filters.dateRange} onChange={(event) => updateFilter("dateRange", event.target.value as DateRangeId)}>
               {DATE_RANGES.map((range) => <option key={range.id} value={range.id}>{range.label}</option>)}
-            </select>
-          </label>
-          <label className="wl-filter">
-            <span>Estado</span>
-            <select value={filters.reviewStatus} onChange={(event) => updateFilter("reviewStatus", event.target.value)}>
-              <option value={ANY}>Todos</option>
-              {REVIEW_STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>{displayReviewStatus(status)} ({statusCounts[status]})</option>
-              ))}
             </select>
           </label>
           <label className="wl-filter">
@@ -296,7 +309,7 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
                       }}
                       aria-label={`Abrir estudio ${study.caseId}`}
                     >
-                      <td className="wl-num" data-label="Paciente">{displaySubjectRef(study.subjectRef)}</td>
+                      <td className="wl-num" data-label="Paciente">{study.patientName || displayOptionalSubjectRef(study.patientCode || study.subjectRef)}{study.patientName && study.patientCode ? <small className="wl-secondary-line">{study.patientCode}</small> : null}</td>
                       <td className="wl-case" data-label="ID estudio">
                         <span className="wl-case-id">{study.caseId}</span>
                         {study.description ? <span className="wl-case-desc">{study.description}</span> : null}
@@ -376,12 +389,6 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
         ) : null}
       </div>
 
-      {drawerOpen && (
-        <NewAnalysisDrawer
-          onAnalysisReady={(caseId) => { setDrawerOpen(false); onAnalysisReady(caseId); }}
-          onClose={() => setDrawerOpen(false)}
-        />
-      )}
     </div>
   );
 }
