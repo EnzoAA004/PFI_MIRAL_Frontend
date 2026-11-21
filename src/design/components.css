@@ -4483,3 +4483,23 @@ body,
 .registered-patients-ok { color: var(--ok, #2f9e6e); }
 .registered-patients-error { color: var(--danger, #d9534f); }
 
+.pre-level-row { align-items: center; display: flex; gap: var(--sp-2); }
+.pre-level-row .pre-level-head { flex: 1 1 auto; min-width: 0; }
+.pre-collapse {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-btn);
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+.pre-collapse:hover,
+.pre-collapse:focus-visible { background: rgba(127, 127, 127, 0.18); }
+.pre-collapse-arrow { display: inline-block; font-size: 18px; line-height: 1; transition: transform 0.15s ease; }
+.pre-collapse-arrow.is-collapsed { transform: rotate(-90deg); }
+

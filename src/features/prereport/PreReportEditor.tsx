@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { explainStale } from "./staleExplanation";
 import { VARIANT_LABEL, buildPreReportHtml, type DocumentMeta, type ExportVariant } from "./prereportHtml";
 import {
@@ -100,6 +100,21 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
   const [showChanges, setShowChanges] = useState(false);
   /** Qué variante del documento se previsualiza y exporta. Excluir los anexos no borra datos ni cambia lo guardado. */
   const [variant, setVariant] = useState<ExportVariant>("full");
+  /**
+   * La vista previa es un iframe con `srcDoc`: cada vez que cambia el HTML (tildar una casilla, editar un texto)
+   * el navegador carga un documento nuevo y vuelve arriba. Se recuerda la posición y se restaura al cargar.
+   */
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const previewScrollRef = useRef(0);
+  function restorePreviewScroll() {
+    const win = frameRef.current?.contentWindow;
+    if (!win) return;
+    const target = previewScrollRef.current;
+    win.scrollTo(0, target);
+    // Si el contenido todavía no tiene su alto final (imágenes), se reintenta en el cuadro siguiente.
+    win.requestAnimationFrame(() => { if (Math.abs(win.scrollY - target) > 1) win.scrollTo(0, target); });
+    win.addEventListener("scroll", () => { previewScrollRef.current = win.scrollY; }, { passive: true });
+  }
 
   const meta = useMemo<DocumentMeta | null>(() => (view ? {
     generatedAt: view.draft?.updatedAt ?? view.generatedAt,
@@ -258,7 +273,7 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
           <div className={`pre-body${previewOnly ? " is-preview" : ""}`}>
             {!previewOnly && <EditorColumn edits={edits} model={model} onChange={setEdits} imageStates={imageStates} />}
             <section aria-label="Vista previa del documento" className="pre-preview">
-              <iframe className="pre-frame" data-testid="prereport-frame" sandbox="allow-same-origin" srcDoc={html} title="Vista previa del preinforme" />
+              <iframe className="pre-frame" data-testid="prereport-frame" onLoad={restorePreviewScroll} ref={frameRef} sandbox="allow-same-origin" srcDoc={html} title="Vista previa del preinforme" />
             </section>
           </div>
         </>
@@ -278,6 +293,7 @@ function EditorColumn({
   onChange: (next: PreReportEdits) => void;
   imageStates: ReturnType<typeof usePreReport>["imageStates"];
 }) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const summary = documentSummary(model, edits);
   const missing = missingEvidence(model, edits);
   const research = model.findings.filter((f) => f.section === "investigacion");
@@ -311,6 +327,7 @@ function EditorColumn({
         const blocks = evidenceBlocks(model, edits, selection, { all: true });
         return (
           <section className="pre-card" data-testid={`pre-level-${entry.level}`} key={entry.level}>
+            <div className="pre-level-row">
             <label className="pre-level-head">
               <input aria-label={`Incluir la ficha de ${entry.level}`} checked={included} disabled={!entry.evaluated} onChange={(event) => onChange(withInclude(edits, levelKey(entry.level), event.target.checked))} type="checkbox" />
               <h3>{entry.level}</h3>
@@ -318,7 +335,21 @@ function EditorColumn({
               {entry.evaluated && findings.some((f) => f.positive && f.section === "principal") && <span className="pre-badge">Predicción para revisar</span>}
             </label>
             {included && (
-              <div className="pre-level-body">
+              <button
+                aria-controls={`pre-level-body-${entry.level}`}
+                aria-expanded={!collapsed[entry.level]}
+                aria-label={`${collapsed[entry.level] ? "Expandir" : "Contraer"} la ficha de ${entry.level}`}
+                className="pre-collapse"
+                onClick={() => setCollapsed((current) => ({ ...current, [entry.level]: !current[entry.level] }))}
+                title={collapsed[entry.level] ? "Expandir" : "Contraer"}
+                type="button"
+              >
+                <span aria-hidden className={`pre-collapse-arrow${collapsed[entry.level] ? " is-collapsed" : ""}`}>▾</span>
+              </button>
+            )}
+            </div>
+            {included && !collapsed[entry.level] && (
+              <div className="pre-level-body" id={`pre-level-body-${entry.level}`}>
                 {findings.length > 0 && (
                   <>
                     <h4>Predicciones del modelo</h4>

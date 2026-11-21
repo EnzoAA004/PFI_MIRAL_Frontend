@@ -7,6 +7,7 @@ import type { Plane } from "../../appTypes";
 import type { InputResponse, StudyIngestionResponse } from "../../contracts/inputApiTypes";
 import type { MultiplanarRunPayload } from "../../contracts/multiplanarHttpTypes";
 import { evaluateRealInferenceReadiness } from "../../inferenceReadiness";
+import { displayIngestionWarnings } from "./ingestionWarnings";
 import {
   emptyStudyMetadataDraft,
   normalizeStudyMetadataInput,
@@ -636,7 +637,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady, dedicated = false 
                   que el axial no sea T2 cuando el modelo axial fue entrenado sobre T2,
                   cambia lo que se puede concluir de la corrida.
                 */}
-                {studyUpload.study.warnings.map((warning) => (
+                {displayIngestionWarnings(studyUpload.study).map((warning) => (
                   <p className="wl-drawer-warning" key={warning}>{warning}</p>
                 ))}
               </div>
