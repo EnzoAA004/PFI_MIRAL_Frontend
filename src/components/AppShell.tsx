@@ -54,7 +54,7 @@ export function AppShell({ activeView, activeNavView, onChangeView, children, ai
           systemOnline={aiModuleAvailable && !degradedMode}
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((value) => !value)}
-          identity={<Header activeView={activeView} onChangeView={onChangeView} currentRunId={currentRunId} userName={userName} onLogout={onLogout} />}
+          identity={<Header activeView={activeView} onChangeView={onChangeView} currentRunId={currentRunId} userName={userName} isAdmin={isAdmin} onLogout={onLogout} />}
         />
       )}
       <main className="main-panel">

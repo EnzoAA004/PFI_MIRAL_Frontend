@@ -9,6 +9,7 @@ interface HeaderProps {
   onChangeView: (view: ViewKey) => void;
   currentRunId?: string;
   userName?: string;
+  isAdmin?: boolean;
   onLogout?: () => void;
 }
 
@@ -150,7 +151,7 @@ function renderTechnicalReportHtml(payload: any) {
 </html>`;
 }
 
-export function Header({ activeView, onChangeView, currentRunId, userName, onLogout }: HeaderProps) {
+export function Header({ activeView, onChangeView, currentRunId, userName, isAdmin = false, onLogout }: HeaderProps) {
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const showTechnicalReport = activeView === "review" && Boolean(currentRunId);
@@ -220,7 +221,7 @@ export function Header({ activeView, onChangeView, currentRunId, userName, onLog
         <div className="profile-menu" ref={profileMenuRef}>
           <button className="profile-chip" aria-expanded={profileMenuOpen} aria-haspopup="menu" onClick={() => setProfileMenuOpen((open) => !open)} type="button">
             <UserCircle aria-hidden size={28} />
-            <span><strong>{userName ?? "Revisor"}</strong><small>Revisor</small></span>
+            <span><strong>{userName ?? "Revisor"}</strong><small>{isAdmin ? "Administrador" : "Revisor"}</small></span>
             <ChevronDown aria-hidden size={16} />
           </button>
           {profileMenuOpen && (
