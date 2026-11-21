@@ -145,8 +145,10 @@ function renderTimeline(
                 <small className="patient-timeline-warnings">{productAnalysis.warnings.map(displayWarning).join(" · ")}</small>
               )}
             </div>
-            <ReviewBadge status={study.reviewStatus} />
-            <PriorityBadge priority={study.priority} />
+            <div className="patient-timeline-status">
+              <ReviewBadge status={study.reviewStatus} />
+              <PriorityBadge priority={study.priority} />
+            </div>
             <div className="patient-timeline-actions">
               {onOpenStudyReview && <button className="ghost-button" onClick={() => onOpenStudyReview(study.caseId)} type="button">Abrir estudio</button>}
               {onCompare && !isCurrent && currentCaseId && (

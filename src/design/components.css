@@ -638,10 +638,6 @@ textarea  {
 .patient-timeline-warnings  {
   color: var(--amber, #b45309);
 }
-.patient-timeline-actions  {
-  display: flex;
-  gap: 8px;
-}
 .patient-evolution-section  {
   display: grid;
   gap: 12px;
@@ -2849,11 +2845,19 @@ body {
 .patient-longitudinal-view {
   gap: var(--sp-4);
 }
+.patient-longitudinal-view .history-hero,
+.patient-longitudinal-view .panel-card {
+  background: var(--surface);
+}
 .patient-history-header {
   align-items: center;
   display: grid;
   gap: var(--sp-4);
-  grid-template-columns: auto minmax(180px, .7fr) minmax(360px, 1.6fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 2fr);
+}
+.patient-history-header .history-actions {
+  grid-column: 2 / -1;
+  justify-content: flex-end;
 }
 .patient-avatar {
   align-items: center;
@@ -2876,12 +2880,13 @@ body {
 .patient-header-grid {
   display: grid;
   gap: var(--sp-3);
-  grid-template-columns: repeat(5, minmax(78px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
   margin: 0;
 }
 .patient-header-grid div {
   display: grid;
   gap: var(--sp-1);
+  overflow-wrap: anywhere;
 }
 .patient-header-grid dt {
   color: var(--text-muted);
@@ -2894,16 +2899,19 @@ body {
   margin: 0;
 }
 .patient-overview-grid {
+  align-items: start;
   display: grid;
   gap: var(--sp-4);
-  grid-template-columns: minmax(280px, .88fr) minmax(520px, 1.55fr) minmax(260px, .82fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
 }
-.patient-trends-panel,
-.longitudinal-measurements-table {
-  grid-column: span 1;
+.patient-overview-grid > .panel-card:first-child {
+  grid-row: 1 / span 3;
 }
-.patient-overview-grid > .panel-card:nth-child(3) {
+.patient-overview-grid > .panel-card:not(:first-child) {
   grid-column: 2;
+}
+.patient-longitudinal-view .history-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 .honest-empty-state {
   align-content: center;
@@ -2918,7 +2926,25 @@ body {
   margin-top: var(--sp-1);
 }
 .patient-timeline article {
-  grid-template-columns: auto 1fr auto auto;
+  align-items: start;
+  grid-template-columns: 12px minmax(0, 1fr);
+}
+.patient-timeline article > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.patient-timeline article small {
+  display: block;
+}
+.patient-timeline .timeline-dot {
+  margin-top: var(--sp-1);
+}
+.patient-timeline-status,
+.patient-timeline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  grid-column: 2;
 }
 .trend-card figcaption {
   align-items: center;
@@ -3176,11 +3202,17 @@ body {
     grid-column: 1 / -1;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .patient-history-header,
-  .patient-overview-grid {
-    grid-template-columns: 1fr;
+  .patient-history-header {
+    grid-template-columns: auto minmax(0, 1fr);
   }
-  .patient-overview-grid > .panel-card:nth-child(3),
+  .patient-history-header :is(.patient-header-grid, .history-actions) {
+    grid-column: 1 / -1;
+  }
+  .patient-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .patient-overview-grid > .panel-card:first-child,
+  .patient-overview-grid > .panel-card:not(:first-child),
   .patient-side-stack {
     grid-column: auto;
     grid-row: auto;
