@@ -1259,7 +1259,7 @@ body {
   border:1px solid var(--surface-border);
   box-shadow:var(--surface-shadow)}
 .panel-card, .page-heading, .history-hero, .metric-card {
-  background:rgba(255, 255, 255, .96)}
+  background:color-mix(in srgb, var(--surface) 96%, transparent)}
 .panel-card {
   transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease}
 .panel-card:hover {
