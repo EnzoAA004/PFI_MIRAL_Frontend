@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ApiError } from "../api";
+import { ApiError, LOCAL_EVALUATION } from "../api";
 import { createDemoDoctorSession, loginDoctor, registerDoctor, verifyLogin, verifyRegistration } from "../authClient";
 import type { AuthPendingResponse, AuthSession, RegisterRequest } from "../appTypes";
 
@@ -40,6 +40,8 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
   const [error, setError] = useState("");
   /** Mientras se envía el correo con el código, y los segundos en que se muestra la confirmación antes de pasar a la pantalla del código. */
   const [sendingCode, setSendingCode] = useState(false);
+  /** Solo versión local: correo recién registrado, a la espera de que el administrador lo apruebe. */
+  const [registeredEmail, setRegisteredEmail] = useState("");
 
   function updateField(key: keyof RegisterRequest, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -60,6 +62,14 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
       }
       if (!response.challengeId) {
         setMessage(response.message ?? "Solicitud recibida. Revisá el estado de la cuenta profesional.");
+        return;
+      }
+      if (LOCAL_EVALUATION && mode === "register" && response.channel === "email-demo" && !response.devVerificationCode) {
+        // Versión local: no hay código por correo. La cuenta queda creada y la aprueba el administrador.
+        setRegisteredEmail(form.email);
+        setForm((current) => ({ ...current, password: "" }));
+        setMode("login");
+        setError("");
         return;
       }
       if (response.channel === "email") {
@@ -131,6 +141,27 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
           <button className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setChallengeState(null); }} type="button">Ingresar</button>
           <button className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setChallengeState(null); }} type="button">Registro</button>
         </div>
+        {LOCAL_EVALUATION && registeredEmail && mode === "login" && !challengeState && (
+          <div className="verification-panel local-guide" role="status">
+            <strong>Cuenta creada: {registeredEmail}</strong>
+            <p>En esta versión local no hay verificación por correo. Un administrador tiene que habilitar tu cuenta:</p>
+            <ol>
+              <li>Abrí otra ventana del navegador en modo incógnito, en esta misma dirección.</li>
+              <li>Ahí ingresá como <b>administrador</b> con las credenciales que mostró <code>iniciar.ps1</code>.</li>
+              <li>En el menú <b>Profesionales</b>, buscá <b>{registeredEmail}</b> y tocá <b>Activar manualmente</b>.</li>
+              <li>Volvé a esta ventana, ingresá con tu correo y contraseña: ya vas a ver <b>Pacientes</b>.</li>
+            </ol>
+            <p>Si al ingresar te dice que la cuenta no está habilitada, el administrador todavía no la aprobó.</p>
+          </div>
+        )}
+        {LOCAL_EVALUATION && !registeredEmail && !challengeState && (
+          <div className="verification-panel local-guide" role="note">
+            <strong>Versión local de evaluación</strong>
+            {mode === "register"
+              ? <p>Completá tus datos y creá la cuenta. No se envía ningún código por correo: después un administrador la aprueba (te vamos a indicar cómo).</p>
+              : <p>Si ya tenés una cuenta aprobada, ingresá. Si sos el administrador, usá las credenciales que mostró <code>iniciar.ps1</code>. Para registrar un médico nuevo, usá la pestaña <b>Registro</b>.</p>}
+          </div>
+        )}
         {!challengeState ? (
           <div className="auth-form">
             {mode === "register" && (
@@ -143,7 +174,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
             )}
             <label>Correo profesional<input value={form.email} onChange={(event) => updateField("email", event.target.value)} /></label>
             <label>Contraseña<input type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} /></label>
-            <button className="primary-button" disabled={loading} onClick={() => void submit()} type="button">{sendingCode ? "Enviando código…" : loading ? "Procesando..." : mode === "register" ? "Crear cuenta y verificar" : "Ingresar"}</button>
+            <button className="primary-button" disabled={loading} onClick={() => void submit()} type="button">{sendingCode ? "Enviando código…" : loading ? "Procesando..." : mode === "register" ? (LOCAL_EVALUATION ? "Crear cuenta" : "Crear cuenta y verificar") : "Ingresar"}</button>
             {authDemoEnabled && <button className="ghost-button" disabled={loading} onClick={() => void startDemo()} type="button">Entrar con doctor demo</button>}
           </div>
         ) : (

@@ -4528,3 +4528,7 @@ body,
 .profile-change-panel p { margin: 0; }
 .profile-change-field { display: grid; gap: var(--sp-1); }
 
+
+.local-guide ol { margin: 8px 0 8px 18px; padding: 0; display: grid; gap: 4px; }
+.local-guide p, .local-guide li { color: var(--text); }
+.local-guide code { font-family: var(--font-mono, ui-monospace, monospace); }

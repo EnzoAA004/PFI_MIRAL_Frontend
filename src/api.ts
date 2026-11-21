@@ -12,11 +12,14 @@ declare global {
   interface Window {
     __PFI_CONFIG__?: {
       API_BASE_URL?: string;
+      /** true solo en el paquete Docker local para evaluadores: sin verificación por correo, aprobación directa del administrador. */
+      LOCAL_EVALUATION?: boolean;
     };
   }
 }
 
 const runtimeConfig = typeof window !== "undefined" ? window.__PFI_CONFIG__ : undefined;
+export const LOCAL_EVALUATION = runtimeConfig?.LOCAL_EVALUATION === true;
 export const API_BASE_URL = runtimeConfig?.API_BASE_URL || import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 // P10-C.1 §12: fail loudly (but not fatally) if the resolved backend origin
