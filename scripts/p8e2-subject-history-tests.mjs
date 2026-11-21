@@ -202,12 +202,20 @@ test("A subjectRef SPIDER-101 es válido y se normaliza en studyMetadata", () =>
     modality: "MRI",
     description: " RM lumbar sagital T2 ",
     reviewPriority: "medium",
-  })), JSON.stringify({
+    })), JSON.stringify({
     subjectRef: "SPIDER-101",
+    patientId: null,
     studyDate: "2026-07-26",
     modality: "MRI",
     description: "RM lumbar sagital T2",
     reviewPriority: "medium",
+    ageAtStudy: null,
+    ageProvenance: "unknown",
+    clinicalReason: null,
+    symptoms: null,
+    symptomDuration: null,
+    relevantHistory: null,
+    contextVersion: "pfi.study-context.v1",
   }));
 });
 
@@ -309,10 +317,11 @@ test("M PatientDetailView fue retirado (Stage 85 -- huerfano desde Stage 84, ver
   assert.ok(!existsSync(join(root, "src/components/PatientDetailView.tsx")));
 });
 
-test("N [actualizado Stage 86] patientApi.ts fue retirado -- Nuevo analisis tambien dejo de depender de /api/patients", () => {
-  assert.ok(!existsSync(join(root, "src/patientApi.ts")));
-  const patientsView = readFileSync(join(root, "src/components/PatientsView.tsx"), "utf8");
-  assert.doesNotMatch(patientsView, /from ["']\.\.\/patientApi["']/);
+test("N el flujo de contexto de paciente se limita al selector del nuevo estudio", () => {
+  assert.ok(existsSync(join(root, "src/patientApi.ts")));
+  const selector = readFileSync(join(root, "src/features/worklist/PatientContextSelector.tsx"), "utf8");
+  assert.match(selector, /searchPatients/);
+  assert.match(selector, /createPatient/);
 });
 
 test("O el endpoint legacy de subjects se conserva aislado", () => {

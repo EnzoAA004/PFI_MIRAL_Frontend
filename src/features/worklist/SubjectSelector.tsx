@@ -91,9 +91,9 @@ export function SubjectSelector({ disabled = false, value, onChange }: Props) {
   if (selectedExisting) {
     return (
       <section aria-live="polite" className="wl-patient-selected">
-        <span className="wl-patient-selected-label"><b aria-hidden="true">01</b> Paciente seleccionado</span>
+        <span className="wl-patient-selected-label"><b aria-hidden="true">01</b> Referencia asociada</span>
         <strong>
-          Paciente existente · {selectedExisting.studyCount === 1 ? "1 estudio" : `${selectedExisting.studyCount} estudios`} · Último: {displayStudyDate(selectedExisting.latestStudyDate)}
+          Referencia existente · {selectedExisting.studyCount === 1 ? "1 estudio" : `${selectedExisting.studyCount} estudios`} · Último: {displayStudyDate(selectedExisting.latestStudyDate)}
         </strong>
         <button disabled={disabled} onClick={clearSelection} type="button">Cambiar</button>
       </section>
@@ -103,8 +103,8 @@ export function SubjectSelector({ disabled = false, value, onChange }: Props) {
   if (mode === "new" && value) {
     return (
       <section aria-live="polite" className="wl-patient-selected">
-        <span className="wl-patient-selected-label"><b aria-hidden="true">01</b> Paciente seleccionado</span>
-        <strong>Paciente nuevo</strong>
+        <span className="wl-patient-selected-label"><b aria-hidden="true">01</b> Referencia asociada</span>
+        <strong>Nueva referencia de seguimiento</strong>
         <button disabled={disabled} onClick={clearSelection} type="button">Cambiar</button>
       </section>
     );
@@ -113,8 +113,8 @@ export function SubjectSelector({ disabled = false, value, onChange }: Props) {
   return (
     <section aria-labelledby="patient-section-title" className="wl-patient-selector">
       <div className="wl-patient-heading">
-        <strong id="patient-section-title">Paciente</strong>
-        <span>Opcional. Sin selección, el estudio queda sin paciente asociado.</span>
+        <strong id="patient-section-title">Asociación opcional</strong>
+        <span>Podés continuar sin asociar una referencia. Asociarla permite agrupar estudios para seguimiento.</span>
       </div>
 
       <div aria-label="Tipo de paciente" className="wl-patient-modes" role="radiogroup">
@@ -126,7 +126,7 @@ export function SubjectSelector({ disabled = false, value, onChange }: Props) {
             onChange={() => changeMode("existing")}
             type="radio"
           />
-          Paciente existente
+          Referencia existente
         </label>
         <label>
           <input
@@ -136,14 +136,14 @@ export function SubjectSelector({ disabled = false, value, onChange }: Props) {
             onChange={() => changeMode("new")}
             type="radio"
           />
-          Paciente nuevo
+          Nueva referencia
         </label>
       </div>
 
       {mode === "existing" ? (
         <div className="wl-patient-search">
           <label className="wl-field" htmlFor="subject-search-query">
-            <span>Buscar por caso</span>
+            <span>Buscar por caso asociado</span>
             <input
               autoComplete="off"
               disabled={disabled}
@@ -154,15 +154,15 @@ export function SubjectSelector({ disabled = false, value, onChange }: Props) {
             />
           </label>
           <div aria-live="polite" className="wl-patient-search-state">
-            {listState.status === "loading" && <p>Buscando pacientes…</p>}
-            {listState.status === "error" && <p className="wl-drawer-error">No se pudieron buscar pacientes. Reintentá.</p>}
-            {listState.status === "ready" && visibleSubjects.length === 0 && <p>No se encontraron pacientes.</p>}
+            {listState.status === "loading" && <p>Buscando referencias…</p>}
+            {listState.status === "error" && <p className="wl-drawer-error">No se pudieron buscar referencias. Reintentá.</p>}
+            {listState.status === "ready" && visibleSubjects.length === 0 && <p>No se encontraron referencias asociables.</p>}
             {listState.status === "ready" && visibleSubjects.length > 0 && (
-              <ul aria-label="Resultados de pacientes" className="wl-patient-results">
+                <ul aria-label="Resultados de referencias" className="wl-patient-results">
                 {visibleSubjects.map((subject) => (
                   <li key={subject.subjectRef}>
                     <button disabled={disabled} onClick={() => onChange(subject.subjectRef)} type="button">
-                      Paciente existente · {subject.studyCount === 1 ? "1 estudio" : `${subject.studyCount} estudios`} · Último: {displayStudyDate(subject.latestStudyDate)} · Caso: {subject.latestCaseId}
+                      Referencia existente · {subject.studyCount === 1 ? "1 estudio" : `${subject.studyCount} estudios`} · Último: {displayStudyDate(subject.latestStudyDate)} · Caso: {subject.latestCaseId}
                     </button>
                   </li>
                 ))}

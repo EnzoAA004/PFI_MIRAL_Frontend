@@ -52,8 +52,8 @@ test("Worklist usa el page header operativo reutilizable", () => {
  * el texto decorativo que lo acompañaba.
  */
 test("el header identifica la pantalla y ofrece la acción primaria", () => {
-  assert.match(worklist, /title="Lista de estudios"/);
-  assert.match(worklist, /Nuevo análisis/);
+  assert.match(worklist, /title="Estudios"/);
+  assert.match(worklist, /Cargar estudio/);
   assert.doesNotMatch(worklist, /eyebrow=/);
 });
 
@@ -93,9 +93,12 @@ test("seleccionar una fila abre el panel del estudio sin abrir la revisión", ()
   assert.match(worklist, /<SelectedStudyPanel/);
 });
 
-/* El panel no promete datos que el contrato de estudios no transporta. */
-test("el panel del estudio no inventa filiación ni derivador", () => {
-  assert.doesNotMatch(panel, /Accession|Médico solicitante|Centro derivador|<dt>Sexo|<dt>Edad/);
+/* El panel muestra sólo el contexto de paciente que el Backend autorizó y devolvió. */
+test("el panel presenta el perfil vinculado sin inventar metadatos de derivación", () => {
+  assert.match(panel, /study\.patientName/);
+  assert.match(panel, /study\.patientCode/);
+  assert.match(panel, /study\.ageAtStudy/);
+  assert.doesNotMatch(panel, /Accession|Médico solicitante|Centro derivador|<dt>Sexo/);
   assert.match(panel, /archiveSeries/);
 });
 

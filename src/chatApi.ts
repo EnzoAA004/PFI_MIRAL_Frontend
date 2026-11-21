@@ -68,6 +68,8 @@ export function parseChatResponse(value: unknown): ChatResponse {
     humanReviewRequired: requiredBoolean(raw.humanReviewRequired, "humanReviewRequired"),
     notClinicalDiagnosis: requiredBoolean(raw.notClinicalDiagnosis, "notClinicalDiagnosis"),
     contextSources: requiredStringArray(raw.contextSources),
+    contextVersion: nullableText(raw.contextVersion),
+    draftStatus: raw.draftStatus === "DRAFT_OUTDATED" || raw.draftStatus === "DRAFT_PENDING_REVIEW" ? raw.draftStatus : null,
   };
 }
 
@@ -82,6 +84,9 @@ function parseChatMessage(value: unknown): ChatMessage {
     model: nullableText(raw.model),
     provider: nullableText(raw.provider),
     promptVersion: nullableText(raw.promptVersion),
+    contextVersion: nullableText(raw.contextVersion),
+    outdated: raw.outdated === true,
+    draftStatus: raw.draftStatus === "DRAFT_OUTDATED" || raw.draftStatus === "DRAFT_PENDING_REVIEW" ? raw.draftStatus : null,
   };
 }
 

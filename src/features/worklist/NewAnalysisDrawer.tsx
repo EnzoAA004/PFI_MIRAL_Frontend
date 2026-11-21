@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { LoaderCircle } from "lucide-react";
+import { PatientContextSelector } from "./PatientContextSelector";
+import type { Patient } from "../../patientApi";
 import { BackendApiError, runMultiplanarAnalysis, uploadAiInput, uploadStudyArchive } from "../../multiplanarApi";
 import type { Plane } from "../../appTypes";
 import type { InputResponse, StudyIngestionResponse } from "../../contracts/inputApiTypes";
@@ -20,7 +22,6 @@ import {
   type ProductAnalysisState,
   type ProductFlowPhase,
 } from "./productAnalysisFlow";
-import { SubjectSelector } from "./SubjectSelector";
 
 /**
  * Carga de un estudio nuevo, como panel sobre la lista de trabajo.
@@ -86,6 +87,7 @@ type Props = {
   onClose: () => void;
   /** Se invoca con el caseId cuando la corrida terminó y el estudio ya es legible. */
   onAnalysisReady: (caseId: string) => void;
+  dedicated?: boolean;
 };
 
 function planeLabel(plane: Plane) {
@@ -95,6 +97,18 @@ function planeLabel(plane: Plane) {
 function hasAllowedExtension(fileName: string) {
   const lowered = fileName.toLowerCase();
   return allowedInputExtensions.some((extension) => lowered.endsWith(extension));
+}
+
+function ageOn(dateOfBirth: string | null, studyDate: string | null) {
+  if (!dateOfBirth || !studyDate) return null;
+  const birth = new Date(`${dateOfBirth}T00:00:00`);
+  const study = new Date(`${studyDate}T00:00:00`);
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(study.getTime()) || study < birth) return null;
+  let age = study.getFullYear() - birth.getFullYear();
+  const beforeBirthday = study.getMonth() < birth.getMonth()
+    || (study.getMonth() === birth.getMonth() && study.getDate() < birth.getDate());
+  if (beforeBirthday) age -= 1;
+  return age;
 }
 
 /**
@@ -146,10 +160,11 @@ function productSeriesLabel(status: ProductAnalysisState["series"]["sagittal_t1"
   return "Error";
 }
 
-export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
+export function NewAnalysisDrawer({ onClose, onAnalysisReady, dedicated = false }: Props) {
   const [caseId, setCaseId] = useState("");
   const [metadata, setMetadata] = useState<StudyMetadataDraft>(() => emptyStudyMetadataDraft());
   const [metadataError, setMetadataError] = useState("");
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [uploads, setUploads] = useState<Record<Plane, UploadState>>(emptyUploads);
   const [studyUpload, setStudyUpload] = useState<StudyUploadState>({ status: "idle" });
   /* La carga por plano queda plegada: es la salida para un archivo suelto de dataset. */
@@ -163,6 +178,12 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   const progressRef = useRef<HTMLElement | null>(null);
   const interactionLocked = running || analysisStage === "opening";
   const productRetryLock = useRef(false);
+  const caseIdGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+  const studyUploadRequestRef = useRef(0);
+  const planeUploadRequestRef = useRef<Record<Plane, number>>({ sagittal: 0, axial: 0 });
+  const backButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
   /*
    * Escape cierra el drawer. Es el equivalente por teclado del clic en el fondo, y lo
@@ -177,6 +198,23 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [interactionLocked, onClose]);
+
+  useEffect(() => {
+    previousActiveElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = window.requestAnimationFrame(() => backButtonRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(frame);
+      previousActiveElementRef.current?.focus();
+    };
+  }, []);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    caseIdGenerationRef.current += 1;
+    studyUploadRequestRef.current += 1;
+    planeUploadRequestRef.current.sagittal += 1;
+    planeUploadRequestRef.current.axial += 1;
+  }, []);
 
   useEffect(() => {
     if (analysisStage === "idle") return;
@@ -202,8 +240,38 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
    */
   const sagittalInputId = studyUpload.study?.sagittal?.inputId ?? uploads.sagittal.input?.inputId;
   const axialInputId = studyUpload.study?.axial?.inputId ?? uploads.axial.input?.inputId;
-  const sagittalReady = Boolean(normalizedCaseId && sagittalInputId);
+  const sagittalReady = Boolean(caseIdReady && sagittalInputId);
   const axialReady = Boolean(axialInputId);
+  const uploading = studyUpload.status === "uploading" || uploads.sagittal.status === "uploading" || uploads.axial.status === "uploading";
+  const uploadLocked = !studyIdentityReady || running;
+  /* Lo que bloquea la carga se dice junto a la carga, no solo en el campo de arriba. */
+  const uploadBlocker = !normalizedCaseId
+    ? "Para cargar las imágenes, primero ingresá el ID de caso en «Datos del estudio»."
+    : caseIdIssue
+      ? "Corregí el ID de caso para poder cargar las imágenes."
+      : "";
+  /* Y el botón principal explica qué falta mientras está deshabilitado. */
+  const analyzeBlocker = running
+    ? ""
+    : !normalizedCaseId
+      ? "Falta el ID de caso."
+      : caseIdIssue
+        ? "El ID de caso no es válido."
+        : uploading
+          ? "Esperá a que termine la carga de las imágenes."
+          : studyUpload.status === "uploaded" && !sagittalInputId
+            ? "El ZIP cargado no incluye una serie sagital."
+            : !sagittalInputId
+              ? "Falta cargar el ZIP del estudio (o un archivo sagital)."
+              : "";
+  const clinicalTextFilled = [metadata.clinicalReason, metadata.symptoms, metadata.symptomDuration, metadata.relevantHistory]
+    .some((value) => Boolean(value?.trim()));
+  const ageMismatch = Boolean(
+    selectedPatient?.dateOfBirth
+    && metadata.ageAtStudy !== null && metadata.ageAtStudy !== undefined && metadata.ageAtStudy !== ""
+    && ageOn(selectedPatient.dateOfBirth, metadata.studyDate) !== null
+    && Number(metadata.ageAtStudy) !== ageOn(selectedPatient.dateOfBirth, metadata.studyDate),
+  );
   const activeAnalysisStep = analysisStage === "idle" ? -1 : analysisSteps.findIndex((step) => step.id === analysisStage);
 
   function openCompletedStudy(caseIdToOpen: string) {
@@ -222,15 +290,20 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
       setStudyUpload({ fileName: file.name, status: "error", error: "El estudio completo se carga como .zip. Para un archivo suelto usá la carga por plano." });
       return;
     }
+    const generation = caseIdGenerationRef.current;
+    const requestId = studyUploadRequestRef.current + 1;
+    studyUploadRequestRef.current = requestId;
     setPersistedRun(null);
     setProductState(null);
     setAnalysisStage("idle");
     setStudyUpload({ fileName: file.name, status: "uploading" });
     try {
       const study = await uploadStudyArchive(file, normalizedCaseId);
+      if (!mountedRef.current || generation !== caseIdGenerationRef.current || requestId !== studyUploadRequestRef.current) return;
       setStudyUpload({ fileName: file.name, status: "uploaded", study });
       setMessage("");
     } catch (error) {
+      if (!mountedRef.current || generation !== caseIdGenerationRef.current || requestId !== studyUploadRequestRef.current) return;
       setStudyUpload({ fileName: file.name, status: "error", error: apiErrorMessage(error, "cargar el estudio") });
     }
   }
@@ -248,12 +321,17 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
       }));
       return;
     }
+    const generation = caseIdGenerationRef.current;
+    const requestId = planeUploadRequestRef.current[plane] + 1;
+    planeUploadRequestRef.current[plane] = requestId;
     setUploads((current) => ({ ...current, [plane]: { fileName: file.name, status: "uploading" } }));
     try {
       const input = await uploadAiInput(file, normalizedCaseId, plane);
+      if (!mountedRef.current || generation !== caseIdGenerationRef.current || requestId !== planeUploadRequestRef.current[plane]) return;
       setUploads((current) => ({ ...current, [plane]: { fileName: file.name, status: "uploaded", input } }));
       setMessage("");
     } catch (error) {
+      if (!mountedRef.current || generation !== caseIdGenerationRef.current || requestId !== planeUploadRequestRef.current[plane]) return;
       setUploads((current) => ({
         ...current,
         [plane]: { fileName: file.name, status: "error", error: apiErrorMessage(error, "cargar archivo") },
@@ -312,7 +390,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   }
 
   async function run() {
-    if (!sagittalReady || running || runInFlightRef.current) return;
+    if (!sagittalReady || uploading || running || runInFlightRef.current) return;
     const subjectError = validateSubjectRef(metadata.subjectRef);
     if (subjectError) {
       setMetadataError(subjectError);
@@ -385,7 +463,8 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
   return (
     // El fondo cierra el drawer al hacerle clic. Es una comodidad de mouse: el
     // equivalente por teclado es Escape, que se maneja arriba, mas el boton de cerrar.
-    <div className="wl-drawer-backdrop" role="presentation" onClick={() => { if (!interactionLocked) onClose(); }}>
+    /* eslint-disable-next-line jsx-a11y/click-events-have-key-events */
+    <div className={dedicated ? "wl-new-study-page" : "wl-drawer-backdrop"} role={dedicated ? undefined : "presentation"} onClick={() => { if (!dedicated && !interactionLocked) onClose(); }}>
       {/*
         El onClick del panel no hace nada propio: solo frena la propagacion para que un
         clic adentro no llegue al fondo y cierre el drawer. Es una preocupacion de mouse
@@ -393,96 +472,133 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
       */}
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
       <aside
-        aria-label="Nuevo análisis"
-        className="wl-drawer"
+        aria-labelledby="new-analysis-title"
+        className={`wl-drawer${dedicated ? " wl-new-study" : ""}`}
         onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        role={dedicated ? undefined : "dialog"}
+        aria-modal={dedicated ? undefined : "true"}
       >
-        <header className="wl-drawer-head">
-          <h2>Nuevo análisis</h2>
-          <button aria-label="Cerrar" className="wl-drawer-close" disabled={interactionLocked} onClick={onClose} type="button">×</button>
+        <header className="wl-drawer-head ns-head">
+          <button ref={backButtonRef} className="ns-back" disabled={interactionLocked} onClick={onClose} type="button">← Volver a estudios</button>
+          <h2 id="new-analysis-title">{dedicated ? "Nuevo estudio" : "Cargar y analizar estudio"}</h2>
+          <p className="ns-head-desc">Ingresá el ID del estudio, cargá las imágenes y, si corresponde, asociá un paciente para el seguimiento.</p>
         </header>
 
         <div className="wl-drawer-body">
-          <p className="wl-drawer-intro">
-            Seleccioná el paciente, completá los datos del estudio, cargá las imágenes y ejecutá el análisis.
-          </p>
-          <SubjectSelector
-            disabled={running || Boolean(persistedRun)}
-            onChange={(subjectRef) => {
-              setMetadata((current) => ({ ...current, subjectRef }));
-              setMetadataError("");
-            }}
-            value={metadata.subjectRef}
-          />
-
-          <h3 className="wl-section-title">Datos del estudio</h3>
-
-          <label className="wl-field">
-            <span>ID de caso de-identificado</span>
-            <input
-              onChange={(event) => {
-                setCaseId(event.target.value);
-                setPersistedRun(null);
-                setProductState(null);
-                setAnalysisStage("idle");
-              }}
-              placeholder="CASE-XXXX"
-              value={caseId}
-            />
-            {caseIdIssue
-              ? <em className="wl-field-error">{caseIdIssue}</em>
-              : <em>Letras, números, punto, guion, guion bajo o dos puntos.</em>}
-          </label>
-
-          <div className="wl-field-row">
-            <label className="wl-field">
-              <span>Fecha del estudio</span>
-              <input
-                onChange={(event) => setMetadata((current) => ({ ...current, studyDate: event.target.value }))}
-                type="date"
-                value={metadata.studyDate}
-              />
-            </label>
-            <label className="wl-field">
-              <span>Prioridad</span>
-              <select
-                onChange={(event) => setMetadata((current) => ({ ...current, reviewPriority: event.target.value as StudyMetadataDraft["reviewPriority"] }))}
-                value={metadata.reviewPriority}
-              >
-                <option value="low">Baja</option>
-                <option value="medium">Media</option>
-                <option value="high">Alta</option>
-              </select>
-            </label>
+          <div className="ns-layout">
+          <div className="ns-col">
+          <PatientContextSelector disabled={running || Boolean(persistedRun)} selected={selectedPatient} onSelect={(patient) => { setSelectedPatient(patient); setMetadata((current) => ({ ...current, patientId: patient?.id ?? "", subjectRef: patient?.patientReference ?? "" })); }} onContinueDeidentified={() => { setSelectedPatient(null); setMetadata((current) => ({ ...current, patientId: "", subjectRef: "" })); }} />
+          <section className="ns-card ns-clinical-context" aria-labelledby="new-study-context-title">
+            <div className="ns-section-heading">
+              <h2 id="new-study-context-title">Contexto clínico</h2>
+              <p>Opcional. Ayuda a interpretar el estudio y se usa solo como contexto, nunca como hallazgo. Puede enviarse al asistente de IA que redacta las respuestas y el informe.</p>
+            </div>
+            <div className="ns-two-fields">
+              <label className="wl-field"><span>Edad al estudio</span><input disabled={running} type="number" min="0" max="130" placeholder="No informada" value={metadata.ageAtStudy ?? ""} onChange={(event) => setMetadata((current) => ({ ...current, ageAtStudy: event.target.value }))} /></label>
+              <label className="wl-field"><span>Procedencia de la edad</span><select disabled={running} value={metadata.ageProvenance ?? "unknown"} onChange={(event) => setMetadata((current) => ({ ...current, ageProvenance: event.target.value as StudyMetadataDraft["ageProvenance"] }))}><option value="unknown">No informada</option><option value="reported">Informada al cargar</option><option value="calculated">Calculada por fecha</option><option value="imported">Importada</option></select></label>
+            </div>
+            {ageMismatch ? <p className="ns-context-warning" role="alert">La edad informada no coincide con la calculada a partir de la fecha de nacimiento del paciente. Se conservará la edad informada y su procedencia.</p> : null}
+            <details className="ns-clinical-details">
+              <summary>
+                <span>Detalles clínicos</span>
+                <em className={clinicalTextFilled ? "is-filled" : ""}>{clinicalTextFilled ? "Con información" : "Sin completar"}</em>
+              </summary>
+              <div className="ns-clinical-fields">
+                <label className="wl-field"><span>Motivo del estudio</span><textarea disabled={running} value={metadata.clinicalReason ?? ""} onChange={(event) => setMetadata((current) => ({ ...current, clinicalReason: event.target.value }))} placeholder="Opcional" /></label>
+                <label className="wl-field"><span>Síntomas</span><textarea disabled={running} value={metadata.symptoms ?? ""} onChange={(event) => setMetadata((current) => ({ ...current, symptoms: event.target.value }))} placeholder="Opcional" /></label>
+                <label className="wl-field"><span>Tiempo de evolución</span><input disabled={running} value={metadata.symptomDuration ?? ""} onChange={(event) => setMetadata((current) => ({ ...current, symptomDuration: event.target.value }))} placeholder="Opcional" /></label>
+                <label className="wl-field"><span>Antecedentes relevantes</span><textarea disabled={running} value={metadata.relevantHistory ?? ""} onChange={(event) => setMetadata((current) => ({ ...current, relevantHistory: event.target.value }))} placeholder="Opcional" /></label>
+              </div>
+            </details>
+          </section>
           </div>
 
-          <label className="wl-field">
-            <span>Descripción</span>
-            <input
-              maxLength={200}
-              onChange={(event) => setMetadata((current) => ({ ...current, description: event.target.value }))}
-              placeholder="RM lumbar sagital T2"
-              value={metadata.description}
-            />
-          </label>
+          <div className="ns-col">
+          <section className="ns-card ns-study-data" aria-labelledby="new-study-data-title">
+            <h2 className="ns-card-title" id="new-study-data-title">Datos del estudio</h2>
 
-          {metadataError && <p className="wl-drawer-error">{metadataError}</p>}
+            <label className="wl-field">
+              <span>ID de caso de-identificado</span>
+              <input
+                disabled={running}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  const hadLoadedInput = Boolean(studyUpload.fileName || Object.values(uploads).some((uploadState) => uploadState.fileName));
+                  caseIdGenerationRef.current += 1;
+                  setCaseId(nextValue);
+                  setUploads(emptyUploads);
+                  setStudyUpload({ status: "idle" });
+                  setPersistedRun(null);
+                  setProductState(null);
+                  setAnalysisStage("idle");
+                  if (hadLoadedInput) setMessage("Cambiaste el ID del estudio. Volvé a cargar las imágenes para asociarlas al nuevo ID.");
+                }}
+                placeholder="CASE-XXXX"
+                value={caseId}
+              />
+              {caseIdIssue
+                ? <em className="wl-field-error">{caseIdIssue}</em>
+                : <em>Letras, números, punto, guion, guion bajo o dos puntos.</em>}
+            </label>
 
-          <h3 className="wl-section-title">Imágenes</h3>
-
-          <div className="wl-upload">
-            <div className="wl-upload-head">
-              <strong>Estudio completo</strong>
-              <span>.zip · las series se separan solas</span>
+            <div className="ns-two-fields">
+              <label className="wl-field">
+                <span>Fecha del estudio</span>
+                <input
+                  disabled={running}
+                  onChange={(event) => setMetadata((current) => ({ ...current, studyDate: event.target.value }))}
+                  type="date"
+                  value={metadata.studyDate}
+                />
+              </label>
+              <label className="wl-field">
+                <span>Prioridad</span>
+                <select
+                  disabled={running}
+                  onChange={(event) => setMetadata((current) => ({ ...current, reviewPriority: event.target.value as StudyMetadataDraft["reviewPriority"] }))}
+                  value={metadata.reviewPriority}
+                >
+                  <option value="low">Baja</option>
+                  <option value="medium">Media</option>
+                  <option value="high">Alta</option>
+                </select>
+              </label>
             </div>
-            <input
-              accept=".zip"
-              disabled={!studyIdentityReady}
-              onChange={(event) => { void uploadStudy(event.target.files?.[0]); event.target.value = ""; }}
-              type="file"
-            />
+
+            <label className="wl-field">
+              <span>Descripción</span>
+              <input
+                disabled={running}
+                maxLength={200}
+                onChange={(event) => setMetadata((current) => ({ ...current, description: event.target.value }))}
+                placeholder="RM lumbar sagital T2"
+                value={metadata.description}
+              />
+            </label>
+
+            {metadataError && <p className="wl-drawer-error">{metadataError}</p>}
+          </section>
+
+          <section className="ns-card ns-images" aria-labelledby="new-study-images-title">
+          <h2 className="ns-card-title" id="new-study-images-title">Imágenes</h2>
+
+          <div className="wl-upload ns-zip">
+            <div className="wl-upload-head">
+              <strong>Estudio completo (.zip)</strong>
+              <span>las series se separan solas</span>
+            </div>
+            <label className={`ns-file-button${uploadLocked ? " is-disabled" : ""}`}>
+              <input
+                accept=".zip"
+                aria-describedby={uploadBlocker ? "ns-upload-blocker" : undefined}
+                className="ns-file-input"
+                disabled={uploadLocked}
+                onChange={(event) => { void uploadStudy(event.target.files?.[0]); event.target.value = ""; }}
+                type="file"
+              />
+              <span>{studyUpload.fileName ? "Cambiar ZIP" : "Seleccionar ZIP"}</span>
+            </label>
+            {uploadBlocker && <p className="ns-blocker" id="ns-upload-blocker">{uploadBlocker}</p>}
             {studyUpload.status === "uploading" && <p className="wl-upload-state">Leyendo {studyUpload.fileName}…</p>}
             {studyUpload.status === "error" && <p className="wl-drawer-error">{studyUpload.error}</p>}
             {studyUpload.status === "uploaded" && studyUpload.study && (
@@ -554,6 +670,7 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
               </div>
             ))}
           </div>
+          </section>
 
           {analysisStage !== "idle" && (
             <section ref={progressRef} className="wl-analysis-progress" aria-live="polite" aria-label="Progreso del análisis" role="status">
@@ -604,34 +721,40 @@ export function NewAnalysisDrawer({ onClose, onAnalysisReady }: Props) {
             </section>
           )}
 
-          {message && <p className="wl-drawer-message">{message}</p>}
+          {message && <p className="wl-drawer-message" role="status">{message}</p>}
+          </div>
+          </div>
         </div>
 
-        <footer className="wl-drawer-foot">
-          <button className="wl-drawer-cancel" disabled={interactionLocked} onClick={onClose} type="button">Cancelar</button>
-          {persistedRun && productState?.phase === "error" ? (
-            <>
-              <button className="wl-drawer-cancel" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
-                Abrir sin hallazgos discales
+        <footer className="wl-drawer-foot ns-foot">
+          {!persistedRun && analyzeBlocker ? <p className="ns-foot-hint" id="ns-run-hint">{analyzeBlocker}</p> : <span />}
+          <div className="ns-foot-actions">
+            <button className="wl-drawer-cancel" disabled={interactionLocked} onClick={onClose} type="button">Cancelar</button>
+            {persistedRun && productState?.phase === "error" ? (
+              <>
+                <button className="wl-drawer-cancel" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
+                  Abrir sin hallazgos discales
+                </button>
+                <button className="wl-drawer-run" disabled={running || !productState.retryable} onClick={() => void retryProductExtensions()} type="button">
+                  {running ? "Reintentando…" : productState.retryable ? "Reintentar hallazgos discales" : "Hallazgos discales no disponibles"}
+                </button>
+              </>
+            ) : persistedRun && productState && ["completed", "degraded"].includes(productState.phase) ? (
+              <button className="wl-drawer-run" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
+                Abrir sala de lectura
               </button>
-              <button className="wl-drawer-run" disabled={running || !productState.retryable} onClick={() => void retryProductExtensions()} type="button">
-                {running ? "Reintentando…" : productState.retryable ? "Reintentar hallazgos discales" : "Hallazgos discales no disponibles"}
+            ) : (
+              <button
+                aria-describedby={analyzeBlocker ? "ns-run-hint" : undefined}
+                className="wl-drawer-run"
+                disabled={Boolean(analyzeBlocker) || running}
+                onClick={() => void run()}
+                type="button"
+              >
+                {running ? <><LoaderCircle aria-hidden className="wl-button-spinner" size={15} />Procesando…</> : "Analizar estudio"}
               </button>
-            </>
-          ) : persistedRun && productState && ["completed", "degraded"].includes(productState.phase) ? (
-            <button className="wl-drawer-run" disabled={running} onClick={() => onAnalysisReady(persistedRun.caseId)} type="button">
-              Abrir sala de lectura
-            </button>
-          ) : (
-            <button
-              className="wl-drawer-run"
-              disabled={!sagittalReady || running}
-              onClick={() => void run()}
-              type="button"
-            >
-              {running ? <><LoaderCircle aria-hidden className="wl-button-spinner" size={15} />Procesando…</> : "Analizar"}
-            </button>
-          )}
+            )}
+          </div>
         </footer>
       </aside>
     </div>

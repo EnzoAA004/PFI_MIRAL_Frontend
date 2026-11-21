@@ -873,6 +873,7 @@ body {
   border:0;
   border-radius:11px;
   background:transparent;
+  color:var(--text-muted);
   min-height:38px;
   font-weight:850}
 .auth-tabs button.active {
@@ -892,8 +893,14 @@ body {
   background:var(--surface-soft);
   border:1px solid var(--border);
   border-radius:12px;
+  color:var(--text);
+  font:inherit;
+  font-weight:400;
   min-height:38px;
   padding:8px 10px}
+.auth-form input::placeholder {
+  color:var(--text-muted);
+  opacity:1}
 .auth-form button, .verification-panel, .auth-form .toast {
   grid-column:1/-1}
 .verification-panel {
@@ -4309,4 +4316,38 @@ body,
     gap: var(--sp-1);
     width: 100%;
   }
+
+.sidebar-footer .profile-menu {
+  min-width: 0;
+  width: 100%;
+}
+
+.sidebar-footer .profile-chip {
+  justify-content: flex-start;
+  min-width: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.sidebar-footer .profile-chip span {
+  min-width: 0;
+  text-align: left;
+}
+
+.sidebar-footer .profile-chip strong {
+  overflow-wrap: anywhere;
+}
+
+/* Los botones del footer usan texto claro sobre la barra oscura. El menú de
+   perfil vive sobre una superficie propia y necesita el color de esa superficie. */
+.sidebar-footer .profile-menu-panel button,
+.sidebar-footer .profile-menu-panel button:hover,
+.sidebar-footer .profile-menu-panel button:focus-visible {
+  color: var(--text);
+}
+
+.sidebar-footer .profile-menu-panel button:hover,
+.sidebar-footer .profile-menu-panel button:focus-visible {
+  background: var(--surface-soft);
+}
 }

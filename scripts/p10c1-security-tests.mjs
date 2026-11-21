@@ -283,4 +283,14 @@ test("32 App.tsx se suscribe a la invalidacion de sesion en background y a la si
   assert.match(app, /const unsubscribeCrossTab = onCrossTabSessionSync\(handleSessionLost\);/);
 });
 
+test("33 AuthView oculta el acceso demo y sus credenciales precargadas salvo opt-in explicito de build", () => {
+  const auth = src("src/components/AuthView.tsx");
+  assert.match(auth, /const authDemoEnabled = import\.meta\.env\.VITE_DEMO_LOGIN_ENABLED === "true";/);
+  assert.match(auth, /email: authDemoEnabled \? "doctor\.demo@pfi\.local" : ""/);
+  assert.match(auth, /password: authDemoEnabled \? "Demo1234!" : ""/);
+  assert.ok(auth.includes('{authDemoEnabled && <button className="ghost-button"'));
+  assert.ok(auth.includes(">Entrar con doctor demo</button>}"));
+  assert.match(src("Dockerfile"), /ARG VITE_DEMO_LOGIN_ENABLED=false/);
+});
+
 console.log(`P10-C.1 security/session/observability tests passed: ${count}`);

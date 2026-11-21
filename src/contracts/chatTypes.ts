@@ -14,6 +14,9 @@ export type ChatMessage = {
   model: string | null;
   provider: string | null;
   promptVersion: string | null;
+  contextVersion?: string | null;
+  outdated?: boolean;
+  draftStatus?: "DRAFT_PENDING_REVIEW" | "DRAFT_OUTDATED" | null;
 };
 
 /**
@@ -41,6 +44,8 @@ export type ChatResponse = {
   humanReviewRequired: boolean;
   notClinicalDiagnosis: boolean;
   contextSources: string[];
+  contextVersion?: string | null;
+  draftStatus?: "DRAFT_PENDING_REVIEW" | "DRAFT_OUTDATED" | null;
 };
 
 export type ChatConversationSummary = {

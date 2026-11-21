@@ -14,6 +14,10 @@ type ChallengeState = {
   email: string;
 };
 
+// Demo access is an explicit build-time opt-in. Public/local evaluation builds
+// keep the demo endpoint and credentials out of the login screen by default.
+const authDemoEnabled = import.meta.env.VITE_DEMO_LOGIN_ENABLED === "true";
+
 function isSession(value: AuthPendingResponse | AuthSession): value is AuthSession {
   return typeof (value as AuthSession).accessToken === "string";
 }
@@ -21,12 +25,12 @@ function isSession(value: AuthPendingResponse | AuthSession): value is AuthSessi
 export function AuthView({ onAuthenticated }: AuthViewProps) {
   const [mode, setMode] = useState<Mode>("login");
   const [form, setForm] = useState<RegisterRequest>({
-    fullName: "Dra. Demo Revisora",
-    email: "doctor.demo@pfi.local",
-    password: "Demo1234!",
-    licenseNumber: "MN-DEMO-2026",
-    specialty: "Radiologia / Columna lumbar",
-    institution: "PFI Academic Lab",
+    fullName: authDemoEnabled ? "Dra. Demo Revisora" : "",
+    email: authDemoEnabled ? "doctor.demo@pfi.local" : "",
+    password: authDemoEnabled ? "Demo1234!" : "",
+    licenseNumber: authDemoEnabled ? "MN-DEMO-2026" : "",
+    specialty: authDemoEnabled ? "Radiologia / Columna lumbar" : "",
+    institution: authDemoEnabled ? "PFI Academic Lab" : "",
   });
   const [challengeState, setChallengeState] = useState<ChallengeState | null>(null);
   const [code, setCode] = useState("");
@@ -125,7 +129,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
             <label>Correo profesional<input value={form.email} onChange={(event) => updateField("email", event.target.value)} /></label>
             <label>Contraseña<input type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} /></label>
             <button className="primary-button" disabled={loading} onClick={() => void submit()} type="button">{loading ? "Procesando..." : mode === "register" ? "Crear cuenta y verificar" : "Ingresar"}</button>
-            <button className="ghost-button" disabled={loading} onClick={() => void startDemo()} type="button">Entrar con doctor demo</button>
+            {authDemoEnabled && <button className="ghost-button" disabled={loading} onClick={() => void startDemo()} type="button">Entrar con doctor demo</button>}
           </div>
         ) : (
           <div className="auth-form">

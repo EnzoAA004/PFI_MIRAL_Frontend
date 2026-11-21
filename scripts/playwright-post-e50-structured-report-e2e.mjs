@@ -79,12 +79,12 @@ async function main() {
   await page.getByRole("heading", { name: "Lista de trabajo" }).waitFor({ timeout: 10000 });
   console.log("ok 1 - sesión profesional y worklist real abiertas");
 
-  await page.getByRole("button", { name: /Nuevo análisis/ }).click();
-  await page.locator('.wl-drawer[aria-label="Nuevo análisis"]').waitFor({ state: "visible", timeout: 10000 });
-  await page.getByLabel("Paciente nuevo").check();
+  await page.getByRole("button", { name: /Cargar estudio/ }).click();
+  await page.locator('.wl-drawer[role="dialog"]').waitFor({ state: "visible", timeout: 10000 });
+  await page.getByLabel("Nueva referencia").check();
   await page.getByLabel(/Referencia interna del estudio/i).fill(subjectRef);
   await page.getByRole("button", { name: "Usar esta referencia" }).click();
-  await page.waitForSelector("text=Paciente seleccionado", { timeout: 10000 });
+  await page.waitForSelector("text=Referencia asociada", { timeout: 10000 });
   console.log("ok 2 - nuevo paciente/subjectRef de-identificado seleccionado");
 
   await page.getByPlaceholder("CASE-XXXX").fill(caseId);

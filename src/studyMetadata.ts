@@ -2,10 +2,17 @@ import type { Priority, StudyMetadataInput } from "./appTypes";
 
 export type StudyMetadataDraft = {
   subjectRef: string;
+  patientId?: string;
   studyDate: string;
   modality: string;
   description: string;
   reviewPriority: "low" | "medium" | "high";
+  ageAtStudy?: string;
+  ageProvenance?: "calculated" | "reported" | "imported" | "unknown";
+  clinicalReason?: string;
+  symptoms?: string;
+  symptomDuration?: string;
+  relevantHistory?: string;
 };
 
 export const subjectRefErrorMessage = "La referencia debe ser un código de-identificado de entre 3 y 64 caracteres, sin espacios.";
@@ -35,19 +42,34 @@ export function normalizeStudyMetadataInput(draft: StudyMetadataDraft): StudyMet
   const description = draft.description.trim();
   return {
     subjectRef: subjectRef || null,
+    patientId: draft.patientId?.trim() || null,
     studyDate: draft.studyDate || null,
     modality: draft.modality || null,
     description: description || null,
     reviewPriority: draft.reviewPriority,
+    ageAtStudy: draft.ageAtStudy?.trim() ? Number(draft.ageAtStudy) : null,
+    ageProvenance: draft.ageAtStudy?.trim() ? draft.ageProvenance : "unknown",
+    clinicalReason: draft.clinicalReason?.trim() || null,
+    symptoms: draft.symptoms?.trim() || null,
+    symptomDuration: draft.symptomDuration?.trim() || null,
+    relevantHistory: draft.relevantHistory?.trim() || null,
+    contextVersion: "pfi.study-context.v1",
   };
 }
 
 export function emptyStudyMetadataDraft(priority: StudyMetadataInput["reviewPriority"] = "medium"): StudyMetadataDraft {
   return {
     subjectRef: "",
+    patientId: "",
     studyDate: "",
     modality: "",
     description: "",
     reviewPriority: priority,
+    ageAtStudy: "",
+    ageProvenance: "unknown",
+    clinicalReason: "",
+    symptoms: "",
+    symptomDuration: "",
+    relevantHistory: "",
   };
 }

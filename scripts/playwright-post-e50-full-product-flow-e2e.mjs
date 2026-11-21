@@ -79,14 +79,14 @@ async function main() {
 
   // 3. Nuevo análisis.
   await page.goto(`${frontendUrl}/worklist`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: /Nuevo análisis/ }).click();
-  await page.locator('.wl-drawer[aria-label="Nuevo análisis"]').waitFor({ state: "visible", timeout: 10000 });
-  console.log("ok 3 - drawer 'Nuevo análisis' abre");
+  await page.getByRole("button", { name: /Cargar estudio/ }).click();
+  await page.locator('.wl-drawer[role="dialog"]').waitFor({ state: "visible", timeout: 10000 });
+  console.log("ok 3 - drawer 'Cargar y analizar estudio' abre");
 
   // 4. Seleccionar paciente existente.
-  await page.waitForSelector("text=Paciente existente ·", { timeout: 10000 });
-  await page.getByRole("button", { name: /Paciente existente ·/ }).first().click();
-  await page.waitForSelector("text=Paciente seleccionado", { timeout: 10000 });
+  await page.waitForSelector("text=Referencia existente ·", { timeout: 10000 });
+  await page.getByRole("button", { name: /Referencia existente ·/ }).first().click();
+  await page.waitForSelector("text=Referencia asociada", { timeout: 10000 });
   console.log("ok 4 - seleccionar paciente existente");
 
   // 5. Cargar fixture sintético mínimo (caseId + archivo por plano sagital).

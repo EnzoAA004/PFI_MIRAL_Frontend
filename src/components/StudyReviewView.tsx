@@ -512,6 +512,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     setLandmarkAddMode(false);
     setSaveMessage("");
     setReportReady(false);
+    const previousReportSection = document.querySelector<HTMLDetailsElement>("[data-study-report]");
+    if (previousReportSection) previousReportSection.open = false;
     setMetadataError("");
     setMetadataDialogOpen(false);
   }, [run.runId, run.review?.status, run.review?.notes, run.review?.observations, run.reviewStatus]);
@@ -556,6 +558,17 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
       });
     return () => { cancelled = true; };
   }, [panelTab, displayRun.caseId, studyReportRefresh]);
+
+  useEffect(() => {
+    if (!reportReady || panelTab !== "more") return;
+    const frame = window.requestAnimationFrame(() => {
+      const section = document.querySelector<HTMLDetailsElement>("[data-study-report]");
+      if (!section) return;
+      section.open = true;
+      section.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [reportReady, panelTab]);
 
   // EXT-07B: the previous study's own report is fetched only for its visualEvidence (to render
   // the "Comparación con estudio previo" image+overlay side) — the numeric before/after values
@@ -1778,6 +1791,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
      * seria arrebatarle la pantalla al revisor justo despues de guardar.
      */
     setReportReady(status === "aceptado");
+    if (status === "aceptado") setPanelTab("more");
   }
 
   async function saveStudyMetadata() {
@@ -2550,7 +2564,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                 </div>
               </details>
 
-              <details className="rr-more-section">
+              <details className="rr-more-section" data-study-report>
                 <summary>Informe / exportación</summary>
                 <div className="rr-more-section-body">
                 <p className="rr-section-title">Informe estructurado</p>
