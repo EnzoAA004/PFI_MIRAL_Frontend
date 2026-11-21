@@ -1717,6 +1717,7 @@ body {
   transform:translateX(18px)}
 .clinical-loading-state {
   align-items:center;
+  background:var(--surface);
   display:flex;
   gap:16px;
   margin:18px 0;
@@ -2351,6 +2352,7 @@ body {
 
 .settings-section,
 .help-card {
+  background: var(--surface);
   min-width: 0;
 }
 
@@ -4350,4 +4352,17 @@ body,
 .sidebar-footer .profile-menu-panel button:focus-visible {
   background: var(--surface-soft);
 }
+}
+
+.sidebar-footer .profile-chip {
+  background: transparent;
+  color: var(--sidebar-text);
+}
+
+.sidebar-footer .profile-chip:is(:hover, :focus-visible, [aria-expanded="true"]) {
+  background: color-mix(in srgb, var(--sidebar-text) 10%, transparent);
+}
+
+.sidebar-footer .profile-chip svg:last-child {
+  color: var(--sidebar-text-muted);
 }
