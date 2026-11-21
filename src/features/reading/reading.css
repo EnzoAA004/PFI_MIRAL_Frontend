@@ -926,9 +926,9 @@
   .rr-series-picker select {
     flex: 1;
     min-width: 0;
-    background: rgba(255, 255, 255, .06);
-    color: inherit;
-    border: 1px solid rgba(255, 255, 255, .18);
+    background: var(--surface-raised);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
     border-radius: 6px;
     padding: 4px 8px;
     font-size: 12px;
@@ -2783,7 +2783,20 @@
   .rr-dual-bar-title .rr-note { margin: 0; font-size: var(--fs-micro); }
   .rr-dual-select { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .rr-dual-select span { color: var(--text-muted); }
-  .rr-dual-select select { max-width: 24rem; min-width: 0; }
+  .rr-dual-select select {
+    max-width: 24rem;
+    min-width: 0;
+    background: var(--surface-raised);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-btn);
+    padding: 4px 8px;
+  }
+
+  :is(.rr-series-picker, .rr-dual-select) select option {
+    background: var(--surface);
+    color: var(--text);
+  }
   .rr-dual-close {
     padding: 4px 12px;
     border: 1px solid var(--border-strong);
