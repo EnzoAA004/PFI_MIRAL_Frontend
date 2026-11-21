@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fetchStudyDetail } from "../../studyApi";
 import { assignStudyPatient, findPatientByReference, searchPatients, type Patient } from "../../patientApi";
 
 type Props = {
@@ -51,9 +52,13 @@ export function StudyPatientEditor({ caseId, currentPatientCode, onAssigned }: P
     setSaving(true);
     setMessage(null);
     try {
+      // El paciente actual se consulta al guardar: la lista o el panel pueden estar desactualizados
+      // (por ejemplo, si el paciente se asignó hace un momento) y el backend exige el estado real.
+      const fresh = await fetchStudyDetail({ caseId });
+      const actualCode = fresh.study.patientCode ?? null;
       let expectedPatientId: string | null = null;
-      if (currentPatientCode) {
-        const current = await findPatientByReference(currentPatientCode);
+      if (actualCode) {
+        const current = await findPatientByReference(actualCode);
         if (!current) throw new Error("current-not-found");
         expectedPatientId = current.id;
       }
