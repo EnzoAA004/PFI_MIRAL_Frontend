@@ -1,7 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import App from "./App";
+import { UnsavedChangesGuard } from "./features/navigation/UnsavedChangesGuard";
 import "./design/tokens.css";
 import "./design/base.css";
 import "./design/components.css";
@@ -10,14 +11,15 @@ import "./design/components.css";
 import "./design/shell.css";
 import "./features/worklist/worklist.css";
 import "./features/reading/reading.css";
+import "./features/prereport/prereport.css";
 import "./features/settings/settings.css";
 import "./design/utilities.css";
 import "./a11yDev";
 
+const router = createBrowserRouter([{ path: "*", element: <><App /><UnsavedChangesGuard /></> }]);
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <RouterProvider router={router} />
   </React.StrictMode>,
 );
