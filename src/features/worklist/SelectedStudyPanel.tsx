@@ -7,6 +7,8 @@ import { fetchStudyDetail } from "../../studyApi";
 import { aiAssetUrl } from "../../multiplanarApi";
 import { useAuthenticatedImageUrl } from "../../authenticatedAssets";
 import { PriorityBadge, ReviewBadge } from "../../components/StatusBadge";
+import type { Patient } from "../../patientApi";
+import { StudyPatientEditor } from "./StudyPatientEditor";
 
 /**
  * Panel del estudio seleccionado.
@@ -30,6 +32,8 @@ interface SelectedStudyPanelProps {
   study: StudyRow;
   onClose: () => void;
   onOpen: (study: StudyRow) => void;
+  /** Se llama cuando cambió el paciente del estudio, para refrescar la lista. */
+  onPatientChanged?: () => void;
 }
 
 function planeLabel(plane: StudyArchiveSeries["plane"]) {
@@ -60,7 +64,12 @@ function SeriesThumbnail({ runId, plane, label }: { runId?: string | null; plane
   );
 }
 
-export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPanelProps) {
+export function SelectedStudyPanel({ study, onClose, onOpen, onPatientChanged }: SelectedStudyPanelProps) {
+  /** Paciente recién asignado: se muestra de inmediato, sin esperar a que se recargue la lista. */
+  const [assigned, setAssigned] = useState<Patient | null>(null);
+  useEffect(() => { setAssigned(null); }, [study.caseId]);
+  const assignedName = assigned ? [assigned.firstName, assigned.lastName].filter(Boolean).join(" ") : "";
+  const patientCode = assigned ? assigned.patientReference : study.patientCode ?? null;
   const [detail, setDetail] = useState<StudyDetailResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
 
@@ -108,13 +117,15 @@ export function SelectedStudyPanel({ study, onClose, onOpen }: SelectedStudyPane
 
       <div className="wl-panel-body">
         <dl className="wl-panel-facts">
-              <div><dt>Paciente</dt><dd>{study.patientName || displayOptionalSubjectRef(study.patientCode || study.subjectRef)}</dd></div>
-              {study.patientName && study.patientCode ? <div><dt>Código</dt><dd>{study.patientCode}</dd></div> : null}
+              <div><dt>Paciente</dt><dd>{assigned ? (assignedName || assigned.patientReference) : study.patientName || displayOptionalSubjectRef(study.patientCode || study.subjectRef)}</dd></div>
+              {(assigned ? assignedName : study.patientName) && patientCode ? <div><dt>Código</dt><dd>{patientCode}</dd></div> : null}
               {study.ageAtStudy !== null && study.ageAtStudy !== undefined ? <div><dt>Edad al estudio</dt><dd>{study.ageAtStudy} años</dd></div> : null}
           <div><dt>Fecha</dt><dd>{displayStudyDate(study.studyDate)}</dd></div>
           <div><dt>Modalidad</dt><dd>{displayModality(study.modality)}</dd></div>
           {study.description ? <div><dt>Descripción</dt><dd>{study.description}</dd></div> : null}
         </dl>
+
+        <StudyPatientEditor caseId={study.caseId} currentPatientCode={patientCode} onAssigned={(patient) => { setAssigned(patient); onPatientChanged?.(); }} />
 
         <div className="wl-panel-badges">
           <ReviewBadge status={study.reviewStatus} />

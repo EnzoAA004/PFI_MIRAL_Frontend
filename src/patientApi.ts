@@ -38,3 +38,22 @@ export async function setPatientActive(patientId: string, active: boolean): Prom
 export async function createPatient(payload: { patientReference: string; firstName?: string; lastName?: string; dateOfBirth?: string }): Promise<Patient> {
   return multiplanarRequest<Patient>("/api/patients", { method: "POST", body: JSON.stringify(payload) });
 }
+
+export type StudyPatientAssignment = { studyId: string; caseId: string; patientId: string; previousPatientId: string | null; reasonCode: string; changed: boolean };
+
+/**
+ * Asocia un estudio a un paciente o corrige la asociación existente.
+ * El backend exige el motivo correcto (primera asociación vs. corrección) y el paciente que se creía asociado,
+ * para no pisar un cambio hecho desde otra pantalla.
+ */
+export async function assignStudyPatient(caseId: string, patientId: string, expectedPatientId: string | null): Promise<StudyPatientAssignment> {
+  const payload = { patientId, expectedPatientId, reason: expectedPatientId ? "CORRECTION" : "INITIAL_ASSIGNMENT" };
+  return multiplanarRequest<StudyPatientAssignment>(`/api/studies/${encodeURIComponent(caseId)}/patient`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+/** El listado de estudios trae el código visible del paciente, no su identificador interno: se resuelve por código exacto. */
+export async function findPatientByReference(patientReference: string): Promise<Patient | null> {
+  const items = await searchPatients(patientReference, { includeInactive: true, limit: 25 });
+  return items.find((item) => item.patientReference === patientReference) ?? null;
+}
+

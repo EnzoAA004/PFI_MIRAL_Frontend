@@ -94,9 +94,11 @@ interface WorklistProps {
   onOpenReview: (study: StudyRow) => void;
   /** Se invoca con el caseId cuando una corrida nueva quedó lista para leer. */
   onAnalysisReady: (caseId: string) => void;
+  /** Se invoca cuando se asignó o corrigió el paciente de un estudio. */
+  onStudiesChanged?: () => void;
 }
 
-export function Worklist({ studies, loading = false, onOpenReview, onAnalysisReady }: WorklistProps) {
+export function Worklist({ studies, loading = false, onOpenReview, onAnalysisReady, onStudiesChanged }: WorklistProps) {
   /*
    * Cargar un estudio es un panel sobre la lista, no un destino aparte: el
    * asistente de cuatro pasos sacaba al médico de su lista de trabajo para
@@ -385,7 +387,7 @@ export function Worklist({ studies, loading = false, onOpenReview, onAnalysisRea
         </div>
 
         {selectedStudy ? (
-          <SelectedStudyPanel study={selectedStudy} onClose={() => setSelectedKey(null)} onOpen={openStudy} />
+          <SelectedStudyPanel study={selectedStudy} onClose={() => setSelectedKey(null)} onOpen={openStudy} onPatientChanged={onStudiesChanged} />
         ) : null}
       </div>
 

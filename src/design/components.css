@@ -4503,3 +4503,24 @@ body,
 .pre-collapse-arrow { display: inline-block; font-size: 18px; line-height: 1; transition: transform 0.15s ease; }
 .pre-collapse-arrow.is-collapsed { transform: rotate(-90deg); }
 
+/* Paneles de formularios: no se "levantan" al pasar el mouse (el efecto global es para tarjetas de resumen). */
+.patient-directory-panel:hover,
+.registered-patients:hover {
+  border-color: var(--border);
+  box-shadow: none;
+  transform: none;
+}
+.registered-patients { gap: var(--sp-3); }
+.registered-patients .section-title { margin: 0; }
+.registered-patients > p { margin: 0; }
+.patient-directory-list li { transition: background-color 0.12s ease, border-color 0.12s ease; }
+.patient-directory-list li:hover { background: var(--surface-soft, rgba(127, 127, 127, 0.08)); border-color: var(--primary); }
+.patient-directory-list li > div:first-child strong { font-family: inherit; }
+.study-patient-editor { display: grid; gap: var(--sp-2); margin: var(--sp-3) 0; }
+.study-patient-editor-form { display: grid; gap: var(--sp-2); }
+.study-patient-editor-form label { display: grid; gap: var(--sp-1); }
+.study-patient-results { display: grid; gap: var(--sp-1); list-style: none; margin: 0; max-height: 180px; overflow: auto; padding: 0; }
+.study-patient-results button { align-items: center; background: transparent; border: 1px solid var(--border); border-radius: var(--radius-btn); cursor: pointer; display: flex; font: inherit; justify-content: space-between; padding: var(--sp-2) var(--sp-3); text-align: left; width: 100%; }
+.study-patient-results button:hover { background: var(--surface-soft, rgba(127, 127, 127, 0.1)); }
+.study-patient-actions { display: flex; gap: var(--sp-2); }
+
