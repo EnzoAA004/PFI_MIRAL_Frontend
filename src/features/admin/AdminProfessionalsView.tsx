@@ -83,12 +83,12 @@ export function AdminProfessionalsView({ currentEmail }: { currentEmail: string 
                     <span>
                       {pending ? "Pendiente de aprobación" : "Aprobado"}
                       {isAdminAccount ? " · Administrador" : ""}
-                      {user.verified ? "" : " · Correo sin verificar"}
+                      {user.verified ? "" : " · Correo sin verificar (se puede activar manualmente)"}
                     </span>
                   </div>
                   {isAdminAccount || isSelf ? null : pending ? (
-                    <button className="primary-button" disabled={busyEmail === user.email || !user.verified} onClick={() => void setApproval(user, true)} type="button" title={user.verified ? undefined : "El profesional todavía no verificó su correo"}>
-                      Aprobar
+                    <button className="primary-button" disabled={busyEmail === user.email} onClick={() => void setApproval(user, true)} type="button" title={user.verified ? undefined : "Habilita la cuenta sin verificación por correo (activación institucional manual)"}>
+                      {user.verified ? "Aprobar" : "Activar manualmente"}
                     </button>
                   ) : (
                     <button className="ghost-button" disabled={busyEmail === user.email} onClick={() => void setApproval(user, false)} type="button">
