@@ -1237,6 +1237,10 @@ body {
   margin:0}
 .approval-card {
   max-width:720px}
+.approval-card .ghost-button {
+  width:100%;
+  justify-content:center;
+  text-align:center}
 .professional-table .comparison-head, .professional-table .comparison-row {
   grid-template-columns:1.25fr 1.35fr .7fr 1fr .55fr}
 @media (max-width:760px) {
