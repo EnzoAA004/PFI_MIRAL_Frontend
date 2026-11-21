@@ -60,7 +60,9 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
       }
       setChallengeState({ mode, challenge: response, email: form.email });
       setCode(response.devVerificationCode ?? "");
-      setMessage(response.message ?? "Código de verificación generado.");
+      setMessage(response.channel === "email-demo" && !response.devVerificationCode
+        ? "El envío de correo no está habilitado en este entorno. Si todavía no activaron tu cuenta, contactá al administrador."
+        : response.message ?? "Código de verificación generado.");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "No se pudo completar la solicitud");
     } finally {

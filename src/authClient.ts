@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./api";
+import { API_BASE_URL, ApiError } from "./api";
 import { ensureAuthSession, getCachedAuthSession, saveAuthSession } from "./authStorage";
 import { coordinateRefresh } from "./security/refreshCoordinator";
 import { clearAllProtectedData, notifySessionInvalidated } from "./security/sessionCleanup";
@@ -12,7 +12,7 @@ async function authRequest<T>(path: string, body?: unknown, method = "POST", inc
     headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...(includeAuth ? authHeaders() : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`Backend respondio ${response.status}`);
+  if (!response.ok) throw new ApiError(`Backend respondio ${response.status}`, { path, status: response.status, traceId });
   return (await response.json()) as T;
 }
 
@@ -26,8 +26,21 @@ export function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${session.accessToken}` };
 }
 
-export function registerDoctor(payload: RegisterRequest) {
-  return authRequest<AuthPendingResponse>("/api/auth/register", payload);
+export async function registerDoctor(payload: RegisterRequest) {
+  try {
+    return await authRequest<AuthPendingResponse>("/api/auth/register", payload);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 409) throw error;
+  }
+
+  try {
+    return await loginDoctor(payload.email, payload.password);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      throw new Error("Ya existe una cuenta con ese correo. Usá la contraseña de esa cuenta para ingresar o continuar la verificación.");
+    }
+    throw error;
+  }
 }
 
 export async function loginDoctor(email: string, password: string) {
