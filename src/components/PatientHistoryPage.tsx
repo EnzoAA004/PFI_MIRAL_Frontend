@@ -10,6 +10,7 @@ interface PatientHistoryPageProps {
   currentCaseId?: string | null;
   onBack: () => void;
   onOpenStudy: (caseId: string) => void;
+  onCompareStudies?: (currentCaseId: string, referenceCaseId: string) => void;
 }
 
 type PageState =
@@ -25,7 +26,7 @@ type PageState =
  * pero nunca había sido conectado al routing -- este componente es esa conexión real, usando el
  * endpoint que sí funciona (`/api/subjects/{subjectRef}/history`, Stage 8E/79/84).
  */
-export function PatientHistoryPage({ subjectRef, currentCaseId, onBack, onOpenStudy }: PatientHistoryPageProps) {
+export function PatientHistoryPage({ subjectRef, currentCaseId, onBack, onOpenStudy, onCompareStudies }: PatientHistoryPageProps) {
   const [state, setState] = useState<PageState>({ status: "loading" });
 
   useEffect(() => {
@@ -71,6 +72,7 @@ export function PatientHistoryPage({ subjectRef, currentCaseId, onBack, onOpenSt
       summary={state.history.summary}
       currentCaseId={currentCaseId}
       onOpenStudyReview={onOpenStudy}
+      onCompareStudies={onCompareStudies}
     />
   );
 }

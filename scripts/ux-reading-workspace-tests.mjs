@@ -22,6 +22,7 @@ const sliceSource = loadPureSource(sliceSourceCode, ["resolveAnalyzedSliceSource
 const appSource = readFileSync("src/App.tsx", "utf8");
 const shellSource = readFileSync("src/components/AppShell.tsx", "utf8");
 const reviewSource = readFileSync("src/components/StudyReviewView.tsx", "utf8");
+const planeSeriesSource = readFileSync("src/features/reading/planeSeries.ts", "utf8");
 const viewportSource = readFileSync("src/features/reading/PlaneViewport.tsx", "utf8");
 const gridSource = readFileSync("src/features/reading/ViewportGrid.tsx", "utf8");
 const cssSource = readFileSync("src/features/reading/reading.css", "utf8");
@@ -114,7 +115,7 @@ check("los cortes adyacentes usan el inputId exacto de la serie analizada", () =
     index: 6,
     aiIndex: 7,
   }), "https://backend.example/api/ai/series/input%20con%20espacio/slices/6");
-  assert.match(reviewSource, /sourceInputId = typeof metadata\.inputId/);
+  assert.match(planeSeriesSource, /sourceInputId = typeof metadata\.inputId/);
   assert.match(reviewSource, /sourceInputId: analyzedSeries\.sourceInputId/);
 });
 

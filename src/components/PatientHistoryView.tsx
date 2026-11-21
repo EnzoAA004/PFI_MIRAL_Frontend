@@ -3,7 +3,6 @@ import type { HistoryTarget, Measurement, MeasurementSeries, MeasurementSeriesKe
 import { displayMeasurementLabel, displayModality, displayReviewStatus, displayUnit } from "../clinicalDisplay";
 import { displayStudyDate, displaySubjectRef } from "../studyDisplay";
 import { fetchAvailableMeasurementSeriesKeys, fetchMeasurementSeries } from "../subjectHistoryApi";
-import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
 import { displayMetricLabel } from "../features/reading/longitudinalComparisonDisplay";
 import { PriorityBadge, ReviewBadge, StatusBadge } from "./StatusBadge";
 import { VisibilityIcon } from "./VisibilityIcon";
@@ -18,6 +17,7 @@ interface PatientHistoryViewProps {
   onOpenStudyReview?: (caseId: string) => void;
   /** Stage 84-P: el Study desde el que se abrió este historial, si corresponde -- se marca "Estudio actual". */
   currentCaseId?: string | null;
+  onCompareStudies?: (currentCaseId: string, referenceCaseId: string) => void;
 }
 
 type HistoryTab = "overview" | "repository" | "activity";
@@ -287,10 +287,10 @@ function EvolutionSection({ subjectRef }: { subjectRef: string }) {
   );
 }
 
-export function PatientHistoryView({ studies, target, subjectRef, source, summary, error, onOpenStudyReview, currentCaseId }: PatientHistoryViewProps) {
+export function PatientHistoryView({ studies, target, subjectRef, source, summary, error, onOpenStudyReview, currentCaseId, onCompareStudies }: PatientHistoryViewProps) {
   const [activeTab, setActiveTab] = useState<HistoryTab>("overview");
   const [hiddenPanels, setHiddenPanels] = useState<Record<string, boolean>>({});
-  const [compareBaselineCaseId, setCompareBaselineCaseId] = useState<string | null>(null);
+  const compare = currentCaseId && onCompareStudies ? (caseId: string) => onCompareStudies(currentCaseId, caseId) : undefined;
   const visible = (id: string) => !hiddenPanels[id];
   const toggle = (id: string) => setHiddenPanels((current) => ({ ...current, [id]: !current[id] }));
   const hidden = <div className="panel-hidden-placeholder">Información oculta. Usá el control de visualización para desplegarla.</div>;
@@ -399,19 +399,9 @@ export function PatientHistoryView({ studies, target, subjectRef, source, summar
           <article className="panel-card compact-card">
             <PanelTitle id="timeline" title={`Línea de tiempo de estudios (${totalStudies})`} />
             {visible("timeline")
-              ? renderTimeline(studies, onOpenStudyReview, currentCaseId, currentCaseId ? (caseId) => setCompareBaselineCaseId(caseId) : undefined)
+              ? renderTimeline(studies, onOpenStudyReview, currentCaseId, compare)
               : hidden}
           </article>
-          {currentCaseId && compareBaselineCaseId && !studyTraceabilityMode && (
-            <article className="panel-card compact-card">
-              <PanelTitle id="compare" title="Comparar con estudio actual">
-                <button className="ghost-button" type="button" onClick={() => setCompareBaselineCaseId(null)}>Cerrar</button>
-              </PanelTitle>
-              {visible("compare") ? (
-                <LongitudinalComparisonPanel caseId={currentCaseId} subjectRef={displayReference} initialBaselineCaseId={compareBaselineCaseId} />
-              ) : hidden}
-            </article>
-          )}
           <article className="panel-card compact-card patient-trends-panel">
             <PanelTitle id="trends" title="Evolución de mediciones" />
             {visible("trends") ? (

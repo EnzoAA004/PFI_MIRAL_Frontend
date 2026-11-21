@@ -1,6 +1,7 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { exportReviewReport, getRunAnnotations, saveRunAnnotations } from "../api";
-import { resolvePersistedPlaneWorkspace, type PersistedPlaneWorkspace } from "../appDataGuards";
+import { resolvePersistedPlaneWorkspace } from "../appDataGuards";
+import { planeRunRecord, seriesFromPlaneRun, type PersistedStudySeries } from "../features/reading/planeSeries";
 import type { AiModelArtifact, AiRunResponse, AgentQuality, AuditEvent, Measurement, ReviewStatus, ReviewStatusResponse, StudyDetailResponse, StudyLandmark, StudyMask, StudyMetadataInput, StudySeries, StudyArchiveSeries } from "../appTypes";
 import { parseThreeD } from "../adapters/multiplanarRunAdapter";
 import { parseThreeDProxyMeshAsset, ThreeDProxyAssetError } from "../adapters/threeDProxyAssetParser";
@@ -33,7 +34,8 @@ import { ActivationMapPanel } from "../features/reading/ActivationMapPanel";
 import { parseDegenerativeFindings, viewerPointToImagePixels, type DegenerativeFinding, type FindingSide } from "../features/reading/degenerativeFindings";
 import { DiscDegenerativeFindingsPanel } from "../features/reading/DiscDegenerativeFindingsPanel";
 import { ProductAnalysisV1Panel } from "../features/reading/ProductAnalysisV1Panel";
-import { LongitudinalComparisonPanel } from "../features/reading/LongitudinalComparisonPanel";
+import { DualComparisonView } from "../features/reading/DualComparisonView";
+import { InitialComparisonPanel } from "../features/reading/InitialComparisonPanel";
 import { ChatPanel } from "../features/reading/ChatPanel";
 import { displayHistoryPreviousStatus, displayReportMetric, displayReportPlane, displayReportStatus, formatReportDelta, formatReportPercent, formatReportValue, reportContractLabel, reportCorrectedMarker, reportMeasurementLine, REPORT_SAFETY_TEXT } from "../features/reading/studyReportDisplay";
 import { EvidenceRegionEditor } from "../features/reading/EvidenceRegionEditor";
@@ -138,6 +140,8 @@ interface StudyReviewViewProps {
   onStudyMetadataUpdated?: (caseId: string) => Promise<void>;
   /** Stage 84: navega al historial longitudinal (subjectRef) del paciente de este estudio. */
   onOpenPatientHistory?: (subjectRef: string) => void;
+  initialDualReference?: string | null;
+  onInitialDualConsumed?: () => void;
 }
 
 function inferenceModeLabel(value?: string) {
@@ -166,65 +170,6 @@ function asRecord(value: unknown): Record<string, any> | undefined {
 
 function isDemoRun(run: AiRunResponse) {
   return run.dataOrigin === "demo" || run.effectiveInferenceMode === "mock" || run.requestedInferenceMode === "mock";
-}
-
-function planeRunRecord(run: AiRunResponse, plane: "sagittal" | "axial") {
-  const planes = asRecord(run.planes);
-  return asRecord(planes?.[plane]);
-}
-
-type PersistedStudySeries = StudySeries & { sourceInputId?: string };
-
-function seriesFromPlaneRun(run: AiRunResponse, workspace: PersistedPlaneWorkspace): PersistedStudySeries | null {
-  const planeRun = planeRunRecord(run, workspace.plane);
-  // El contrato v1 publica la metadata volumétrica bajo `metadata` y v2 bajo
-  // `input`; también se consulta el plano canónico persistido, que es de donde
-  // viene la corrida reabierta.
-  const canonicalPlane = asRecord(asRecord(run.canonicalRun?.planes)?.[workspace.plane]);
-  const metadata = { ...asRecord(canonicalPlane?.input), ...asRecord(canonicalPlane?.metadata), ...asRecord(planeRun?.input), ...asRecord(planeRun?.metadata) };
-  const rawSliceCount = metadata.sliceCount;
-  const rawSelectedSlice = metadata.selectedSlice ?? metadata.selectedSliceIndex;
-  const sourceInputId = typeof metadata.inputId === "string" && metadata.inputId.trim() ? metadata.inputId.trim() : undefined;
-  const sliceCount = typeof rawSliceCount === "number" && rawSliceCount > 0 ? rawSliceCount : 1;
-  const selectedSlice = typeof rawSelectedSlice === "number" && rawSelectedSlice >= 0 ? rawSelectedSlice : 0;
-  // Cantidad de previsualizaciones por corte que el AI Module realmente escribió.
-  // Es lo que distingue "este corte todavía no tiene imagen" de "este corte tiene
-  // imagen": sin el número habría que pedir el PNG y tratar el 404 como respuesta.
-  const quality = { ...asRecord(canonicalPlane?.quality), ...asRecord(planeRun?.quality) };
-  const rawSpacing = metadata.inPlaneSpacingMm ?? metadata.inPlaneSpacing;
-  const inPlaneSpacingMm = Array.isArray(rawSpacing) && rawSpacing.every((value) => typeof value === "number")
-    ? rawSpacing as number[]
-    : undefined;
-  const rawPreviewCount = quality.slicePreviewCount;
-  const slicePreviewCount = typeof rawPreviewCount === "number" && rawPreviewCount > 0 ? rawPreviewCount : 0;
-  const coordinateSpace = typeof planeRun?.coordinateSpace === "string"
-    ? planeRun.coordinateSpace
-    : typeof planeRun?.measurements?.coordinateSpace === "string"
-      ? planeRun.measurements.coordinateSpace
-      : undefined;
-  const assets = {
-    ...(workspace.inputUrl ? { "input.png": workspace.inputUrl } : {}),
-    ...(workspace.overlayUrl ? { "overlay.png": workspace.overlayUrl } : {}),
-    ...(workspace.maskPreviewUrl ? { "mask-preview.png": workspace.maskPreviewUrl } : {}),
-  };
-  return workspace.planeRunId ? {
-    id: `${workspace.planeRunId}-${workspace.plane}`,
-    name: workspace.plane === "sagittal" ? "Sagital" : "Axial",
-    plane: workspace.plane,
-    sliceCount,
-    selectedSlice,
-    sourceInputId,
-    slicePreviewCount,
-    inPlaneSpacingMm,
-    imageUrl: workspace.inputUrl ?? null,
-    overlayUrl: workspace.overlayUrl ?? null,
-    assets,
-    planeRunId: workspace.planeRunId,
-    storageStatus: workspace.storageStatus,
-    available: workspace.available,
-    coordinateSpace,
-    status: workspace.available ? "stored" : workspace.storageStatus,
-  } : null;
 }
 
 function readinessLabel(value?: string) {
@@ -390,7 +335,12 @@ function metadataPayloadEqual(next: StudyMetadataInput, current: StudyMetadataDr
     && next.reviewPriority === current.reviewPriority;
 }
 
-export function StudyReviewView({ run, studyReview, measurements, auditTrail, saving, onBackToStudies, onMeasurementsChange, onSaveReview, onStudyMetadataUpdated, selectedDetail, onOpenPatientHistory }: StudyReviewViewProps) {
+export function StudyReviewView({ run, studyReview, measurements, auditTrail, saving, onBackToStudies, onMeasurementsChange, onSaveReview, onStudyMetadataUpdated, selectedDetail, onOpenPatientHistory, initialDualReference, onInitialDualConsumed }: StudyReviewViewProps) {
+  const [dualReference, setDualReference] = useState<string | null>(initialDualReference ?? null);
+  useEffect(() => {
+    if (initialDualReference) onInitialDualConsumed?.();
+  }, [initialDualReference, onInitialDualConsumed]);
+  const closeDualComparison = useCallback(() => setDualReference(null), []);
   const [tab, setTab] = useState<"Sagittal" | "Axial" | "3D Reconstruction">("Sagittal");
   const [selectedSeriesId, setSelectedSeriesId] = useState("");
   const [editMode, setEditMode] = useState(false);
@@ -2273,9 +2223,10 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   <summary>Evolución</summary>
                   <div className="rr-more-section-body">
                     <p className="rr-section-title">Comparación entre estudios</p>
-                    <LongitudinalComparisonPanel
+                    <InitialComparisonPanel
                       caseId={displayRun.caseId}
-                      subjectRef={selectedDetail?.study?.subjectRef ?? run.patientId ?? studyReview?.patientId ?? null}
+                      currentRunId={run.runId ?? null}
+                      onOpenVisual={setDualReference}
                     />
                   </div>
                 </details>
@@ -2735,6 +2686,17 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
 
       {preReportOpen && displayRun.caseId && run.runId && (
         <PreReportEditor caseId={displayRun.caseId} onClose={() => setPreReportOpen(false)} runId={run.runId} />
+      )}
+
+      {dualReference !== null && displayRun.caseId && (
+        <DualComparisonView
+          archiveSeries={studySeries}
+          caseId={displayRun.caseId}
+          currentRunId={run.runId ?? null}
+          initialReferenceCaseId={dualReference || null}
+          onClose={closeDualComparison}
+          run={run}
+        />
       )}
 
       {metadataDialogOpen && (

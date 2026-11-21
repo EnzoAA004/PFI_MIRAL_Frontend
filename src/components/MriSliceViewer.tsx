@@ -647,7 +647,10 @@ export function MriSliceViewer({
 
   useEffect(() => {
     setFitInitialized(false);
-    setImageSize({ width: 0, height: 0 });
+    const image = imageRef.current;
+    setImageSize(image?.complete && image.naturalWidth > 0
+      ? { width: image.naturalWidth, height: image.naturalHeight }
+      : { width: 0, height: 0 });
     setPan({ x: 0, y: 0 });
   }, [inputUrl]);
 
