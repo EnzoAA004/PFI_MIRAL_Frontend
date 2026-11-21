@@ -13,12 +13,13 @@ import {
  * EXT-02: "Review Analytics" — neutral internal telemetry dashboard. Never a clinical safety
  * signal: no traffic-light coloring, no "modelo seguro"/"accuracy clínica" wording anywhere here.
  */
-export function ReviewAnalyticsView({ onBack }: { onBack: () => void }) {
+export function ReviewAnalyticsView({ onBack, isAdmin = true }: { onBack: () => void; isAdmin?: boolean }) {
   const [report, setReport] = useState<ReviewAnalyticsReport | null>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!isAdmin) return;
     setPhase("loading");
     getReviewAnalytics()
       .then((data) => {
@@ -29,13 +30,25 @@ export function ReviewAnalyticsView({ onBack }: { onBack: () => void }) {
         setPhase("error");
         setError(thrown instanceof Error ? thrown.message : "No se pudo cargar la telemetría de revisión.");
       });
-  }, []);
+  }, [isAdmin]);
+
+  if (!isAdmin) {
+    return (
+      <div className="review-analytics-view">
+        <div className="review-analytics-header">
+          <button type="button" className="ghost-button" onClick={onBack}>Volver</button>
+          <h1>Analítica de revisión</h1>
+        </div>
+        <p className="rr-note" role="alert">Se necesitan permisos de administrador para ver este panel.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="review-analytics-view">
       <div className="review-analytics-header">
         <button type="button" className="ghost-button" onClick={onBack}>Volver</button>
-        <h1>Review Analytics</h1>
+        <h1>Analítica de revisión</h1>
       </div>
       <p className="rr-note">{REVIEW_ANALYTICS_DISCLAIMER}</p>
 

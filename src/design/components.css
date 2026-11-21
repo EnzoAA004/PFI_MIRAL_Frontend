@@ -2460,8 +2460,40 @@ body {
   color: var(--text);
   display: grid;
   gap: var(--sp-2);
+  list-style-position: outside;
   margin: 0;
-  padding-left: var(--sp-5);
+  padding-left: 1.75em;
+}
+
+.support-steps li {
+  padding-left: var(--sp-1);
+}
+
+.password-change-form {
+  display: grid;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+
+.password-change-form label {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.password-change-form label span {
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+}
+
+.password-change-form input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  color: var(--text);
+  min-height: 40px;
+  padding: var(--sp-2) var(--sp-3);
 }
 
 .analysis-stepper {

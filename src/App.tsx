@@ -534,7 +534,7 @@ function App() {
         </section>
       ))}
       {activeView === "settings" && <SettingsView user={session.user} onUserUpdated={(user) => setSession((current) => current ? { ...current, user } : current)} onLogout={logout} />}
-      {activeView === "analytics" && <ReviewAnalyticsView onBack={() => changeView("dashboard")} />}
+      {activeView === "analytics" && <ReviewAnalyticsView isAdmin={session.user.roles.includes("ADMIN")} onBack={() => changeView("dashboard")} />}
       {activeView === "admin" && (session.user.roles.includes("ADMIN") ? <AdminProfessionalsView currentEmail={session.user.email} /> : <section className="panel-card clinical-empty-state"><h2>Acceso restringido</h2><p>Esta sección es solo para administradores.</p></section>)}
     </AppShell>
   );

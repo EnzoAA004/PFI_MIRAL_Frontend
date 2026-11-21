@@ -97,6 +97,30 @@ export async function updateDoctorSettings(settings: AuthSettingsRequest) {
   return user;
 }
 
+/**
+ * Cambia la contraseña de la cuenta autenticada. El backend revoca las demás sesiones y devuelve
+ * una sesión nueva, que se guarda para que quien cambia la clave siga adentro.
+ */
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const traceId = generateTraceId("frontend-auth");
+  const response = await fetch(`${API_BASE_URL}/api/auth/password`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...authHeaders() },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!response.ok) {
+    let message = "";
+    try {
+      const body = (await response.json()) as { message?: string };
+      message = typeof body.message === "string" ? body.message : "";
+    } catch {
+      message = "";
+    }
+    throw new Error(message || `No se pudo cambiar la contraseña (${response.status}).`);
+  }
+  return saveAuthSession((await response.json()) as AuthTokenResponse);
+}
+
 export async function listProfessionals() {
   return authRequest<AuthUser[]>("/api/auth/admin/professionals", undefined, "GET", true);
 }
