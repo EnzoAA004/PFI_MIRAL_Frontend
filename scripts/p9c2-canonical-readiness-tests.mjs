@@ -217,6 +217,14 @@ test("E3 sliceCount distinto de canonicalShape[selectedAxis] bloquea", () => {
   const run = cleanRun({ planes: { sagittal: cleanSagittal({ input: { ...cleanSagittal().input, sliceCount: 5 } }) } });
   assert.equal(readiness.evaluateSagittalReadiness(run).ready, false);
 });
+
+test("una imagen 2D admite un único corte sin tratarla como volumen", () => {
+  const input = { nativeShape: [256, 256], canonicalShape: [256, 256], orientationTransform: "none", selectedSliceIndex: 0, selectedAxis: 0, sliceCount: 1 };
+  const run = (image) => cleanRun({ planes: { sagittal: cleanSagittal({ input: image }) } });
+  assert.equal(readiness.evaluateRealInferenceReadiness(run(input)).ready, true);
+  assert.equal(readiness.evaluateRealInferenceReadiness(run({ ...input, sliceCount: 2 })).ready, false);
+  assert.equal(readiness.evaluateRealInferenceReadiness(run({ ...input, nativeShape: [64, 256] })).ready, false);
+});
 test("E4 selectedSliceIndex fuera de rango bloquea", () => {
   const run = cleanRun({ planes: { sagittal: cleanSagittal({ input: { ...cleanSagittal().input, selectedSliceIndex: 99 } }) } });
   assert.equal(readiness.evaluateSagittalReadiness(run).ready, false);

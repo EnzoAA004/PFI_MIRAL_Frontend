@@ -147,6 +147,15 @@ export function isVolumetricMetadataAbsent(metadata: SpiderRuntimeMetadata) {
     && metadata.inputOrientationTransform === undefined;
 }
 
+function isValidSingleImage(metadata: SpiderRuntimeMetadata) {
+  const { inputShapeNative, inputShapeCanonical, sliceCount, selectedAxis, selectedSlice, inputOrientationTransform } = metadata;
+  return inputShapeNative?.length === 2
+    && inputShapeCanonical?.length === 2
+    && inputShapeCanonical.every((size, index) => Number.isInteger(size) && size > 0 && size === inputShapeNative[index])
+    && sliceCount === 1 && selectedAxis === 0 && selectedSlice === 0
+    && inputOrientationTransform === "none";
+}
+
 export function evaluateSagittalReadiness(run?: CanonicalMultiplanarRun | null, requireFinalSpider = true): ReadinessResult {
   const reasons: string[] = [];
   const sagittal = run?.planes?.sagittal;
@@ -175,7 +184,7 @@ export function evaluateSagittalReadiness(run?: CanonicalMultiplanarRun | null, 
        * esta metadata; el detalle técnico vive en el panel Técnico de la lectura.
        */
       reasons.push("La corrida no informa la metadata volumétrica del estudio (dimensiones, cantidad de cortes y eje). Sin ella no se puede evaluar el volumen sagital, aunque el estudio sea válido.");
-    } else {
+    } else if (!isValidSingleImage(metadata)) {
       if (!metadata.canonicalShapeValid) reasons.push("La forma canónica sagital no informa 3 dimensiones.");
       if (!metadata.selectedAxisValid) reasons.push("El eje sagital seleccionado no es válido.");
       if (!metadata.sliceCountValid) reasons.push("El conteo de cortes sagitales no es válido.");
