@@ -2389,8 +2389,33 @@
     border: 1px dashed var(--line);
     border-radius: 6px;
   }
-  .rr-roi-toggle { width: 100%; }
-  .rr-roi-toggle.is-active { font-weight: 800; }
+  .rr-roi-toggle {
+    width: 100%;
+    min-height: var(--control-h);
+    padding: var(--sp-1) var(--sp-2);
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-btn);
+    background: var(--primary);
+    color: var(--on-primary);
+    font-weight: var(--fw-semibold);
+    cursor: pointer;
+  }
+
+  .rr-roi-toggle.is-active {
+    background: var(--surface-raised);
+    color: var(--text);
+  }
+
+  .rr-roi-toggle:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+
+  .rr-roi-toggle:disabled {
+    border-color: var(--border);
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    cursor: default;
+  }
   .rr-roi-hint,
   .rr-roi-missing,
   .rr-roi-error {
