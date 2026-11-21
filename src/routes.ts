@@ -18,6 +18,7 @@ export const ROUTES = {
   patients: "/pacientes",
   settings: "/ajustes",
   analytics: "/analytics",
+  admin: "/administracion",
 } as const;
 
 const VIEW_TO_PATH: Record<ViewKey, string> = {
@@ -30,6 +31,7 @@ const VIEW_TO_PATH: Record<ViewKey, string> = {
   history: ROUTES.patients,
   settings: ROUTES.settings,
   analytics: ROUTES.analytics,
+  admin: ROUTES.admin,
 };
 
 export function pathForView(view: ViewKey): string {
@@ -52,6 +54,7 @@ export function viewForPath(pathname: string): ViewKey {
   if (pathname.startsWith(`${ROUTES.patients}/`)) return "history";
   if (pathname.startsWith(ROUTES.settings)) return "settings";
   if (pathname.startsWith(ROUTES.analytics)) return "analytics";
+  if (pathname.startsWith(ROUTES.admin)) return "admin";
   return "dashboard";
 }
 

@@ -4,7 +4,7 @@ export type Priority = "alta" | "media" | "baja";
 export type DataOrigin = "backend" | "ai_module" | "database" | "demo";
 export type MultiplanarRunId = string;
 export type PlaneRunId = string;
-export type ViewKey = "dashboard" | "studies" | "queue" | "review" | "patients" | "history" | "settings" | "analytics";
+export type ViewKey = "dashboard" | "studies" | "queue" | "review" | "patients" | "history" | "settings" | "analytics" | "admin";
 
 export type HistoryTarget =
   | { kind: "subject"; subjectRef: string }

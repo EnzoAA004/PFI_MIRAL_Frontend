@@ -18,10 +18,11 @@ interface AppShellProps {
   userName?: string;
   onLogout?: () => void;
   reviewQueueCount: number;
+  isAdmin?: boolean;
   immersive?: boolean;
 }
 
-export function AppShell({ activeView, activeNavView, onChangeView, children, aiModuleAvailable, degradedMode, currentRunId, userName, onLogout, reviewQueueCount, immersive = false }: AppShellProps) {
+export function AppShell({ activeView, activeNavView, onChangeView, children, aiModuleAvailable, degradedMode, currentRunId, userName, onLogout, reviewQueueCount, isAdmin = false, immersive = false }: AppShellProps) {
   // Collapsing the rail is a workspace preference, so it survives reloads.
   const [collapsed, setCollapsed] = useState(() => {
     try { return window.localStorage.getItem(RAIL_STORAGE_KEY) === "1"; } catch { return false; }
@@ -49,6 +50,7 @@ export function AppShell({ activeView, activeNavView, onChangeView, children, ai
           activeNavView={activeNavView}
           onChangeView={onChangeView}
           reviewQueueCount={reviewQueueCount}
+          isAdmin={isAdmin}
           systemOnline={aiModuleAvailable && !degradedMode}
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((value) => !value)}

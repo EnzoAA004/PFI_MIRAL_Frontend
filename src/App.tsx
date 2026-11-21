@@ -11,6 +11,7 @@ import { PatientHistoryPage } from "./components/PatientHistoryPage";
 import { PatientsView } from "./components/PatientsView";
 import { PendingApprovalView } from "./components/PendingApprovalView";
 import { SettingsView } from "./features/settings/SettingsView";
+import { AdminProfessionalsView } from "./features/admin/AdminProfessionalsView";
 import { ReviewAnalyticsView } from "./components/ReviewAnalyticsView";
 import { StudyReviewView } from "./components/StudyReviewView";
 import { Worklist } from "./features/worklist/Worklist";
@@ -493,7 +494,7 @@ function App() {
   if (pendingApproval) return <PendingApprovalView session={session} onLogout={logout} />;
 
   return (
-    <AppShell activeView={activeView} activeNavView={worklistNavView} onChangeView={changeView} health={health} modelCount={models.length} aiModuleAvailable={safeRun?.aiModuleAvailable ?? false} degradedMode={safeRun?.degradedMode ?? false} currentRunId={safeRun?.runId} userName={session.user.fullName} onLogout={logout} reviewQueueCount={reviewQueueCount} immersive={activeView === "review"}>
+    <AppShell activeView={activeView} activeNavView={worklistNavView} onChangeView={changeView} health={health} modelCount={models.length} aiModuleAvailable={safeRun?.aiModuleAvailable ?? false} degradedMode={safeRun?.degradedMode ?? false} currentRunId={safeRun?.runId} userName={session.user.fullName} onLogout={logout} reviewQueueCount={reviewQueueCount} isAdmin={session.user.roles.includes("ADMIN")} immersive={activeView === "review"}>
       {needsOnboarding && <OnboardingTutorial saving={onboardingSaving} onComplete={() => void completeOnboarding()} />}
       {error && (
         <div className="toast error app-error-toast" role="alert">
@@ -534,6 +535,7 @@ function App() {
       ))}
       {activeView === "settings" && <SettingsView user={session.user} onUserUpdated={(user) => setSession((current) => current ? { ...current, user } : current)} onLogout={logout} />}
       {activeView === "analytics" && <ReviewAnalyticsView onBack={() => changeView("dashboard")} />}
+      {activeView === "admin" && (session.user.roles.includes("ADMIN") ? <AdminProfessionalsView currentEmail={session.user.email} /> : <section className="panel-card clinical-empty-state"><h2>Acceso restringido</h2><p>Esta sección es solo para administradores.</p></section>)}
     </AppShell>
   );
 }

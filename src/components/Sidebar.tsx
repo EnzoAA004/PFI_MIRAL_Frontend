@@ -1,6 +1,6 @@
 import type { ViewKey } from "../appTypes";
 import { Fragment, type ComponentType, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, ListChecks, Moon, Settings, ShieldCheck, Sun, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, ListChecks, Moon, Settings, ShieldCheck, Sun, UserCheck, Users } from "lucide-react";
 import { setTheme, useTheme, type OperationsTheme } from "../design/theme";
 
 /**
@@ -16,11 +16,15 @@ const navItems: Array<{ key: ViewKey; label: string; icon: ComponentType<{ size?
   { key: "settings", label: "Configuración", icon: Settings },
 ];
 
+/** Solo para cuentas ADMIN: aprobar o revocar el acceso de los profesionales registrados. */
+const adminNavItem: (typeof navItems)[number] = { key: "admin", label: "Profesionales", icon: UserCheck };
+
 interface SidebarProps {
   activeView: ViewKey;
   activeNavView?: ViewKey;
   onChangeView: (view: ViewKey) => void;
   reviewQueueCount: number;
+  isAdmin?: boolean;
   systemOnline?: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -55,7 +59,7 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-export function Sidebar({ activeView, activeNavView = activeView, onChangeView, reviewQueueCount, systemOnline = true, collapsed = false, onToggleCollapsed, identity }: SidebarProps) {
+export function Sidebar({ activeView, activeNavView = activeView, onChangeView, reviewQueueCount, isAdmin = false, systemOnline = true, collapsed = false, onToggleCollapsed, identity }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -68,7 +72,7 @@ export function Sidebar({ activeView, activeNavView = activeView, onChangeView, 
         </div>
       </div>
       <nav className="side-nav">
-        {navItems.map((item) => {
+        {(isAdmin ? [...navItems.slice(0, 2), adminNavItem, ...navItems.slice(2)] : navItems).map((item) => {
           const Icon = item.icon;
           const selected = activeNavView === item.key;
           return (
