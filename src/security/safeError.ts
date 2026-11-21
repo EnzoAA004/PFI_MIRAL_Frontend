@@ -9,7 +9,7 @@ export type SafeFrontendError = {
 };
 
 const STATUS_MESSAGES: Record<number, string> = {
-  400: "La solicitud no es válida.",
+  400: "Revisá los datos ingresados: hay campos incompletos o no son válidos.",
   401: "La sesión venció o no es válida. Iniciá sesión nuevamente.",
   403: "No tenés permiso para realizar esta acción.",
   404: "El recurso solicitado no está disponible.",
@@ -20,7 +20,7 @@ const STATUS_MESSAGES: Record<number, string> = {
   429: "Se realizaron demasiadas solicitudes. Esperá un momento e intentá de nuevo.",
 };
 
-function fallbackForStatus(status?: number): string {
+export function fallbackForStatus(status?: number): string {
   if (status === undefined) return "No se pudo completar la operación.";
   if (STATUS_MESSAGES[status]) return STATUS_MESSAGES[status];
   if (status >= 500) return "El servicio no está disponible temporalmente. Intentá más tarde.";
@@ -61,10 +61,37 @@ export function isUnsafeErrorText(text: string): boolean {
   return UNSAFE_MESSAGE_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  email: "Correo",
+  password: "Contraseña",
+  currentPassword: "Contraseña actual",
+  newPassword: "Nueva contraseña",
+  fullName: "Nombre completo",
+  licenseNumber: "Matrícula",
+  specialty: "Especialidad",
+  institution: "Institución",
+  challengeId: "Código de verificación",
+  code: "Código de verificación",
+  patientReference: "Código de paciente",
+  firstName: "Nombre",
+  lastName: "Apellido",
+  dateOfBirth: "Fecha de nacimiento",
+  caseId: "ID de caso",
+};
+
+/** El backend informa "campo: mensaje en inglés"; se traduce a una indicación que el usuario pueda seguir. */
+function humanizeValidationMessage(candidate?: string): string | undefined {
+  const field = candidate?.match(/^([A-Za-z0-9_.\[\]]+):/)?.[1]?.split(".").pop();
+  const label = field ? FIELD_LABELS[field] : undefined;
+  return label ? `Revisá el campo «${label}»: está vacío o no tiene un formato válido.` : undefined;
+}
+
 /** Picks a curated backend message when it's safe, otherwise the fixed status mapping. */
 export function toSafeFrontendError(status: number | undefined, options: { code?: string; traceId?: string; candidateMessage?: string } = {}): SafeFrontendError {
   const { code, traceId, candidateMessage } = options;
-  const safeCandidate = candidateMessage && !isUnsafeErrorText(candidateMessage) ? candidateMessage : undefined;
+  const safeCandidate = code === "VALIDATION_ERROR"
+    ? humanizeValidationMessage(candidateMessage)
+    : candidateMessage && !isUnsafeErrorText(candidateMessage) ? candidateMessage : undefined;
   return {
     message: safeCandidate ?? fallbackForStatus(status),
     status,

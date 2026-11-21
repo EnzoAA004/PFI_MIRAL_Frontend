@@ -61,6 +61,7 @@ const context = {
     // El asset espera la hidratación de la sesión antes de pedir: en la app la
     // sesión vive en IndexedDB y sin esperarla el request sale sin Authorization.
     if (id === "./authStorage") return { ensureAuthSession: async () => null };
+    if (id === "./security/safeError") return { fallbackForStatus: (status) => status === 401 ? "Tu sesión venció. Iniciá sesión de nuevo." : "No se pudo completar la operación." };
     return {};
   },
 };
@@ -104,7 +105,7 @@ await test("C 401 provoca un unico refresh y reintento", async () => {
 
 await test("D segundo 401 produce failed/error sin bucle", async () => {
   fetchQueue = [response(401, "text/plain"), response(401, "text/plain")];
-  await assert.rejects(() => fetchAuthenticatedAiAsset("https://backend.example/api/ai/assets/run/sagittal/input.png"), /401/);
+  await assert.rejects(() => fetchAuthenticatedAiAsset("https://backend.example/api/ai/assets/run/sagittal/input.png"), /No se pudo descargar.*sesión venció/);
   assert.equal(refreshCount, 1);
   assert.equal(calls.length, 2);
 });

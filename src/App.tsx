@@ -12,6 +12,7 @@ import { PatientsView } from "./components/PatientsView";
 import { PendingApprovalView } from "./components/PendingApprovalView";
 import { SettingsView } from "./features/settings/SettingsView";
 import { AdminProfessionalsView } from "./features/admin/AdminProfessionalsView";
+import { DismissibleNotice } from "./components/DismissibleNotice";
 import { ReviewAnalyticsView } from "./components/ReviewAnalyticsView";
 import { StudyReviewView } from "./components/StudyReviewView";
 import { Worklist } from "./features/worklist/Worklist";
@@ -497,21 +498,15 @@ function App() {
     <AppShell activeView={activeView} activeNavView={worklistNavView} onChangeView={changeView} health={health} modelCount={models.length} aiModuleAvailable={safeRun?.aiModuleAvailable ?? false} degradedMode={safeRun?.degradedMode ?? false} currentRunId={safeRun?.runId} userName={session.user.fullName} onLogout={logout} reviewQueueCount={reviewQueueCount} isAdmin={session.user.roles.includes("ADMIN")} immersive={activeView === "review"}>
       {needsOnboarding && <OnboardingTutorial saving={onboardingSaving} onComplete={() => void completeOnboarding()} />}
       {error && (
-        <div className="toast error app-error-toast" role="alert">
-          <span>{error}</span>
-          <button className="ghost-button" onClick={retryBootstrap} type="button">Reintentar</button>
-        </div>
+        <DismissibleNotice key={error} tone="error" actions={<button className="ghost-button" onClick={retryBootstrap} type="button">Reintentar</button>}>{error}</DismissibleNotice>
       )}
       {studiesError && (
-        <div className="toast error app-error-toast" role="alert">
-          <span>{studiesError}</span>
-          <button className="ghost-button" onClick={retryBootstrap} type="button">Reintentar</button>
-        </div>
+        <DismissibleNotice key={studiesError} tone="error" actions={<button className="ghost-button" onClick={retryBootstrap} type="button">Reintentar</button>}>{studiesError}</DismissibleNotice>
       )}
-      {databaseDataStatus === "empty" && <div className="toast info">Sin estudios persistidos.</div>}
-      {aiModuleStatus === "error" && <div className="toast warning">AI Module no disponible. Los estudios persistidos siguen visibles si PostgreSQL responde.</div>}
-      {reviewSnapshotStatus === "error" && <div className="toast warning">No se pudo consultar el snapshot de revisión; no bloquea la lista de trabajo.</div>}
-      {info && <div className="toast info">{info}</div>}
+      {databaseDataStatus === "empty" && <DismissibleNotice tone="info">Todavía no hay estudios cargados.</DismissibleNotice>}
+      {aiModuleStatus === "error" && <DismissibleNotice tone="warning">El módulo de IA no está disponible. Los estudios guardados siguen visibles mientras la base de datos responda.</DismissibleNotice>}
+      {reviewSnapshotStatus === "error" && <DismissibleNotice tone="warning">No se pudo consultar el estado de las revisiones; esto no bloquea la lista de trabajo.</DismissibleNotice>}
+      {info && <DismissibleNotice key={info} tone="info">{info}</DismissibleNotice>}
       {isWorklistView && <Worklist studies={realStudyRows} loading={shouldShowDataLoading} onOpenReview={handleOpenReview} onAnalysisReady={handleViewSavedAnalysis} />}
       {activeView === "review" && (reviewLoading ? <LoadingState title="Cargando corrida" detail={`Consultando corridas persistidas para ${selectedStudy?.caseId ?? "el estudio seleccionado"}.`} /> : contractIssue ? <ContractErrorState detail={`${contractIssue.message}${contractIssue.path ? ` (${contractIssue.path})` : ""}${contractIssue.traceId ? ` · trace ${contractIssue.traceId}` : ""}`} onBackToStudies={() => changeView(lastStudyNavView)} /> : reviewError ? <ContractErrorState detail={reviewError} onBackToStudies={() => changeView(lastStudyNavView)} /> : safeRun ? <StudyReviewView run={safeRun} initialDualReference={pendingCompare && pendingCompare.caseId === safeRun.caseId ? pendingCompare.referenceCaseId : null} onInitialDualConsumed={() => setPendingCompare(null)} studyReview={studyReview} measurements={measurements} auditTrail={auditTrail} saving={saving} onBackToStudies={() => changeView(lastStudyNavView)} onMeasurementsChange={handleMeasurementsChange} onSaveReview={handleSaveReview} onStudyMetadataUpdated={handleStudyMetadataUpdated} selectedDetail={selectedDetail} onOpenPatientHistory={(subjectRef) => { setPatientHistoryCurrentCaseId(safeRun?.caseId ?? null); navigate(pathForPatient(subjectRef)); }} /> : <EmptyReviewState onBackToStudies={() => changeView(lastStudyNavView)} />)}
       {activeView === "patients" && <PatientsView onOpenPatient={(patientId) => navigate(pathForPatient(patientId))} />}

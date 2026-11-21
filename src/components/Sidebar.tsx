@@ -94,7 +94,7 @@ export function Sidebar({ activeView, activeNavView = activeView, onChangeView, 
             señal del estado, que es la señal que nadie mira. */}
         <span className={systemOnline ? "system-status is-online" : "system-status is-degraded"}>
           <ShieldCheck aria-hidden size={16} />
-          <span className="side-nav-label">{systemOnline ? "Sincronizado" : "Modo degradado"} · v1.3.2</span>
+          <span className="side-nav-label">Versión v1.3.2</span>
         </span>
         <ThemeToggle collapsed={collapsed} />
         {onToggleCollapsed && (

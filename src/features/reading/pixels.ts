@@ -1,6 +1,7 @@
 import { isAuthorizedBackendUrl } from "../../security/originPolicy";
 import { ensureAuthSession } from "../../authStorage";
 import { authHeaders, refreshDoctorSession } from "../../authClient";
+import { fallbackForStatus } from "../../security/safeError";
 
 /**
  * Píxeles crudos de un corte.
@@ -122,7 +123,7 @@ export async function fetchSlicePixels(url: string, signal?: AbortSignal): Promi
     await refreshDoctorSession();
     response = await request();
   }
-  if (!response.ok) throw new Error(`No se pudo descargar el corte: backend respondio ${response.status}.`);
+  if (!response.ok) throw new Error(`No se pudo descargar el corte. ${fallbackForStatus(response.status)}`);
 
   const pixels = new Int16Array(await response.arrayBuffer());
   cache.set(url, pixels);

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { authHeaders, refreshDoctorSession } from "./authClient";
 import { ensureAuthSession } from "./authStorage";
 import { isAuthorizedBackendUrl } from "./security/originPolicy";
+import { fallbackForStatus } from "./security/safeError";
 
 export type AuthenticatedImageState = "idle" | "loading" | "loaded" | "failed";
 
@@ -66,7 +67,7 @@ export async function fetchAuthenticatedAiAsset(url: string, signal?: AbortSigna
     response = await requestAsset(url, signal);
   }
   if (!response.ok) {
-    throw new AiAssetFetchError(`No se pudo descargar ${assetName}: backend respondio ${response.status}.`, response.status, url, assetName);
+    throw new AiAssetFetchError(`No se pudo descargar ${assetName}. ${fallbackForStatus(response.status)}`, response.status, url, assetName);
   }
   validateImageResponse(response, url);
   return response.blob();

@@ -3,16 +3,37 @@ import { ensureAuthSession, getCachedAuthSession, saveAuthSession } from "./auth
 import { coordinateRefresh } from "./security/refreshCoordinator";
 import { clearAllProtectedData, notifySessionInvalidated } from "./security/sessionCleanup";
 import { generateTraceId } from "./security/traceId";
+import { toSafeFrontendError } from "./security/safeError";
 import type { AuthLoginResponse, AuthPendingResponse, AuthSession, AuthSettingsRequest, AuthTokenResponse, AuthUser, RegisterRequest } from "./appTypes";
+
+const NETWORK_ERROR_MESSAGE = "No pudimos conectar con el servidor. Revisá tu conexión e intentá de nuevo.";
+
+/** Convierte una respuesta de error del backend en un mensaje legible; nunca muestra números de estado. */
+async function authErrorFromResponse(path: string, response: Response, traceId: string): Promise<ApiError> {
+  let body: { code?: string; message?: string } | undefined;
+  try {
+    body = (await response.json()) as { code?: string; message?: string };
+  } catch {
+    body = undefined;
+  }
+  const safe = toSafeFrontendError(response.status, { code: body?.code, traceId, candidateMessage: body?.message });
+  const message = path === "/api/auth/login" && response.status === 401 ? "Correo o contraseña incorrectos." : safe.message;
+  return new ApiError(message, { path, status: response.status, code: body?.code, traceId, body });
+}
 
 async function authRequest<T>(path: string, body?: unknown, method = "POST", includeAuth = false): Promise<T> {
   const traceId = generateTraceId("frontend-auth");
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...(includeAuth ? authHeaders() : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!response.ok) throw new ApiError(`Backend respondio ${response.status}`, { path, status: response.status, traceId });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...(includeAuth ? authHeaders() : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(NETWORK_ERROR_MESSAGE, { path });
+  }
+  if (!response.ok) throw await authErrorFromResponse(path, response, traceId);
   return (await response.json()) as T;
 }
 
@@ -103,21 +124,17 @@ export async function updateDoctorSettings(settings: AuthSettingsRequest) {
  */
 export async function changePassword(currentPassword: string, newPassword: string) {
   const traceId = generateTraceId("frontend-auth");
-  const response = await fetch(`${API_BASE_URL}/api/auth/password`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...authHeaders() },
-    body: JSON.stringify({ currentPassword, newPassword }),
-  });
-  if (!response.ok) {
-    let message = "";
-    try {
-      const body = (await response.json()) as { message?: string };
-      message = typeof body.message === "string" ? body.message : "";
-    } catch {
-      message = "";
-    }
-    throw new Error(message || `No se pudo cambiar la contraseña (${response.status}).`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/auth/password`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Trace-Id": traceId, ...authHeaders() },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  } catch {
+    throw new ApiError(NETWORK_ERROR_MESSAGE, { path: "/api/auth/password" });
   }
+  if (!response.ok) throw await authErrorFromResponse("/api/auth/password", response, traceId);
   return saveAuthSession((await response.json()) as AuthTokenResponse);
 }
 

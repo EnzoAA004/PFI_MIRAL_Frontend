@@ -144,10 +144,10 @@ test("17 los modulos HTTP adjuntan un traceId generado por el modulo centralizad
 // Roles y autorizacion en UI (P10-C.1 S5) - 3 tests
 // ---------------------------------------------------------------------------
 
-test("18 las preferencias locales del profesional (idioma/densidad/notificaciones) nunca incluyen un campo de rol", () => {
+test("18 la pantalla de ajustes ya no guarda preferencias locales ni fabrica un campo de rol en el cliente", () => {
   const settings = src("src/components/ProfessionalSettingsView.tsx");
-  assert.match(settings, /type PreferenceState = \{\s*language: string;\s*density: string;\s*notifications: boolean;\s*\};/);
-  assert.ok(!/PreferenceState[\s\S]{0,120}role/i.test(settings), "PreferenceState no debe incluir un campo de rol fabricado en el cliente");
+  assert.ok(!/PreferenceState|LOCAL_SETTINGS_KEY|localStorage/.test(settings), "los ajustes no deben persistir preferencias en el navegador");
+  assert.ok(!/role\s*:/i.test(settings), "los ajustes no deben incluir un campo de rol fabricado en el cliente");
 });
 
 test("19 pendingApproval/needsOnboarding en App.tsx se derivan solo de session.user (respuesta de backend), nunca de storage local editable", () => {

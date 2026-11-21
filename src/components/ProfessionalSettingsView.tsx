@@ -1,15 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { changePassword, updateDoctorSettings } from "../authClient";
 import type { AuthUser } from "../appTypes";
 import { ToggleSwitch } from "./ToggleSwitch";
-
-type PreferenceState = {
-  language: string;
-  density: string;
-  notifications: boolean;
-};
-
-const LOCAL_SETTINGS_KEY = "lumbar-mri-professional-settings-v1";
 
 interface ProfessionalSettingsViewProps {
   user: AuthUser;
@@ -17,18 +9,7 @@ interface ProfessionalSettingsViewProps {
   onLogout: () => void;
 }
 
-function loadLocalPreferences(): PreferenceState {
-  try {
-    const raw = window.localStorage.getItem(LOCAL_SETTINGS_KEY);
-    if (!raw) return { language: "es", density: "comfortable", notifications: false };
-    return { language: "es", density: "comfortable", notifications: false, ...JSON.parse(raw) } as PreferenceState;
-  } catch {
-    return { language: "es", density: "comfortable", notifications: false };
-  }
-}
-
 export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: ProfessionalSettingsViewProps) {
-  const [preferences, setPreferences] = useState<PreferenceState>(() => loadLocalPreferences());
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(Boolean(user.twoFactorEnabled));
   const [savingTwoFactor, setSavingTwoFactor] = useState(false);
   const [message, setMessage] = useState("");
@@ -37,10 +18,6 @@ export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: Prof
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const roles = useMemo(() => user.roles.length ? user.roles.join(", ") : "sin rol informado", [user.roles]);
-
-  useEffect(() => {
-    window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(preferences));
-  }, [preferences]);
 
   async function toggleTwoFactor() {
     const next = !twoFactorEnabled;
@@ -101,28 +78,6 @@ export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: Prof
             <div><dt>Correo</dt><dd>{user.email}</dd></div>
           </dl>
           <p className="settings-persistence-note">Edición de perfil pendiente de endpoint backend. Los datos visibles vienen de la sesión autenticada.</p>
-        </article>
-
-        <article className="panel-card compact-card settings-section">
-          <div className="section-title"><h2>Preferencias</h2><span>Guardado local</span></div>
-          <div className="settings-form-grid">
-            <label>
-              <span>Idioma</span>
-              <select value={preferences.language} onChange={(event) => setPreferences((current) => ({ ...current, language: event.target.value }))}>
-                <option value="es">Español</option>
-                <option value="en">Inglés</option>
-              </select>
-            </label>
-            <label>
-              <span>Densidad visual</span>
-              <select value={preferences.density} onChange={(event) => setPreferences((current) => ({ ...current, density: event.target.value }))}>
-                <option value="comfortable">Cómoda</option>
-                <option value="compact">Compacta</option>
-              </select>
-            </label>
-          </div>
-          <ToggleSwitch checked={preferences.notifications} label="Notificaciones" description="Preferencia local. El envío de notificaciones todavía no está disponible." onChange={() => setPreferences((current) => ({ ...current, notifications: !current.notifications }))} />
-          <p className="settings-persistence-note">Preferencias guardadas en este navegador; persistencia backend pendiente.</p>
         </article>
 
         <article className="panel-card compact-card settings-section">

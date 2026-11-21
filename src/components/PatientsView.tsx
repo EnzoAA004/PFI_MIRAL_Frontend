@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { SubjectSummary } from "../appTypes";
 import { displayStudyDate } from "../studyDisplay";
 import { fetchSubjectList } from "../subjectHistoryApi";
+import { RegisteredPatientsPanel } from "../features/patients/RegisteredPatientsPanel";
 import { OperationsPageHeader } from "./OperationsPageHeader";
 
 interface PatientsViewProps {
@@ -83,6 +84,8 @@ export function PatientsView({ onOpenPatient }: PatientsViewProps) {
           </span>
         )}
       />
+
+      <RegisteredPatientsPanel />
 
       <section className="panel-card patient-directory-panel">
         <div className="patient-directory-search">

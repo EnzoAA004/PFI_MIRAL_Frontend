@@ -3230,6 +3230,40 @@ body {
 .app-error-toast span {
   min-width: min(100%, 260px);
 }
+.dismissible-toast {
+  align-items: center;
+  display: flex;
+  gap: var(--sp-3);
+  justify-content: space-between;
+}
+.dismissible-toast .toast-message {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dismissible-toast .toast-actions {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--sp-2);
+}
+.toast-dismiss {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-btn);
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  opacity: 0.75;
+  width: 28px;
+}
+.toast-dismiss:hover,
+.toast-dismiss:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  opacity: 1;
+}
 @media (max-width: 1280px) {
   .review-workspace .review-grid {
     grid-template-columns: minmax(250px, 290px) minmax(0, 1fr);
@@ -4434,3 +4468,18 @@ body,
 .sidebar-footer .profile-chip svg:last-child {
   color: var(--sidebar-text-muted);
 }
+
+.registered-patients .section-title { margin-bottom: var(--sp-2); }
+.registered-patient-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.registered-patient-form {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  width: 100%;
+}
+.registered-patient-form label { display: grid; gap: var(--sp-1); }
+.registered-patient-form .registered-patient-actions { align-items: end; }
+.patient-row-inactive strong { opacity: 0.6; }
+.registered-patients-ok { color: var(--ok, #2f9e6e); }
+.registered-patients-error { color: var(--danger, #d9534f); }
+
