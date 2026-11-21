@@ -3,11 +3,11 @@ export type AnalyzedSliceSourceParams = {
   sourceInputId?: string;
   index: number;
   aiIndex: number;
-  legacyInputUrl?: string | null;
-  legacyPreviewCount?: number;
+  inputUrl?: string | null;
+  previewCount?: number;
 };
 
-function legacySlicePreviewUrl(inputUrl: string | null | undefined, index: number) {
+function runSlicePreviewUrl(inputUrl: string | null | undefined, index: number) {
   if (!inputUrl) return undefined;
   const name = `slice-${String(index).padStart(3, "0")}.png`;
   const separator = inputUrl.lastIndexOf("/");
@@ -18,21 +18,23 @@ function legacySlicePreviewUrl(inputUrl: string | null | undefined, index: numbe
  * Resuelve la imagen de un corte de la misma serie que alimentó la corrida.
  *
  * El corte inferido conserva `input.png`: es el recurso canónico al que están
- * alineados overlay y mediciones. Los demás cortes se piden por el `inputId`
- * persistido de esa misma serie. Las corridas antiguas que no publicaban ese
- * identificador conservan la ruta histórica de previews, si declararon tenerlas.
+ * alineados overlay y mediciones. Para los demás cortes, se prefieren las
+ * imágenes persistidas de la corrida cuando ésta las declara. La ruta de la
+ * serie puede dejar de estar disponible al renovarse la instancia de IA.
  */
 export function resolveAnalyzedSliceSource({
   apiBaseUrl,
   sourceInputId,
   index,
   aiIndex,
-  legacyInputUrl,
-  legacyPreviewCount = 0,
+  inputUrl,
+  previewCount = 0,
 }: AnalyzedSliceSourceParams) {
   if (index === aiIndex) return undefined;
+  const previewUrl = index < previewCount ? runSlicePreviewUrl(inputUrl, index) : undefined;
+  if (previewUrl) return previewUrl;
   if (sourceInputId) {
     return `${apiBaseUrl}/api/ai/series/${encodeURIComponent(sourceInputId)}/slices/${index}`;
   }
-  return index < legacyPreviewCount ? legacySlicePreviewUrl(legacyInputUrl, index) : undefined;
+  return undefined;
 }

@@ -1208,8 +1208,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
       sourceInputId: analyzedSeries.sourceInputId,
       index,
       aiIndex,
-      legacyInputUrl: series.imageUrl,
-      legacyPreviewCount: series.slicePreviewCount,
+      inputUrl: series.imageUrl,
+      previewCount: series.slicePreviewCount,
     });
     const nav: SliceNavigation | undefined = total > 1
       ? {

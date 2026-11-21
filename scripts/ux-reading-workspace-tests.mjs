@@ -102,6 +102,8 @@ check("el corte IA conserva el input.png canónico", () => {
     sourceInputId: "sagittal-input",
     index: 7,
     aiIndex: 7,
+    inputUrl: "https://backend.example/api/ai/assets/run/sagittal/input.png",
+    previewCount: 15,
   }), undefined);
 });
 
@@ -129,9 +131,25 @@ check("corridas antiguas sin inputId conservan previews declaradas", () => {
     apiBaseUrl: "https://backend.example",
     index: 3,
     aiIndex: 4,
-    legacyInputUrl: "https://backend.example/api/ai/assets/run/sagittal/input.png",
-    legacyPreviewCount: 5,
+    inputUrl: "https://backend.example/api/ai/assets/run/sagittal/input.png",
+    previewCount: 5,
   }), "https://backend.example/api/ai/assets/run/sagittal/slice-003.png");
+});
+
+check("los cortes axiales persistidos tienen prioridad sobre el endpoint temporal de la serie", () => {
+  const source = {
+    apiBaseUrl: "https://backend.example",
+    sourceInputId: "axial-input",
+    aiIndex: 6,
+    inputUrl: "https://backend.example/api/ai/assets/axial-run/axial/input.png",
+    previewCount: 12,
+  };
+  assert.equal(sliceSource.resolveAnalyzedSliceSource({ ...source, index: 9 }),
+    "https://backend.example/api/ai/assets/axial-run/axial/slice-009.png");
+  assert.equal(sliceSource.resolveAnalyzedSliceSource({ ...source, previewCount: 9, index: 9 }),
+    "https://backend.example/api/ai/series/axial-input/slices/9");
+  assert.equal(sliceSource.resolveAnalyzedSliceSource({ ...source, inputUrl: null, index: 9 }),
+    "https://backend.example/api/ai/series/axial-input/slices/9");
 });
 
 check("IDs y selección de mediciones permanecen intactos", () => {
