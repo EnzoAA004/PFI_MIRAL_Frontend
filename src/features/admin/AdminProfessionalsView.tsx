@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { listProfessionals, updateProfessionalApproval } from "../../authClient";
-import type { AuthUser } from "../../appTypes";
+import { authorizeProfileChange, decideProfileChange, listProfessionals, listProfileChanges, updateProfessionalApproval } from "../../authClient";
+import type { AdminProfileChange, AuthUser } from "../../appTypes";
 import { OperationsPageHeader } from "../../components/OperationsPageHeader";
 
 /**
@@ -19,6 +19,30 @@ export function AdminProfessionalsView({ currentEmail }: { currentEmail: string 
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [busyEmail, setBusyEmail] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [changes, setChanges] = useState<AdminProfileChange[]>([]);
+  const [changeNotice, setChangeNotice] = useState("");
+
+  const loadChanges = useCallback(async () => {
+    try {
+      setChanges(await listProfileChanges());
+    } catch {
+      setChanges([]);
+    }
+  }, []);
+
+  async function runChangeAction(email: string, action: () => Promise<string>) {
+    setBusyEmail(email);
+    setActionError("");
+    setChangeNotice("");
+    try {
+      setChangeNotice(await action());
+      await loadChanges();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No se pudo completar la acción.");
+    } finally {
+      setBusyEmail(null);
+    }
+  }
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -29,7 +53,7 @@ export function AdminProfessionalsView({ currentEmail }: { currentEmail: string 
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); void loadChanges(); }, [load, loadChanges]);
 
   async function setApproval(user: AuthUser, approved: boolean) {
     setBusyEmail(user.email);
@@ -59,6 +83,51 @@ export function AdminProfessionalsView({ currentEmail }: { currentEmail: string 
         meta={<span className="patient-directory-total" aria-live="polite">{state.status === "ready" ? `${pendingCount} pendientes` : "—"}</span>}
         actions={<button className="ghost-button" onClick={() => void load()} type="button" disabled={state.status === "loading"}>Actualizar</button>}
       />
+      {changes.length > 0 && (
+        <section className="panel-card patient-directory-panel" aria-labelledby="profile-changes-title">
+          <div className="section-title"><h2 id="profile-changes-title">Cambios de perfil ({changes.length})</h2></div>
+          <p className="muted">Un profesional que quiere corregir su nombre, matrícula o institución pide el cambio acá. Al autorizarlo recibe un código por correo (si el entorno envía correos); al guardar, su cuenta queda en solo lectura hasta que apruebes o rechaces los cambios.</p>
+          {changeNotice && <p className="registered-patients-ok" role="status">{changeNotice}</p>}
+          <ul className="patient-directory-list" aria-label="Cambios de perfil">
+            {changes.map((change) => {
+              const busy = busyEmail === change.email;
+              return (
+                <li key={change.email}>
+                  <div>
+                    <strong>{change.fullName}</strong>
+                    <span>{change.email}</span>
+                    {change.note ? <span>Motivo: {change.note}</span> : null}
+                    {change.status === "REQUESTED" && <span>Esperando tu autorización</span>}
+                    {change.status === "AUTHORIZED" && <span>Autorizado: el profesional tiene que ingresar el código que recibió</span>}
+                    {change.status === "UNLOCKED" && <span>Edición habilitada: esperando que el profesional guarde los cambios</span>}
+                    {change.status === "PENDING_REVIEW" && (
+                      <>
+                        <span>Nombre: {change.previousFullName ?? "—"} → <strong>{change.fullName}</strong></span>
+                        <span>Matrícula: {change.previousLicenseNumber || "—"} → <strong>{change.licenseNumber || "—"}</strong></span>
+                        <span>Institución: {change.previousInstitution || "—"} → <strong>{change.institution || "—"}</strong></span>
+                      </>
+                    )}
+                  </div>
+                  <div className="registered-patient-actions">
+                    {(change.status === "REQUESTED" || change.status === "AUTHORIZED") && (
+                      <button className="primary-button" disabled={busy} onClick={() => void runChangeAction(change.email, async () => {
+                        const result = await authorizeProfileChange(change.email);
+                        return result.status === "UNLOCKED" ? "Edición habilitada directamente (este entorno no envía correos)." : "Código enviado al correo del profesional.";
+                      })} type="button">{change.status === "AUTHORIZED" ? "Reenviar código" : "Autorizar"}</button>
+                    )}
+                    {change.status === "PENDING_REVIEW" && (
+                      <button className="primary-button" disabled={busy} onClick={() => void runChangeAction(change.email, async () => { await decideProfileChange(change.email, true); return "Cambios aprobados: la cuenta recuperó el acceso completo."; })} type="button">Aprobar cambios</button>
+                    )}
+                    <button className="ghost-button" disabled={busy} onClick={() => void runChangeAction(change.email, async () => { await decideProfileChange(change.email, false); return change.status === "PENDING_REVIEW" ? "Cambios rechazados: se restauraron los datos anteriores." : "Solicitud rechazada."; })} type="button">
+                      {change.status === "PENDING_REVIEW" ? "Rechazar y revertir" : "Rechazar"}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
       <section className="panel-card patient-directory-panel">
         {state.status === "loading" && <div className="panel-hidden-placeholder">Consultando profesionales…</div>}
         {state.status === "error" && (

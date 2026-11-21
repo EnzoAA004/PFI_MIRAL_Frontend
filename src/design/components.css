@@ -4524,3 +4524,7 @@ body,
 .study-patient-results button:hover { background: var(--surface-soft, rgba(127, 127, 127, 0.1)); }
 .study-patient-actions { display: flex; gap: var(--sp-2); }
 
+.profile-change-panel { display: grid; gap: var(--sp-3); margin-top: var(--sp-3); }
+.profile-change-panel p { margin: 0; }
+.profile-change-field { display: grid; gap: var(--sp-1); }
+

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ApiError } from "../api";
 import { createDemoDoctorSession, loginDoctor, registerDoctor, verifyLogin, verifyRegistration } from "../authClient";
 import type { AuthPendingResponse, AuthSession, RegisterRequest } from "../appTypes";
 
@@ -37,6 +38,8 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  /** Mientras se envía el correo con el código, y los segundos en que se muestra la confirmación antes de pasar a la pantalla del código. */
+  const [sendingCode, setSendingCode] = useState(false);
 
   function updateField(key: keyof RegisterRequest, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -47,6 +50,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
     setError("");
     setMessage("");
     try {
+      if (mode === "register") setSendingCode(true);
       const response = mode === "register"
         ? await registerDoctor(form)
         : await loginDoctor(form.email, form.password);
@@ -58,14 +62,23 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
         setMessage(response.message ?? "Solicitud recibida. Revisá el estado de la cuenta profesional.");
         return;
       }
+      if (response.channel === "email") {
+        // El correo salió: se confirma unos segundos y después se pasa a ingresar el código.
+        setSendingCode(false);
+        setMessage(`Código enviado a ${form.email}. Revisá tu bandeja de entrada (y el spam).`);
+        await new Promise((resolve) => window.setTimeout(resolve, 3000));
+      }
       setChallengeState({ mode, challenge: response, email: form.email });
       setCode(response.devVerificationCode ?? "");
       setMessage(response.channel === "email-demo" && !response.devVerificationCode
         ? "El envío de correo no está habilitado en este entorno. Si todavía no activaron tu cuenta, contactá al administrador."
         : response.message ?? "Código de verificación generado.");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "No se pudo completar la solicitud");
+      setError(mode === "register" && submitError instanceof ApiError && submitError.status === 503
+        ? "Falló el envío del código. Verificá tus datos, preferentemente el correo electrónico, e intentá nuevamente."
+        : submitError instanceof Error ? submitError.message : "No se pudo completar la solicitud");
     } finally {
+      setSendingCode(false);
       setLoading(false);
     }
   }
@@ -130,7 +143,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
             )}
             <label>Correo profesional<input value={form.email} onChange={(event) => updateField("email", event.target.value)} /></label>
             <label>Contraseña<input type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} /></label>
-            <button className="primary-button" disabled={loading} onClick={() => void submit()} type="button">{loading ? "Procesando..." : mode === "register" ? "Crear cuenta y verificar" : "Ingresar"}</button>
+            <button className="primary-button" disabled={loading} onClick={() => void submit()} type="button">{sendingCode ? "Enviando código…" : loading ? "Procesando..." : mode === "register" ? "Crear cuenta y verificar" : "Ingresar"}</button>
             {authDemoEnabled && <button className="ghost-button" disabled={loading} onClick={() => void startDemo()} type="button">Entrar con doctor demo</button>}
           </div>
         ) : (
@@ -145,7 +158,8 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
             <button className="ghost-button" onClick={() => setChallengeState(null)} type="button">Volver</button>
           </div>
         )}
-        {message && !challengeState && <div className="toast info">{message}</div>}
+        {sendingCode && <div className="toast info" role="status">Enviando el código de verificación a tu correo…</div>}
+        {message && !challengeState && !sendingCode && <div className="toast info" role="status">{message}</div>}
         {error && <div className="toast error">{error}</div>}
       </section>
     </main>

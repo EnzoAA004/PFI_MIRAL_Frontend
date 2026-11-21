@@ -4,7 +4,7 @@ import { coordinateRefresh } from "./security/refreshCoordinator";
 import { clearAllProtectedData, notifySessionInvalidated } from "./security/sessionCleanup";
 import { generateTraceId } from "./security/traceId";
 import { toSafeFrontendError } from "./security/safeError";
-import type { AuthLoginResponse, AuthPendingResponse, AuthSession, AuthSettingsRequest, AuthTokenResponse, AuthUser, RegisterRequest } from "./appTypes";
+import type { AuthLoginResponse, AuthPendingResponse, AuthSession, AuthSettingsRequest, AuthTokenResponse, AuthUser, RegisterRequest, AdminProfileChange, ProfileChangeInfo } from "./appTypes";
 
 const NETWORK_ERROR_MESSAGE = "No pudimos conectar con el servidor. Revisá tu conexión e intentá de nuevo.";
 
@@ -34,6 +34,7 @@ async function authRequest<T>(path: string, body?: unknown, method = "POST", inc
     throw new ApiError(NETWORK_ERROR_MESSAGE, { path });
   }
   if (!response.ok) throw await authErrorFromResponse(path, response, traceId);
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -153,3 +154,40 @@ export async function logoutDoctor() {
   }
   await clearAllProtectedData();
 }
+
+// ---- Cambio de datos del perfil (el administrador autoriza; el profesional ingresa un código y edita) ----
+
+export async function getProfileChange() {
+  return authRequest<ProfileChangeInfo>("/api/auth/profile-change", undefined, "GET", true);
+}
+
+export async function requestProfileChange(note: string) {
+  return authRequest<ProfileChangeInfo>("/api/auth/profile-change/request", { note }, "POST", true);
+}
+
+export async function unlockProfileChange(token: string) {
+  return authRequest<ProfileChangeInfo>("/api/auth/profile-change/unlock", { token }, "POST", true);
+}
+
+/** Guarda los cambios; el backend devuelve una sesión nueva (la cuenta pasa a solo lectura hasta la revisión). */
+export async function submitProfileChange(data: { fullName: string; licenseNumber: string; institution: string }) {
+  const tokens = await authRequest<AuthTokenResponse>("/api/auth/profile-change/submit", data, "POST", true);
+  return saveAuthSession(tokens);
+}
+
+export async function cancelProfileChange() {
+  return authRequest<ProfileChangeInfo>("/api/auth/profile-change", undefined, "DELETE", true);
+}
+
+export async function listProfileChanges() {
+  return authRequest<AdminProfileChange[]>("/api/auth/admin/profile-changes", undefined, "GET", true);
+}
+
+export async function authorizeProfileChange(email: string) {
+  return authRequest<ProfileChangeInfo>("/api/auth/admin/profile-changes/authorize", { email }, "POST", true);
+}
+
+export async function decideProfileChange(email: string, approve: boolean) {
+  await authRequest<void>("/api/auth/admin/profile-changes/decision", { email, approve }, "POST", true);
+}
+

@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { changePassword, updateDoctorSettings } from "../authClient";
 import type { AuthUser } from "../appTypes";
 import { ToggleSwitch } from "./ToggleSwitch";
+import { ProfileChangePanel } from "../features/profile/ProfileChangePanel";
 
 interface ProfessionalSettingsViewProps {
   user: AuthUser;
@@ -17,7 +18,11 @@ export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: Prof
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "", repeat: "" });
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
-  const roles = useMemo(() => user.roles.length ? user.roles.join(", ") : "sin rol informado", [user.roles]);
+  const roles = useMemo(() => {
+    const visible = user.roles.filter((role) => role !== "READ_ONLY");
+    const base = visible.length ? visible.join(", ") : "sin rol informado";
+    return user.roles.includes("READ_ONLY") ? `${base} (solo lectura: cambios de perfil en revisión)` : base;
+  }, [user.roles]);
 
   async function toggleTwoFactor() {
     const next = !twoFactorEnabled;
@@ -69,7 +74,7 @@ export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: Prof
 
       <section className="settings-grid">
         <article className="panel-card compact-card settings-section">
-          <div className="section-title"><h2>Perfil</h2><span>Lectura de sesión</span></div>
+          <div className="section-title"><h2>Perfil</h2></div>
           <dl className="settings-details">
             <div><dt>Nombre</dt><dd>{user.fullName || "sin datos"}</dd></div>
             <div><dt>Rol</dt><dd>{roles}</dd></div>
@@ -77,7 +82,7 @@ export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: Prof
             <div><dt>Centro / institución</dt><dd>{user.institution || "sin datos"}</dd></div>
             <div><dt>Correo</dt><dd>{user.email}</dd></div>
           </dl>
-          <p className="settings-persistence-note">Edición de perfil pendiente de endpoint backend. Los datos visibles vienen de la sesión autenticada.</p>
+          <ProfileChangePanel onUserUpdated={onUserUpdated} user={user} />
         </article>
 
         <article className="panel-card compact-card settings-section">

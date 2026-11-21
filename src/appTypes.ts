@@ -796,3 +796,31 @@ export type AiEvaluationSummary = Record<string, unknown> & {
   latestRunId?: string;
   reports?: Record<string, unknown>;
 };
+
+export type ProfileChangeStatus = "NONE" | "REQUESTED" | "AUTHORIZED" | "UNLOCKED" | "PENDING_REVIEW";
+
+/** Estado del pedido de cambio de datos del perfil de la cuenta autenticada. */
+export type ProfileChangeInfo = {
+  status: ProfileChangeStatus;
+  note: string;
+  expiresAt?: string | null;
+  requestedAt?: string | null;
+  previousFullName?: string | null;
+  previousLicenseNumber?: string | null;
+  previousInstitution?: string | null;
+};
+
+/** Fila de la sección «Cambios de perfil» del administrador. */
+export type AdminProfileChange = {
+  email: string;
+  fullName: string;
+  licenseNumber: string;
+  institution: string;
+  status: ProfileChangeStatus;
+  note: string;
+  requestedAt: string;
+  previousFullName?: string | null;
+  previousLicenseNumber?: string | null;
+  previousInstitution?: string | null;
+};
+
