@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { changePassword, updateDoctorSettings } from "../authClient";
+import { PASSWORD_RULES_TEXT, passwordProblem } from "../features/auth/passwordPolicy";
 import type { AuthUser } from "../appTypes";
 import { ToggleSwitch } from "./ToggleSwitch";
 import { ProfileChangePanel } from "../features/profile/ProfileChangePanel";
@@ -54,6 +55,11 @@ export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: Prof
       setPasswordError("La confirmación no coincide con la nueva contraseña.");
       return;
     }
+    const policyProblem = passwordProblem(passwordForm.next);
+    if (policyProblem) {
+      setPasswordError(policyProblem);
+      return;
+    }
     setPasswordBusy(true);
     try {
       const session = await changePassword(passwordForm.current, passwordForm.next);
@@ -100,13 +106,13 @@ export function ProfessionalSettingsView({ user, onUserUpdated, onLogout }: Prof
               </label>
               <label>
                 <span>Nueva contraseña</span>
-                <input autoComplete="new-password" minLength={10} onChange={(event) => setPasswordForm((current) => ({ ...current, next: event.target.value }))} required type="password" value={passwordForm.next} />
+                <input autoComplete="new-password" minLength={8} onChange={(event) => setPasswordForm((current) => ({ ...current, next: event.target.value }))} required type="password" value={passwordForm.next} />
               </label>
               <label>
                 <span>Repetir nueva contraseña</span>
-                <input autoComplete="new-password" minLength={10} onChange={(event) => setPasswordForm((current) => ({ ...current, repeat: event.target.value }))} required type="password" value={passwordForm.repeat} />
+                <input autoComplete="new-password" minLength={8} onChange={(event) => setPasswordForm((current) => ({ ...current, repeat: event.target.value }))} required type="password" value={passwordForm.repeat} />
               </label>
-              <p className="settings-persistence-note">Mínimo 10 caracteres, con letras y números. Al cambiarla se cierran las demás sesiones abiertas.</p>
+              <p className="settings-persistence-note">{PASSWORD_RULES_TEXT} Al cambiarla se cierran las demás sesiones abiertas.</p>
               {passwordError && <div className="toast error" role="alert">{passwordError}</div>}
               <div className="account-actions">
                 <button className="primary-button" disabled={passwordBusy} type="submit">{passwordBusy ? "Guardando…" : "Guardar contraseña"}</button>

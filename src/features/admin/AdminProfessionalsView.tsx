@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { authorizeProfileChange, decideProfileChange, listProfessionals, listProfileChanges, updateProfessionalApproval } from "../../authClient";
+import { authorizeProfileChange, decideProfileChange, listProfessionals, listProfileChanges, listRegistrationRejections, rejectProfessionalRegistration, updateProfessionalApproval } from "../../authClient";
 import type { AdminProfileChange, AuthUser } from "../../appTypes";
 import { OperationsPageHeader } from "../../components/OperationsPageHeader";
 
@@ -21,6 +21,39 @@ export function AdminProfessionalsView({ currentEmail }: { currentEmail: string 
   const [actionError, setActionError] = useState("");
   const [changes, setChanges] = useState<AdminProfileChange[]>([]);
   const [changeNotice, setChangeNotice] = useState("");
+  /** Cuenta pendiente a la que se le está escribiendo el motivo del rechazo, y el texto. */
+  const [rejectingEmail, setRejectingEmail] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejections, setRejections] = useState<Record<string, string>>({});
+  const [rejectNotice, setRejectNotice] = useState("");
+
+  const loadRejections = useCallback(async () => {
+    try {
+      const items = await listRegistrationRejections();
+      setRejections(Object.fromEntries(items.map((item) => [item.email.toLowerCase(), item.reason])));
+    } catch {
+      setRejections({});
+    }
+  }, []);
+
+  async function sendRejection(user: AuthUser) {
+    setBusyEmail(user.email);
+    setActionError("");
+    setRejectNotice("");
+    try {
+      const result = await rejectProfessionalRegistration(user.email, rejectReason.trim());
+      setRejectNotice(result.emailSent
+        ? `Rechazo enviado por correo a ${user.email}. El motivo también le aparece al ingresar.`
+        : `Motivo guardado. Este entorno no envía correos: ${user.email} lo ve al ingresar.`);
+      setRejectingEmail(null);
+      setRejectReason("");
+      await loadRejections();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No se pudo registrar el rechazo.");
+    } finally {
+      setBusyEmail(null);
+    }
+  }
 
   const loadChanges = useCallback(async () => {
     try {
@@ -53,13 +86,14 @@ export function AdminProfessionalsView({ currentEmail }: { currentEmail: string 
     }
   }, []);
 
-  useEffect(() => { void load(); void loadChanges(); }, [load, loadChanges]);
+  useEffect(() => { void load(); void loadChanges(); void loadRejections(); }, [load, loadChanges, loadRejections]);
 
   async function setApproval(user: AuthUser, approved: boolean) {
     setBusyEmail(user.email);
     setActionError("");
     try {
       const updated = await updateProfessionalApproval(user.email, approved);
+      if (approved) void loadRejections();
       setState((current) => current.status === "ready"
         ? { status: "ready", professionals: current.professionals.map((item) => item.email === user.email ? updated : item) }
         : current);
@@ -138,6 +172,7 @@ export function AdminProfessionalsView({ currentEmail }: { currentEmail: string 
           </div>
         )}
         {actionError && <div className="toast error" role="alert">{actionError}</div>}
+        {rejectNotice && <p className="registered-patients-ok" role="status">{rejectNotice}</p>}
         {state.status === "ready" && (
           <ul className="patient-directory-list" aria-label="Profesionales registrados">
             {professionals.map((user) => {
@@ -154,11 +189,30 @@ export function AdminProfessionalsView({ currentEmail }: { currentEmail: string 
                       {isAdminAccount ? " · Administrador" : ""}
                       {user.verified ? "" : " · Correo sin verificar (se puede activar manualmente)"}
                     </span>
+                    {pending && rejections[user.email.toLowerCase()] && (
+                      <span className="rejection-note">Rechazada · motivo enviado: {rejections[user.email.toLowerCase()]}</span>
+                    )}
+                    {pending && rejectingEmail === user.email && (
+                      <div className="rejection-form">
+                        <label>
+                          <span>Motivo del rechazo (se le informa al profesional)</span>
+                          <textarea maxLength={1000} onChange={(event) => setRejectReason(event.target.value)} placeholder="Ej.: la matrícula no coincide con el registro del colegio profesional." rows={3} value={rejectReason} />
+                        </label>
+                        <div className="registered-patient-actions">
+                          <button className="primary-button" disabled={busyEmail === user.email || rejectReason.trim().length < 10} onClick={() => void sendRejection(user)} type="button">Enviar rechazo</button>
+                          <button className="ghost-button" disabled={busyEmail === user.email} onClick={() => { setRejectingEmail(null); setRejectReason(""); }} type="button">Cancelar</button>
+                        </div>
+                        {rejectReason.trim().length < 10 && <small className="auth-hint">Escribí al menos 10 caracteres para poder enviarlo.</small>}
+                      </div>
+                    )}
                   </div>
                   {isAdminAccount || isSelf ? null : pending ? (
-                    <button className="primary-button" disabled={busyEmail === user.email} onClick={() => void setApproval(user, true)} type="button" title={user.verified ? undefined : "Habilita la cuenta sin verificación por correo (activación institucional manual)"}>
-                      {user.verified ? "Aprobar" : "Activar manualmente"}
-                    </button>
+                    <div className="registered-patient-actions">
+                      <button className="primary-button" disabled={busyEmail === user.email} onClick={() => void setApproval(user, true)} type="button" title={user.verified ? undefined : "Habilita la cuenta sin verificación por correo (activación institucional manual)"}>
+                        {user.verified ? "Aprobar" : "Activar manualmente"}
+                      </button>
+                      <button className="ghost-button" disabled={busyEmail === user.email} onClick={() => { setRejectingEmail(user.email); setRejectReason(""); setRejectNotice(""); }} type="button">Rechazar…</button>
+                    </div>
                   ) : (
                     <button className="ghost-button" disabled={busyEmail === user.email} onClick={() => void setApproval(user, false)} type="button">
                       Revocar acceso

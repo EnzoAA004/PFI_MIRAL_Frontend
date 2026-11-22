@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ApiError, LOCAL_EVALUATION } from "../api";
 import { createDemoDoctorSession, loginDoctor, registerDoctor, requestPasswordReset, resetPassword, verifyLogin, verifyRegistration } from "../authClient";
 import type { AuthPendingResponse, AuthSession, RegisterRequest } from "../appTypes";
+import { emailProblem, PASSWORD_RULES_TEXT, passwordProblem } from "../features/auth/passwordPolicy";
 
 interface AuthViewProps {
   onAuthenticated: (session: AuthSession) => void;
@@ -18,14 +19,6 @@ type ChallengeState = {
 // Demo access is an explicit build-time opt-in. Public/local evaluation builds
 // keep the demo endpoint and credentials out of the login screen by default.
 const authDemoEnabled = import.meta.env.VITE_DEMO_LOGIN_ENABLED === "true";
-
-/** Misma política que el backend: 10 a 128 caracteres, con letras y números. */
-export function newPasswordProblem(value: string): string | null {
-  if (value.length < 10) return "La contraseña nueva debe tener al menos 10 caracteres.";
-  if (value.length > 128) return "La contraseña nueva no puede superar los 128 caracteres.";
-  if (!/\p{L}/u.test(value) || !/\d/.test(value)) return "La contraseña nueva debe combinar letras y números.";
-  return null;
-}
 
 function isSession(value: AuthPendingResponse | AuthSession): value is AuthSession {
   return typeof (value as AuthSession).accessToken === "string";
@@ -87,7 +80,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
 
   async function confirmReset() {
     if (!resetChallengeId) return;
-    const problem = newPasswordProblem(newPassword) ?? (newPassword !== newPassword2 ? "Las dos contraseñas nuevas no coinciden." : null);
+    const problem = passwordProblem(newPassword) ?? (newPassword !== newPassword2 ? "Las dos contraseñas nuevas no coinciden." : null);
     if (problem) { setError(problem); return; }
     setLoading(true);
     setError("");
@@ -108,6 +101,10 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
   }
 
   async function submit() {
+    if (mode === "register") {
+      const problem = emailProblem(form.email) ?? passwordProblem(form.password);
+      if (problem) { setError(problem); setMessage(""); return; }
+    }
     setLoading(true);
     setError("");
     setMessage("");
@@ -244,7 +241,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
                 <label>Código de 6 dígitos<input inputMode="numeric" maxLength={6} value={resetCode} onChange={(event) => setResetCode(event.target.value)} /></label>
                 <label>Contraseña nueva<input autoComplete="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
                 <label>Repetir contraseña nueva<input autoComplete="new-password" type="password" value={newPassword2} onChange={(event) => setNewPassword2(event.target.value)} /></label>
-                <small className="auth-hint">Mínimo 10 caracteres, con letras y números.</small>
+                <small className="auth-hint">{PASSWORD_RULES_TEXT}</small>
                 <button className="primary-button" disabled={loading || resetCode.trim().length !== 6} onClick={() => void confirmReset()} type="button">{loading ? "Procesando..." : "Cambiar contraseña"}</button>
                 <button className="ghost-button" disabled={loading} onClick={() => { setResetChallengeId(null); setResetCode(""); setMessage(""); setError(""); }} type="button">Pedir otro código</button>
               </>
@@ -262,7 +259,8 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
               </>
             )}
             <label>Correo profesional<input value={form.email} onChange={(event) => updateField("email", event.target.value)} /></label>
-            <label>Contraseña<input type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} /></label>
+            <label>Contraseña<input autoComplete={mode === "register" ? "new-password" : "current-password"} type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} /></label>
+            {mode === "register" && <small className="auth-hint">{PASSWORD_RULES_TEXT}</small>}
             <button className="primary-button" disabled={loading} onClick={() => void submit()} type="button">{sendingCode ? "Enviando código…" : loading ? "Procesando..." : mode === "register" ? (LOCAL_EVALUATION ? "Crear cuenta" : "Crear cuenta y verificar") : "Ingresar"}</button>
             <button className="auth-link" onClick={() => goTo("forgot")} type="button">¿Olvidaste tu contraseña?</button>
             {authDemoEnabled && <button className="ghost-button" disabled={loading} onClick={() => void startDemo()} type="button">Entrar con doctor demo</button>}

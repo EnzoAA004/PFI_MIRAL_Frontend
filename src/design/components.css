@@ -4537,3 +4537,10 @@ body,
 .auth-link { background: transparent; border: 0; padding: 4px 0; color: var(--primary); text-decoration: underline; cursor: pointer; font: inherit; font-size: 13px; text-align: center; }
 .auth-link:hover { color: var(--primary-hover, var(--primary)); }
 .auth-hint { color: var(--text-muted); font-size: 12px; }
+
+/* Rechazo de un registro con motivo. */
+.rejection-panel { border-color: #dc2626; background: rgba(220, 38, 38, .1); }
+.rejection-panel blockquote { margin: 6px 0; padding: 8px 12px; border-left: 3px solid #dc2626; background: var(--surface-subtle); color: var(--text); white-space: pre-wrap; }
+.rejection-form { display: grid; gap: 6px; margin-top: 8px; }
+.rejection-form textarea { width: 100%; min-height: 72px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px; font: inherit; }
+.rejection-note { color: #b91c1c; font-size: 12px; }

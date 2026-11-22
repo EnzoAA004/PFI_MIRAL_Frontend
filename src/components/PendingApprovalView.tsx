@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { getMyRegistrationRejection } from "../authClient";
 import type { AuthSession } from "../appTypes";
 
 interface PendingApprovalViewProps {
@@ -6,6 +8,16 @@ interface PendingApprovalViewProps {
 }
 
 export function PendingApprovalView({ session, onLogout }: PendingApprovalViewProps) {
+  /** Si un administrador no aprobó el registro, el motivo que escribió; `null` mientras la cuenta solo espera. */
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    getMyRegistrationRejection()
+      .then((result) => { if (active) setRejectionReason(result.rejected ? result.reason ?? "" : null); })
+      .catch(() => { if (active) setRejectionReason(null); });
+    return () => { active = false; };
+  }, [session.user.email]);
+
   return (
     <main className="auth-page">
       <section className="auth-card approval-card">
@@ -29,6 +41,14 @@ export function PendingApprovalView({ session, onLogout }: PendingApprovalViewPr
           <div><dt>Matrícula</dt><dd>{session.user.licenseNumber ?? "pendiente"}</dd></div>
           <div><dt>Estado</dt><dd>pending approval</dd></div>
         </dl>
+        {rejectionReason !== null && (
+          <div className="verification-panel rejection-panel" role="alert">
+            <strong>Tu registro no fue aprobado</strong>
+            <p>Motivo indicado por el administrador:</p>
+            <blockquote>{rejectionReason}</blockquote>
+            <p>Corregí lo que corresponda y escribile al administrador, o registrate de nuevo con los datos correctos.</p>
+          </div>
+        )}
         <div className="verification-panel">
           <strong>Acceso restringido</strong>
           <p>Mientras la cuenta esté pendiente, el backend bloquea endpoints clínico-académicos protegidos y solo permite consultar/configurar la cuenta profesional.</p>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { exportReviewReport, getRunAnnotations, saveRunAnnotations } from "../api";
+import { exportReviewReport, getRunAnnotations, LOCAL_EVALUATION, saveRunAnnotations } from "../api";
 import { resolvePersistedPlaneWorkspace } from "../appDataGuards";
 import { planeRunRecord, seriesFromPlaneRun, type PersistedStudySeries } from "../features/reading/planeSeries";
 import type { AiModelArtifact, AiRunResponse, AgentQuality, AuditEvent, Measurement, ReviewStatus, ReviewStatusResponse, StudyDetailResponse, StudyLandmark, StudyMask, StudyMetadataInput, StudySeries, StudyArchiveSeries } from "../appTypes";
@@ -1274,6 +1274,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   const outlierCount = resultRows.filter((row) => row.outlier).length;
 
   const confirmDisabled = saving || reviewStatus === "pendiente";
+  /** Aviso cuando falta la nota que exige el estado elegido; se borra al escribirla o al guardar. */
+  const [saveWarning, setSaveWarning] = useState("");
   const findingDecisions = useFindingDecisions(demoMode ? undefined : displayRun.caseId, demoMode ? undefined : run.runId);
 
   function selectSeries(series: any) {
@@ -1524,6 +1526,13 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
    * la que se editan en pantalla.
    */
   async function save(status: ReviewStatus) {
+    // El servidor exige una nota descriptiva para observado y descartado: se avisa acá, en vez de no hacer nada.
+    if ((status === "observado" || status === "descartado") && notes.trim().length < 5) {
+      setSaveMessage("");
+      setSaveWarning(`Para marcar el estudio como ${status === "observado" ? "observado" : "descartado"}, escribí el motivo en «Notas de revisión» (mínimo 5 caracteres).`);
+      return;
+    }
+    setSaveWarning("");
     const nextMeasurements = currentReviewerMeasurements();
     const review = await onSaveReview(status, notes, nextMeasurements);
     if (!review) return;
@@ -2195,12 +2204,14 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   <p className="rr-section-title">Proxy 3D experimental</p>
                   <p className="rr-note">Vista secundaria para inspección académica; no sustituye los planos adquiridos.</p>
                   <button
+                    aria-describedby="rr-3d-pending-note"
                     className="rr-more-action"
-                    onClick={() => setTab("3D Reconstruction")}
+                    disabled
                     type="button"
                   >
                     Abrir reconstrucción 3D
                   </button>
+                  <p className="rr-note" id="rr-3d-pending-note">Pendiente de realización: la reconstrucción 3D queda fuera del alcance de la herramienta actual.</p>
                 </div>
               </details>
 
@@ -2248,7 +2259,13 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   <summary>Asistente</summary>
                   <div className="rr-more-section-body">
                     <p className="rr-section-title">Asistente contextual</p>
-                    <ChatPanel caseId={displayRun.caseId} />
+                    {LOCAL_EVALUATION ? (
+                      <p className="rr-note" data-testid="assistant-local-unsupported">
+                        No disponible en esta versión local: el asistente necesita un modelo de lenguaje (Qwen2.5) de varios GB que no se incluye en el paquete. Con el modelo descargado y habilitado funciona igual que en la versión en la nube. No forma parte del núcleo de la tesis.
+                      </p>
+                    ) : (
+                      <ChatPanel caseId={displayRun.caseId} />
+                    )}
                   </div>
                 </details>
               )}
@@ -2589,7 +2606,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
           <ReviewInspectorPanel activeTab={panelTab} tab="review">
             <label className="rr-field">
               <span>Notas de revisión</span>
-              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Hallazgos, observaciones o motivo del estado…" />
+              <textarea value={notes} onChange={(event) => { setNotes(event.target.value); if (saveWarning) setSaveWarning(""); }} placeholder="Hallazgos, observaciones o motivo del estado…" />
             </label>
 
             <label className="rr-field">
@@ -2623,7 +2640,8 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                 <button className="rr-ghost rr-secondary" disabled={saving} onClick={() => void save("pendiente")} type="button">Guardar borrador</button>
                 <button className="rr-primary" disabled={confirmDisabled} onClick={() => void save(reviewStatus)} title={reviewStatus === "pendiente" ? "Usá Guardar borrador para conservar una revisión pendiente." : undefined} type="button">Confirmar</button>
               </div>
-              {saveMessage && <p className="rr-ok" role="status">{saveMessage}</p>}
+              {saveWarning && <p className="rr-error" role="alert">{saveWarning}</p>}
+              {saveMessage && !saveWarning && <p className="rr-ok" role="status">{saveMessage}</p>}
             </div>
           </ReviewInspectorPanel>
         </ReviewInspector>

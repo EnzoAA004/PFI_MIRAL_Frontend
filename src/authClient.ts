@@ -157,6 +157,23 @@ export async function updateProfessionalApproval(email: string, approved: boolea
   return authRequest<AuthUser>("/api/auth/admin/professionals/approval", { email, approved }, "PATCH", true);
 }
 
+export type RegistrationRejectionResult = { email: string; emailSent: boolean };
+export type RegistrationRejectionItem = { email: string; reason: string; rejectedAt: string };
+
+/** El administrador no aprueba un registro y le dice al profesional por qué (por correo si el entorno envía correos). */
+export async function rejectProfessionalRegistration(email: string, reason: string) {
+  return authRequest<RegistrationRejectionResult>("/api/auth/admin/professionals/rejection", { email, reason }, "POST", true);
+}
+
+export async function listRegistrationRejections() {
+  return authRequest<RegistrationRejectionItem[]>("/api/auth/admin/professionals/rejections", undefined, "GET", true);
+}
+
+/** Lo consulta la propia cuenta pendiente para saber si fue rechazada y por qué. */
+export async function getMyRegistrationRejection() {
+  return authRequest<{ rejected: boolean; reason?: string; rejectedAt?: string }>("/api/auth/rejection", undefined, "GET", true);
+}
+
 export async function logoutDoctor() {
   const session = getCachedAuthSession();
   if (session?.refreshToken) {

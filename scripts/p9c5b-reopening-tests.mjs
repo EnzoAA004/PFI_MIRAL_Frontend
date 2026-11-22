@@ -105,13 +105,12 @@ test("6 asset invalido o error de descarga durante la reapertura produce un esta
   assert.match(source, /setThreeDAssetState\(\{ status: "error"/);
 });
 
-test("7 la entrada 3D nunca queda deshabilitada: cada estado tiene su propio mensaje dentro del panel", () => {
+test("7 la entrada de reconstruccion 3D queda bloqueada y explica que esta fuera del alcance de la herramienta actual", () => {
   const source = readSource("src/components/StudyReviewView.tsx");
-  // En la sala de lectura el proxy 3D es una entrada mas del rail de series, y es
-  // seleccionable siempre: bloqueado, cargando, con error o disponible, el estado
-  // se explica dentro del panel en vez de dejar un control muerto.
-  assert.match(source, /setTab\("3D Reconstruction"\)/);
-  assert.equal(/disabled[^\n]*3D Reconstruction/.test(source), false, "la entrada 3D no debe deshabilitarse");
+  // Decision de alcance: no hay reconstruccion 3D disponible en esta version, asi que el boton no abre nada
+  // y se explica el motivo en vez de dejar un control que no hace nada.
+  assert.match(source, /Pendiente de realización: la reconstrucción 3D queda fuera del alcance de la herramienta actual\./);
+  assert.equal(/setTab\("3D Reconstruction"\)/.test(source), false, "el boton ya no abre el proxy 3D");
 });
 
 // 8. el mesh solo acepta /api/... o un origin que coincide exactamente con API_BASE_URL
