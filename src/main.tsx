@@ -6,8 +6,8 @@ import { UnsavedChangesGuard } from "./features/navigation/UnsavedChangesGuard";
 import "./design/tokens.css";
 import "./design/base.css";
 import "./design/components.css";
-// Feature stylesheets: each migrated screen owns its CSS instead of adding another
-// override layer to components.css.
+// Hojas de estilo por funcionalidad: cada pantalla migrada es dueña de su CSS en lugar de sumar otra
+// capa de overrides a components.css.
 import "./design/shell.css";
 import "./features/worklist/worklist.css";
 import "./features/reading/reading.css";

@@ -267,9 +267,9 @@ function App() {
     });
   }
 
-  // A session invalidated in the background (failed refresh) or a logout in
-  // another tab must close this tab's session too — no clinical data may
-  // remain reachable once the session is gone anywhere (P10-C.1 §3/§4).
+  // Una sesión invalidada en segundo plano (refresh fallido) o un logout en
+  // otra pestaña también debe cerrar la sesión de esta pestaña — ningún dato clínico debe
+  // seguir accesible una vez que la sesión dejó de existir en cualquier lado (P10-C.1 §3/§4).
   useEffect(() => {
     function handleSessionLost() {
       setSession(null);
@@ -484,9 +484,9 @@ function App() {
     await refreshSelectedStudyFromPostgres();
   }
 
-  // "dashboard", "studies" and "queue" all resolve to the single worklist; the old
-  // keys stay valid so existing navigation calls keep working while the redesign
-  // migrates screen by screen.
+  // "dashboard", "studies" y "queue" resuelven todas al único worklist; las claves
+  // viejas siguen siendo válidas para que las llamadas de navegación existentes sigan funcionando mientras el rediseño
+  // migra pantalla por pantalla.
   const isWorklistView = activeView === "dashboard" || activeView === "studies" || activeView === "queue";
   const worklistNavView: ViewKey = isWorklistView || activeView === "review" ? "dashboard" : activeView === "history" ? "patients" : activeView;
 

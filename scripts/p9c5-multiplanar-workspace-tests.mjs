@@ -50,7 +50,7 @@ exports.canonicalThreeDToProxyViewModel = canonicalThreeDToProxyViewModel;`, san
   return sandbox.exports;
 }
 
-/** Same loader pattern as p9c3-canonical-components-tests.mjs: stubs react/react-jsx-runtime, returns {} for other imports, reaches only pure exported helpers. */
+/** El mismo patrón de loader que p9c3-canonical-components-tests.mjs: stubbea react/react-jsx-runtime, devuelve {} para otros imports, alcanza solo helpers puros exportados. */
 function loadComponentModule(path) {
   const source = readFileSync(join(root, path), "utf8");
   const compiled = ts.transpileModule(source, {
@@ -207,7 +207,7 @@ test("2 parseo de todos los estados bloqueados definidos por el AI Module", () =
     assert.equal(run.threeD.status, status);
     assert.equal(run.threeD.assets.length, 0);
   }
-  // pending_registered_reconstruction must never be treated as a recognized/ready status.
+  // pending_registered_reconstruction nunca debe tratarse como un estado reconocido/listo.
   const legacyRaw = baseRawRun({ enabled: false, status: "pending_registered_reconstruction", assets: [] });
   const legacyRun = adapter.parseMultiplanarRunResponse(legacyRaw);
   const viewModel = threeDViewModel.canonicalThreeDToProxyViewModel(legacyRun.threeD, { status: "idle" });

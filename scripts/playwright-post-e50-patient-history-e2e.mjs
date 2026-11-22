@@ -1,14 +1,14 @@
 import { chromium } from "playwright";
 
 /**
- * Stage 84: real-backend browser E2E for the patient history / longitudinal timeline, extending
- * Stage 81's `playwright-post-e50-real-backend-e2e.mjs` pattern (real Frontend, real Backend,
- * real Postgres, deterministic mock AI/LLM -- `docker-compose.post-e50.yml`). Requires the fixture
- * from `84_PATIENT_HISTORY_BACKEND.md` (subjectRef PAT-84-1, Studies A/B/C + a legacy
- * `domain_study_runs` row for CASE-84-C so `StudyReviewView` can render) already seeded.
+ * Etapa 84: E2E de browser con backend real para el historial de pacientes / timeline longitudinal, extendiendo
+ * el patrón `playwright-post-e50-real-backend-e2e.mjs` de la Etapa 81 (Frontend real, Backend real,
+ * Postgres real, mock determinístico de AI/LLM -- `docker-compose.post-e50.yml`). Requiere el fixture
+ * de `84_PATIENT_HISTORY_BACKEND.md` (subjectRef PAT-84-1, Studies A/B/C + una fila legacy
+ * `domain_study_runs` para CASE-84-C para que `StudyReviewView` pueda renderizar) ya sembrado.
  *
- * Not wired into `npm test` -- manual confirmation script, matching Stage 81's own "no meter
- * framework enorme" scope.
+ * No está conectado a `npm test` -- script de confirmación manual, igual que el propio alcance de "no meter
+ * framework enorme" de la Etapa 81.
  */
 
 const frontendUrl = process.env.POST_E50_FRONTEND_URL ?? "http://localhost:8188";

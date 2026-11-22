@@ -1,7 +1,7 @@
-// EXT-07B: "Comparación con estudio previo" — pure display/matching helper tests, following the
-// same transpile-and-vm-load convention as scripts/post-e50-structured-report-tests.mjs (this
-// repo has no jsdom/testing-library/vitest — component JSX is not rendered here, only the
-// helpers it consumes).
+// EXT-07B: "Comparación con estudio previo" — tests de helpers puros de visualización/emparejamiento, siguiendo la
+// misma convención de transpile-and-vm-load que scripts/post-e50-structured-report-tests.mjs (este
+// repo no tiene jsdom/testing-library/vitest — el JSX del componente no se renderiza acá, solo los
+// helpers que consume).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";

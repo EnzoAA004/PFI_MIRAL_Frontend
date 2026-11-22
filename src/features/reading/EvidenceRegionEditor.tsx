@@ -30,15 +30,15 @@ import {
 } from "./visualEvidenceDisplay";
 
 /**
- * EXT-04B5: read-only by default (renders exactly like `EvidenceRegionOverlay`); a professional
- * must deliberately click "Editar anotación" to enter edit mode. Only BBOX/ELLIPSE become
- * draggable — see `isGraphicallyEditable`. Nothing is written to the Backend until "Guardar
- * corrección" is pressed; "Cancelar" discards the local draft with no network call at all
- * ("no autosave durante el arrastre", per the EXT-04B5 spec).
+ * EXT-04B5: solo lectura por defecto (se renderiza exactamente igual que `EvidenceRegionOverlay`); un profesional
+ * debe hacer clic deliberadamente en "Editar anotación" para entrar en modo edición. Solo BBOX/ELLIPSE se vuelven
+ * arrastrables — ver `isGraphicallyEditable`. No se escribe nada en el Backend hasta que se presiona "Guardar
+ * corrección"; "Cancelar" descarta el borrador local sin ninguna llamada de red
+ * ("no autosave durante el arrastre", según la spec de EXT-04B5).
  *
- * The red stroke used for a professional's draft is the same "región señalada" documented in
- * `EvidenceRegionOverlay`/`EXT_04B_FRONTEND_VISUAL_EVIDENCE.md` — never a severity signal, and
- * never the only cue: the caption below always carries the origin/label/review-status text too.
+ * El trazo rojo usado para el borrador de un profesional es la misma "región señalada" documentada en
+ * `EvidenceRegionOverlay`/`EXT_04B_FRONTEND_VISUAL_EVIDENCE.md` — nunca una señal de severidad, y
+ * nunca la única pista: el epígrafe de abajo siempre lleva también el texto de origen/etiqueta/estado de revisión.
  */
 type DragState =
   | { kind: "move"; geometryType: "BBOX" | "ELLIPSE"; startPoint: { x: number; y: number }; startGeometry: EvidenceGeometry }

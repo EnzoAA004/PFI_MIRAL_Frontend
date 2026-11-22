@@ -3,11 +3,11 @@ import { evaluateConcordance, displayConcordanceSentence, type ConcordanceResult
 import type { DegenerativeFinding } from "./degenerativeFindings";
 
 /**
- * EXT-01: "Concordancia de evidencia" — compares the two genuinely independent classifications
- * this product can produce for the same (level, side, phenomenon): a disc-level batch
- * degenerative-findings run and an on-demand subarticular-ROI classification (both real
- * `DegenerativeFindingsV1Dto` instances, see the Backend audit). Never claims "confirmado por dos
- * IAs" — always the neutral "las fuentes de evidencia son X según la regla Y" sentence.
+ * EXT-01: "Concordancia de evidencia" — compara las dos clasificaciones genuinamente independientes
+ * que este producto puede producir para el mismo (nivel, lado, fenómeno): una corrida por lote de
+ * hallazgos degenerativos de nivel de disco y una clasificación de ROI subarticular a demanda (ambas
+ * instancias reales de `DegenerativeFindingsV1Dto`, ver la auditoría del Backend). Nunca afirma "confirmado por dos
+ * IAs" — siempre la oración neutral "las fuentes de evidencia son X según la regla Y".
  */
 export function EvidenceConcordancePanel({
   caseId, batchFindings, roiFindings,

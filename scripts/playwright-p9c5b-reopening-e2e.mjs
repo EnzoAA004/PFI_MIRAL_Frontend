@@ -5,12 +5,12 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 /**
- * P9-C.5 Parte B smoke E2E: reopens a persisted dual-plane study straight from
- * the worklist (no "Nuevo analisis" / upload / AI Module run involved) and
- * verifies the experimental 3D proxy renders from the Backend's durable
- * canonicalRun contract. The AI Module inference route
- * (/api/ai/multiplanar/run) is intentionally left unmocked/tripwired — if the
- * app ever calls it during reopening, the test fails loudly.
+ * E2E smoke de P9-C.5 Parte B: reabre un estudio persistido de dos planos directamente desde
+ * el worklist (sin "Nuevo analisis" / upload / corrida del AI Module de por medio) y
+ * verifica que el proxy 3D experimental se renderiza a partir del contrato durable
+ * canonicalRun del Backend. La ruta de inferencia del módulo de IA
+ * (/api/ai/multiplanar/run) queda intencionalmente sin mockear/con tripwire — si la
+ * app llega a llamarla durante la reapertura, el test falla de forma ruidosa.
  */
 
 const port = 5197;
@@ -107,7 +107,7 @@ function maliciousStudyDetailResponse() {
     status: "experimental_ready",
     sourcePlaneRunIds: { sagittal: `${maliciousRunId}-sagittal`, axial: `${maliciousRunId}-axial` },
     requiredInputs: [],
-    // A compromised/misconfigured upstream trying to point the mesh at an external host.
+    // Un upstream comprometido/mal configurado intentando apuntar la malla a un host externo.
     assets: [{ assetName: "lumbar-3d-mesh.json", role: "mesh_3d", contentType: "application/json", generated: true, url: "http://evil-external-host.test/steal/lumbar-3d-mesh.json" }],
     reconstruction: { kind: "experimental_geometric_proxy", method: "dual_plane_bbox_proxy", anatomicalReconstruction: false, volumetricReconstruction: false, coordinateSystem: "local_proxy_space", mappingSource: "config", mappingValidated: false },
     warnings: [],
@@ -214,7 +214,7 @@ async function installBackendMocks(page) {
   await page.route(`${backendUrl}/api/**`, async (route) => {
     const url = new URL(route.request().url());
     const apiPath = url.pathname;
-    // Tripwire: this reopening flow must never trigger a new AI Module run.
+    // Tripwire: este flujo de reapertura nunca debe disparar una nueva corrida del AI Module.
     if (apiPath === "/api/ai/multiplanar/run") {
       aiModuleRunCalls.push(apiPath);
       return route.fulfill({ status: 500, json: { message: "AI Module must not be called during reopening" } });
@@ -237,11 +237,11 @@ async function installBackendMocks(page) {
     if (apiPath === "/api/studies/demo-review") return route.fulfill({ json: null });
     return route.fulfill({ json: {} });
   });
-  // Tripwire: catches the frontend ever attempting to reach the malicious
-  // external host at all — the strict origin check in isDurableMeshAssetUrl /
-  // fetchThreeDProxyAsset should refuse before any request is dispatched, so
-  // this route should never fire. If it does, we also record whether a JWT
-  // leaked into the request.
+  // Tripwire: detecta que el frontend intente siquiera alcanzar el host externo
+  // malicioso — el chequeo estricto de origen en isDurableMeshAssetUrl /
+  // fetchThreeDProxyAsset debería rechazar antes de despachar cualquier request, así que
+  // esta ruta nunca debería dispararse. Si lo hace, también registramos si un JWT
+  // se filtró en el request.
   await page.route("http://evil-external-host.test/**", async (route) => {
     externalHostCalls.push({ url: route.request().url(), authorization: route.request().headers().authorization ?? null });
     return route.fulfill({ status: 200, contentType: "application/json", json: meshAsset() });

@@ -4,10 +4,10 @@ import vm from "node:vm";
 import ts from "typescript";
 
 /**
- * Stage 80: contextual chat / self-hosted LLM module. Same pattern as the other post-e50 test
- * scripts: transpile the pure .ts modules to CommonJS and run them in a vm sandbox — no
- * DOM/React renderer, so all the logic worth testing (parsing, presentation, state transitions)
- * lives in plain .ts files with no React import.
+ * Etapa 80: módulo de chat contextual / LLM autoalojado. El mismo patrón que los otros scripts de test post-e50:
+ * transpilar los módulos .ts puros a CommonJS y correrlos en un sandbox vm — sin
+ * DOM/renderer de React, así que toda la lógica que vale la pena testear (parseo, presentación, transiciones de estado)
+ * vive en archivos .ts planos sin imports de React.
  */
 
 function load(path, exportNames) {
@@ -217,14 +217,14 @@ check("23. existe una sugerencia sobre mediciones corregidas profesionalmente", 
   assert.ok(display.SUGGESTED_QUESTIONS.includes("¿Qué mediciones fueron corregidas profesionalmente?"));
 });
 
-// ---- 24: P10.7 unavailable semantics (frontend never invents its own claim) ----
+// ---- 24: semántica de P10.7 no disponible (el frontend nunca inventa su propia afirmación) ----
 check("24. ningún texto estático del chat afirma 'normal'/'sin hallazgos' por su cuenta", () => {
   const forbidden = /\bnormal\b|sin hallazgos|no se detect/i;
   const texts = [display.CHAT_DISCLAIMER, display.CHAT_EMPTY_STATE_TEXT, display.CHAT_SENDING_TEXT, ...display.SUGGESTED_QUESTIONS];
   for (const text of texts) assert.equal(forbidden.test(text), false, `texto indebido: "${text}"`);
 });
 
-// ---- 25: no diagnosis language hardcoded by frontend ----
+// ---- 25: el frontend no hardcodea lenguaje de diagnóstico ----
 check("25. ningún texto estático del chat afirma un diagnóstico o tratamiento", () => {
   const forbidden = /diagn[oó]stic|tratamiento|pron[oó]stico|mejor[oó]|empeor[oó]/i;
   const texts = [display.CHAT_DISCLAIMER, display.CHAT_EMPTY_STATE_TEXT, display.CHAT_SENDING_TEXT, ...display.SUGGESTED_QUESTIONS];

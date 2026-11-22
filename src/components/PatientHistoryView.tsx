@@ -260,7 +260,7 @@ function EvolutionSection({ subjectRef }: { subjectRef: string }) {
       ) : !state.series || state.series.points.length === 0 ? (
         <EmptyLongitudinalState detail="No hay mediciones comparables entre múltiples estudios." />
       ) : (
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- axe requires keyboard focus for horizontally scrollable tables.
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- axe requiere foco de teclado para las tablas con scroll horizontal.
         <div className="table-wrap" tabIndex={0} role="region" aria-label="Evolución de la medición seleccionada">
           <table className="worklist-table longitudinal-measurements-table">
             <thead>

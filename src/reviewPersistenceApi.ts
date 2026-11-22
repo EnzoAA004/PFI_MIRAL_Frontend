@@ -21,9 +21,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const traceId = generateTraceId("frontend-review");
   let response = await fetch(`${API_BASE_URL}${path}`, requestInit(init, traceId));
   if (response.status === 401) {
-    // A failed refresh means the session is gone: surface that as the real
-    // failure (401) instead of silently retrying with the stale token, so
-    // callers observe a genuine "session invalid" state.
+    // Un refresh fallido significa que la sesión dejó de existir: se expone eso como la
+    // falla real (401) en lugar de reintentar en silencio con el token vencido, para que
+    // quienes llaman observen un auténtico estado de "sesión inválida".
     await refreshDoctorSession();
     response = await fetch(`${API_BASE_URL}${path}`, requestInit(init, traceId));
   }

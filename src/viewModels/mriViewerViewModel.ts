@@ -5,10 +5,10 @@ import { normalizeAiAssetUrl } from "../inferenceReadiness";
 import { aiAssetUrl } from "../multiplanarApi";
 
 /**
- * Pure visual domain for MriSliceViewer. Neither the canonical multiplanar
- * domain (CanonicalPlaneRun) nor the legacy single-plane pipeline domain
- * (StudySeries/StudyMask/StudyLandmark) leak past this file — MriSliceViewer
- * only ever sees MriViewerModel.
+ * Dominio visual puro para MriSliceViewer. Ni el dominio multiplanar canónico
+ * (CanonicalPlaneRun) ni el dominio del pipeline legacy de un solo plano
+ * (StudySeries/StudyMask/StudyLandmark) se filtran más allá de este archivo — MriSliceViewer
+ * solo ve MriViewerModel.
  */
 
 export type MriViewerAssetRole = "input" | "overlay" | "mask-preview";
@@ -102,7 +102,7 @@ function resolveAssetUrl(declaredUrl: string | null | undefined, planeRunId: str
   return undefined;
 }
 
-// --- Canonical multiplanar domain -------------------------------------------------
+// --- Dominio multiplanar canónico -------------------------------------------------
 
 function assetsForCanonicalPlane(plane: CanonicalPlaneRun): MriViewerAsset[] {
   const declared = new Map(plane.assets.map((asset) => [asset.assetName, asset]));
@@ -155,10 +155,10 @@ function canonicalLandmarksToViewer(landmarks: CanonicalPlaneRun["landmarks"]): 
 }
 
 /**
- * CanonicalPlaneRun -> MriViewerModel. No raw HTTP, no v1/v2 interpretation
- * (that lives exclusively in multiplanarRunAdapter.ts), no translation
- * (labelKey stays canonical; clinicalDisplay.ts resolves Spanish text at
- * render time).
+ * CanonicalPlaneRun -> MriViewerModel. Sin HTTP crudo, sin interpretación v1/v2
+ * (eso vive exclusivamente en multiplanarRunAdapter.ts), sin traducción
+ * (labelKey se mantiene canónico; clinicalDisplay.ts resuelve el texto en español al
+ * renderizar).
  */
 export function canonicalPlaneToMriViewerModel(plane: CanonicalPlaneRun): MriViewerModel {
   return {
@@ -172,7 +172,7 @@ export function canonicalPlaneToMriViewerModel(plane: CanonicalPlaneRun): MriVie
   };
 }
 
-// --- Legacy single-plane pipeline domain (StudyReviewView) -----------------------
+// --- Dominio legacy de pipeline de un solo plano (StudyReviewView) -----------------------
 
 export type StudyRunPlaneInput = {
   plane: Plane;
@@ -230,11 +230,11 @@ function studyLandmarksToViewer(landmarks: StudyLandmark[]): MriViewerLandmark[]
 }
 
 /**
- * Legacy single-plane pipeline (StudyReviewView, AiRunResponse-backed) ->
- * MriViewerModel. Only accepts the legacy types it has always used
- * (StudySeries/StudyMask/StudyLandmark) — never pretends AiRunResponse is
- * CanonicalMultiplanarRun. This is the only place that domain's compatibility
- * with the shared viewer is concentrated.
+ * Pipeline legacy de un solo plano (StudyReviewView, respaldado por AiRunResponse) ->
+ * MriViewerModel. Solo acepta los tipos legacy que siempre ha usado
+ * (StudySeries/StudyMask/StudyLandmark) — nunca finge que AiRunResponse sea
+ * CanonicalMultiplanarRun. Este es el único lugar donde se concentra la compatibilidad de ese dominio
+ * con el viewer compartido.
  */
 export function studyRunToMriViewerModel(input: StudyRunPlaneInput): MriViewerModel {
   const masks = input.masks ?? [];

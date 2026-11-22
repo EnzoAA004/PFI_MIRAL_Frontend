@@ -2,18 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import type { ThreeDProxyViewModel } from "../viewModels/threeDProxyViewModel";
 
 /**
- * Pure presentation component: renders exactly the vertices/faces/structures
- * already validated and packaged into ThreeDProxyViewModel. Never receives
- * the HTTP response, the raw mesh JSON, or the canonical domain — mirrors the
- * MriSliceViewer pattern. Never mixed with GenericAtlasPreview.
+ * Componente de presentación puro: renderiza exactamente los vértices/caras/estructuras
+ * ya validados y empaquetados en ThreeDProxyViewModel. Nunca recibe
+ * la respuesta HTTP, el JSON crudo de la malla ni el dominio canónico — replica el
+ * patrón de MriSliceViewer. Nunca se mezcla con GenericAtlasPreview.
  */
 
 type Props = {
   viewModel: ThreeDProxyViewModel;
   onRetry?: () => void;
   /**
-   * Optional controlled selection for 2D/3D coordination. When supplied,
-   * structure selection is driven by the parent instead of local-only state.
+   * Selección controlada opcional para coordinar 2D/3D. Cuando se provee,
+   * la selección de estructuras la maneja el padre en lugar de un estado solo local.
    */
   selectedStructure?: string | null;
   onSelectStructure?: (label: string | null) => void;
@@ -162,7 +162,7 @@ export function ExperimentalProxyViewer({ viewModel, onRetry, selectedStructure:
           try {
             canvasElement.releasePointerCapture(event.pointerId);
           } catch {
-            // Browser may release capture during tab changes.
+            // El navegador puede liberar la captura durante los cambios de pestaña.
           }
         }
         function wheel(event: WheelEvent) {

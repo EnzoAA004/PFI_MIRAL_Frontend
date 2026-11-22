@@ -1,5 +1,5 @@
-// EXT-02: pure display/format helper tests for the Review Analytics dashboard. Follows the same
-// transpile-and-vm-load convention as scripts/ext04b3-visual-evidence-tests.mjs.
+// EXT-02: tests de helpers puros de visualización/formato para el dashboard de Review Analytics. Sigue la misma
+// convención de transpile-and-vm-load que scripts/ext04b3-visual-evidence-tests.mjs.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";

@@ -1,16 +1,16 @@
 /**
- * EXT-04B3: types for `StudyReportDto.VisualEvidenceSummary` (Backend EXT-04B2,
- * `extensions/ext-04-visual-evidence-backend` @ 37bc4c1). Field names and the geometry map
- * shapes below are copied from the real Java records
+ * EXT-04B3: tipos para `StudyReportDto.VisualEvidenceSummary` (Backend EXT-04B2,
+ * `extensions/ext-04-visual-evidence-backend` @ 37bc4c1). Los nombres de campos y las formas de los mapas de geometría
+ * de abajo se copian de los records Java reales
  * (`ar.edu.uade.pfi.backend.dto.StudyReportDto.VisualEvidenceSummary`,
- * `ar.edu.uade.pfi.backend.domain.EvidenceGeometry`) — not the EXT-04B1 design draft, which
- * used different names in places (e.g. the DTO's `source="ai_validated"` for what
- * `DerivedEvidenceOrigin` calls `PROFESSIONAL_VALIDATED`).
+ * `ar.edu.uade.pfi.backend.domain.EvidenceGeometry`) — no del borrador de diseño de EXT-04B1, que
+ * usaba nombres distintos en algunos lugares (p. ej. el `source="ai_validated"` del DTO para lo que
+ * `DerivedEvidenceOrigin` llama `PROFESSIONAL_VALIDATED`).
  *
- * `geometry` is always already in the canonical normalised 0..256 basis
- * (`EvidenceCoordinateNormalizer`/`EvidenceGeometry.CANONICAL_MIN/MAX`) — the same basis
- * `ReviewerAnnotation`/`MeasurementLayer` already render in. This module never re-derives that
- * conversion; see `evidenceRegionOverlayDisplay.ts` for the render-time mapping.
+ * `geometry` siempre está ya en la base normalizada canónica 0..256
+ * (`EvidenceCoordinateNormalizer`/`EvidenceGeometry.CANONICAL_MIN/MAX`) — la misma base en la que
+ * `ReviewerAnnotation`/`MeasurementLayer` ya renderizan. Este módulo nunca vuelve a derivar esa
+ * conversión; ver `evidenceRegionOverlayDisplay.ts` para el mapeo en tiempo de renderizado.
  */
 
 export const EVIDENCE_GEOMETRY_TYPES = ["BBOX", "ELLIPSE", "POLYGON", "MASK_REFERENCE"] as const;
@@ -22,19 +22,19 @@ export type EvidenceGeometryBbox = { type: "BBOX"; x: number; y: number; width: 
 export type EvidenceGeometryEllipse = { type: "ELLIPSE"; centerX: number; centerY: number; radiusX: number; radiusY: number };
 export type EvidenceGeometryPolygon = { type: "POLYGON"; points: EvidenceGeometryPoint[] };
 /**
- * Never carries pixel data inline — only a pointer to an already-authenticated asset served by
- * the existing `/api/ai/assets/{runId}/{plane}/{assetName}` endpoint (see
- * `EvidenceGeometry.MaskReference`'s own path-traversal guard on the Backend). This module
- * never accepts a raw URL for this geometry — only these three identifiers, resolved through
- * `evidenceMaskAssetUrl` in `evidenceRegionOverlayDisplay.ts`.
+ * Nunca lleva datos de píxeles inline — solo un puntero a un asset ya autenticado servido por
+ * el endpoint existente `/api/ai/assets/{runId}/{plane}/{assetName}` (ver el propio guard contra path traversal de
+ * `EvidenceGeometry.MaskReference` en el Backend). Este módulo
+ * nunca acepta una URL cruda para esta geometría — solo estos tres identificadores, resueltos mediante
+ * `evidenceMaskAssetUrl` en `evidenceRegionOverlayDisplay.ts`.
  */
 export type EvidenceGeometryMaskReference = { type: "MASK_REFERENCE"; runId: string; plane: "sagittal" | "axial"; assetName: string };
 
 /**
- * A closed union mirroring the Backend's `sealed interface EvidenceGeometry`. A geometry whose
- * `geometryType` is not one of the four known shapes, or whose map is missing required fields,
- * never becomes one of these variants — see `parseEvidenceGeometry` (fail-safe: that single
- * region is dropped, never the rest of the report).
+ * Una unión cerrada que replica la `sealed interface EvidenceGeometry` del Backend. Una geometría cuyo
+ * `geometryType` no es una de las cuatro formas conocidas, o cuyo mapa carece de campos requeridos,
+ * nunca se convierte en una de estas variantes — ver `parseEvidenceGeometry` (fail-safe: esa única
+ * región se descarta, nunca el resto del reporte).
  */
 export type EvidenceGeometry =
   | EvidenceGeometryBbox
@@ -43,26 +43,26 @@ export type EvidenceGeometry =
   | EvidenceGeometryMaskReference;
 
 /**
- * The four EXT-04B1 DERIVED concepts, exactly as `StudyReportService.toVisualEvidenceSummary`
- * emits them — this is a display union, never re-encoded as an independent state machine on
- * the Frontend (mirrors `DerivedEvidenceOrigin` on the Backend, one-to-one).
+ * Los cuatro conceptos DERIVADOS de EXT-04B1, exactamente como los emite `StudyReportService.toVisualEvidenceSummary`
+ * — esta es una unión de visualización, nunca recodificada como una máquina de estados independiente en
+ * el Frontend (replica `DerivedEvidenceOrigin` del Backend, uno a uno).
  */
 export const EVIDENCE_SOURCES = ["ai_suggested", "ai_validated", "professional_corrected", "professional_drawn"] as const;
 export type EvidenceSource = (typeof EVIDENCE_SOURCES)[number];
 
 /**
- * One item of `StudyReportDto.visualEvidence`. Deliberately does NOT include `modelId`,
- * `modelSha256`, `pipelineVersion`, or `confidence` — the real DTO does not serialize them
- * (only the domain-level `AiEvidenceRegion` carries that provenance; the report-facing summary
- * omits it). Modeling fields the wire contract does not send would be inventing an
- * unverified capability — see `EXT_04B_FRONTEND_VISUAL_EVIDENCE.md` "Limitations".
+ * Un ítem de `StudyReportDto.visualEvidence`. Deliberadamente NO incluye `modelId`,
+ * `modelSha256`, `pipelineVersion` ni `confidence` — el DTO real no los serializa
+ * (solo el `AiEvidenceRegion` a nivel de dominio lleva esa procedencia; el resumen orientado al reporte
+ * la omite). Modelar campos que el contrato wire no envía sería inventar una
+ * capacidad no verificada — ver "Limitations" en `EXT_04B_FRONTEND_VISUAL_EVIDENCE.md`.
  */
 /**
- * EXT-04B3.5: how to fetch a real base slice image for a region — additive on the Backend
- * (`StudyReportDto.BaseImageRef`), resolved through the already-existing, already-tested
- * `GET /api/ai/series/{inputId}/slices/{index}` endpoint (Stage 87/89), never a new asset
- * mechanism. `inputId` is the same opaque per-upload identifier `AiProductAnalysisRun.
- * sagittalInputId`/`axialInputId` already exposes elsewhere — never a filesystem path.
+ * EXT-04B3.5: cómo obtener una imagen de slice base real para una región — aditivo en el Backend
+ * (`StudyReportDto.BaseImageRef`), resuelto mediante el endpoint ya existente y ya testeado
+ * `GET /api/ai/series/{inputId}/slices/{index}` (Stage 87/89), nunca un nuevo
+ * mecanismo de assets. `inputId` es el mismo identificador opaco por upload que `AiProductAnalysisRun.
+ * sagittalInputId`/`axialInputId` ya expone en otros lugares — nunca un path del filesystem.
  */
 export type EvidenceBaseImageRef = { inputId: string; sliceIndex: number };
 
@@ -78,9 +78,9 @@ export type VisualEvidenceItem = {
   warning: string | null;
   experimental: boolean;
   /**
-   * Nullable — absent for a pre-EXT-04B3.5 report, or when the Backend itself could not resolve
-   * one (see `StudyReportService.baseImageRef`'s own fail-safe). Never fabricated on this side:
-   * a missing `baseImage` renders the "Imagen base no disponible." fallback, not a guess.
+   * Admite null — ausente en un reporte previo a EXT-04B3.5, o cuando el propio Backend no pudo resolver
+   * una (ver el fail-safe propio de `StudyReportService.baseImageRef`). Nunca se fabrica de este lado:
+   * un `baseImage` faltante renderiza el fallback "Imagen base no disponible.", no una conjetura.
    */
   baseImage: EvidenceBaseImageRef | null;
 };

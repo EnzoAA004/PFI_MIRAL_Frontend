@@ -1,22 +1,22 @@
 import { chromium } from "playwright";
 
 /**
- * Stage 86: real-backend browser E2E for "Nuevo análisis" after removing its dependency on the
- * nonexistent `/api/patients` surface, following Stage 84's `playwright-post-e50-patient-history-
- * e2e.mjs` pattern (real Frontend, real Backend, real Postgres -- `docker-compose.post-e50.yml`).
+ * Etapa 86: E2E de browser con backend real para "Nuevo análisis" tras eliminar su dependencia de la
+ * superficie inexistente `/api/patients`, siguiendo el patrón `playwright-post-e50-patient-history-
+ * e2e.mjs` de la Etapa 84 (Frontend real, Backend real, Postgres real -- `docker-compose.post-e50.yml`).
  *
- * Requires the Stage-86 fixture already seeded: `PAT-86-A` (Studies CASE-86-A1/A2/A3),
- * `PAT-86-B` (CASE-86-B1), `PAT-86-C` (CASE-86-C1) -- see `86_NEW_ANALYSIS_MVP.md`.
+ * Requiere el fixture de la Etapa 86 ya sembrado: `PAT-86-A` (Studies CASE-86-A1/A2/A3),
+ * `PAT-86-B` (CASE-86-B1), `PAT-86-C` (CASE-86-C1) -- ver `86_NEW_ANALYSIS_MVP.md`.
  *
- * Known, pre-existing, out-of-scope limitation (documented, not a Stage 86 regression): this
- * stack's `mock-ai` service only implements the newer product-analysis pipeline
- * (`POST /v1/product/analyze`), not the older multiplanar/upload pipeline `NewAnalysisDrawer.tsx`
- * still calls (`POST /api/ai/inputs`, `POST /api/ai/multiplanar/run`) -- confirmed empirically via
- * curl (502 UPSTREAM_UNAVAILABLE on `/api/ai/inputs`). Stage 86 does not touch that pipeline
- * (86-P forbids rewriting upload/DICOM ingestion), so this script verifies everything Stage 86
- * actually changed -- subject selection, no legacy requests, Study-list/history reflecting an
- * existing Study created with the target subjectRef -- without depending on a real AI run
- * completing. Not wired into `npm test` -- manual confirmation script, matching Stage 81's own
+ * Limitación conocida, preexistente y fuera de alcance (documentada, no una regresión de la Etapa 86): el servicio
+ * `mock-ai` de este stack solo implementa el pipeline más nuevo de product-analysis
+ * (`POST /v1/product/analyze`), no el pipeline más viejo de multiplanar/upload que `NewAnalysisDrawer.tsx`
+ * todavía llama (`POST /api/ai/inputs`, `POST /api/ai/multiplanar/run`) -- confirmado empíricamente mediante
+ * curl (502 UPSTREAM_UNAVAILABLE en `/api/ai/inputs`). La Etapa 86 no toca ese pipeline
+ * (86-P prohíbe reescribir la ingesta de upload/DICOM), así que este script verifica todo lo que la Etapa 86
+ * realmente cambió -- selección de subject, sin requests legacy, lista de Studies/historial que refleja un
+ * Study existente creado con el subjectRef objetivo -- sin depender de que se complete una corrida de IA real.
+ * No está conectado a `npm test` -- script de confirmación manual, igual que el propio alcance de "no meter framework enorme" de la Etapa 81.
  * "no meter framework enorme" scope.
  */
 

@@ -3,12 +3,12 @@ import { parseEvidenceGeometry } from "./studyReportApi";
 import { multiplanarRequest } from "./multiplanarApi";
 
 /**
- * EXT-04B5: client for the two new professional-annotation write endpoints
+ * EXT-04B5: cliente de los dos nuevos endpoints de escritura de anotaciones profesionales
  * (`EvidenceRegionAnnotationController`, Backend `extensions/ext-04b5-professional-annotations-backend`).
- * Deliberately never sends `origin`/`authoredBy`/`reviewedBy` — the Backend derives identity from
- * the JWT and rejects a client-declared `origin=ai` at the DTO level (`CreateProfessionalEvidenceRegionRequestDto`
- * has no `origin` field at all). Mirrors `studyReportApi.ts`'s tolerant-parsing convention, reusing
- * the same `parseEvidenceGeometry` so a malformed response geometry never crashes the caller.
+ * Deliberadamente nunca envía `origin`/`authoredBy`/`reviewedBy` — el Backend deriva la identidad del
+ * JWT y rechaza un `origin=ai` declarado por el cliente a nivel de DTO (`CreateProfessionalEvidenceRegionRequestDto`
+ * no tiene ningún campo `origin`). Replica la convención de parseo tolerante de `studyReportApi.ts`, reutilizando
+ * el mismo `parseEvidenceGeometry` para que una geometría malformada en la respuesta nunca rompa a quien llama.
  */
 
 export class ProfessionalAnnotationContractError extends Error {

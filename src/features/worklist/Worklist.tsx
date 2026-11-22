@@ -23,14 +23,14 @@ import { OperationsPageHeader } from "../../components/OperationsPageHeader";
 import { PriorityBadge, ReviewBadge } from "../../components/StatusBadge";
 
 /**
- * Worklist — the entry point of the application.
+ * Worklist — el punto de entrada de la aplicación.
  *
- * Replaces DashboardView + StudiesView + the review queue, which were the same
- * table under three routes. The four metric cards are gone: their numbers now
- * live inside the status filter, where they are both the count and the way to
- * act on it, instead of occupying the top third of the screen.
+ * Reemplaza a DashboardView + StudiesView + la cola de revisión, que eran la misma
+ * tabla bajo tres rutas. Las cuatro tarjetas de métricas desaparecieron: sus números ahora
+ * viven dentro del filtro de estado, donde son a la vez el conteo y la forma de
+ * actuar sobre él, en lugar de ocupar el tercio superior de la pantalla.
  *
- * Density is deliberate. A worklist is scanned, not read.
+ * La densidad es deliberada. Un worklist se escanea, no se lee.
  */
 
 const PAGE_SIZES = [10, 25, 50];

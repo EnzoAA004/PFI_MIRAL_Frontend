@@ -1,4 +1,4 @@
-/** Public presentation contract for P10.7 disc-degenerative findings. */
+/** Contrato de presentación pública de los hallazgos degenerativos de disco P10.7. */
 
 export const DISC_FINDING_TYPES = [
   "disc_bulging",
@@ -191,10 +191,10 @@ export function analysedSliceRange(source: DiscFindingSource): string {
 }
 
 /**
- * Parses one finding from the Backend public projection. The probability vector is
- * not part of that contract: its presence invalidates the item instead of letting
- * the panel reconstruct a score or read the runner-up class as a second opinion.
- * The confidence of the reported label does travel, already reduced by the Backend.
+ * Parsea un hallazgo de la proyección pública del Backend. El vector de probabilidades
+ * no forma parte de ese contrato: su presencia invalida el ítem en lugar de dejar que
+ * el panel reconstruya un puntaje o lea la segunda clase como una segunda opinión.
+ * La confianza de la etiqueta informada sí viaja, ya reducida por el Backend.
  */
 export function parseDiscFinding(value: unknown): DiscFinding | null {
   const raw = asRecord(value);
@@ -312,7 +312,7 @@ export function preferredRegion(
   return viewed ?? located.find((item) => item.role === "sagittal_t2") ?? located[0];
 }
 
-/** All-or-nothing parsing prevents a broken item from becoming a partial clinical result. */
+/** El parseo todo-o-nada evita que un ítem roto se convierta en un resultado clínico parcial. */
 export function parseDiscDegenerativeFindings(value: unknown): DiscFinding[] {
   const raw = asRecord(value);
   if (!raw || text(raw.schemaVersion) !== SCHEMA_VERSION) {
@@ -336,7 +336,7 @@ function requireSafetyFlags(raw: Record<string, unknown>, context: string) {
   }
 }
 
-/** Live POST response, including confirmation that the immutable snapshot was persisted. */
+/** Respuesta POST en vivo, incluida la confirmación de que el snapshot inmutable se persistió. */
 export function parseDiscDegenerativeFindingsResponse(value: unknown, multiplanarRunId: string): DiscFinding[] {
   const raw = asRecord(value);
   if (!raw) throw new DiscDegenerativeContractError("Contrato P10.7 inválido: respuesta vacía.");
@@ -351,7 +351,7 @@ export function parseDiscDegenerativeFindingsResponse(value: unknown, multiplana
   return parseDiscDegenerativeFindings(raw.discDegenerativeFindings);
 }
 
-/** Durable projection returned in a persisted run's metricsSnapshot. */
+/** Proyección durable devuelta en el metricsSnapshot de una corrida persistida. */
 export function parsePersistedDiscDegenerativeFindings(value: unknown): DiscFinding[] {
   const snapshot = asRecord(value);
   if (!snapshot) throw new DiscDegenerativeContractError("Snapshot P10.7 inválido.");

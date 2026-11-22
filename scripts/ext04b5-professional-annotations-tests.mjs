@@ -1,9 +1,9 @@
-// EXT-04B5: pure geometry-editing math + write-response contract tests for the professional
-// annotation/correction flow. Follows the same transpile-and-vm-load convention as
-// scripts/ext04b3-visual-evidence-tests.mjs (no jsdom/testing-library in this repo — the
-// interactive components `EvidenceRegionEditor.tsx`/`NewEvidenceRegionCreator.tsx` are thin
-// wrappers over these functions and are not rendered here; only the logic they consume is
-// unit-tested, same precedent as `MeasurementLayer.tsx` being tested through `measurements.ts`).
+// EXT-04B5: tests de matemática pura de edición de geometría + contrato de respuesta de escritura para el
+// flujo de anotación/corrección profesional. Sigue la misma convención de transpile-and-vm-load que
+// scripts/ext04b3-visual-evidence-tests.mjs (sin jsdom/testing-library en este repo — los
+// componentes interactivos `EvidenceRegionEditor.tsx`/`NewEvidenceRegionCreator.tsx` son wrappers
+// delgados sobre estas funciones y no se renderizan acá; solo se testea de forma unitaria la lógica que consumen,
+// el mismo precedente que `MeasurementLayer.tsx` testeado a través de `measurements.ts`).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";

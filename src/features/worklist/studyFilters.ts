@@ -3,11 +3,11 @@ import { displayModality, displayReviewStatus } from "../../clinicalDisplay";
 import { displayPrimaryPlane, displayStudyDate, displaySubjectRef } from "../../studyDisplay";
 
 /**
- * Worklist filtering, kept pure so it can be tested without React.
+ * Filtrado del worklist, mantenido puro para poder testearlo sin React.
  *
- * Replaces the two byte-identical `matchesQuery` implementations that lived in
- * StudiesView and DashboardView, and the `mode: "all" | "queue"` flag that made
- * the same screen render under three different routes.
+ * Reemplaza las dos implementaciones byte a byte idénticas de `matchesQuery` que vivían en
+ * StudiesView y DashboardView, y el flag `mode: "all" | "queue"` que hacía que
+ * la misma pantalla se renderizara bajo tres rutas distintas.
  *
  * Los cinco chips excluyentes (Pendientes / Observados / Prioridad alta /
  * Finalizados / Total) se volvieron cinco filtros independientes: el chip podía

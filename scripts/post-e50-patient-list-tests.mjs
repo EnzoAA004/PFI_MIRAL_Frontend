@@ -5,12 +5,12 @@ import vm from "node:vm";
 import ts from "typescript";
 
 /**
- * Stage 85: `/pacientes` closes the last broken link in the visible product flow. `PatientsView.tsx`
- * now calls the real `GET /api/subjects` projection (grouped by `Study.subjectRef`, never a
- * persisted Patient entity) instead of the never-implemented `GET /api/patients`. This file follows
- * the same source-regex + vm-execution convention as every other post-e50 test script in this repo
- * (`.tsx` components can't be rendered without a DOM here, so their observable behavior is verified
- * against their own source text -- see `p8e2-subject-history-tests.mjs` for precedent).
+ * Etapa 85: `/pacientes` cierra el último vínculo roto del flujo visible del producto. `PatientsView.tsx`
+ * ahora llama a la proyección real `GET /api/subjects` (agrupada por `Study.subjectRef`, nunca una
+ * entidad Patient persistida) en lugar del nunca implementado `GET /api/patients`. Este archivo sigue
+ * la misma convención de source-regex + ejecución en vm que todo otro script de test post-e50 de este repo
+ * (los componentes `.tsx` no pueden renderizarse sin un DOM acá, así que su comportamiento observable se verifica
+ * contra su propio texto fuente -- ver `p8e2-subject-history-tests.mjs` como precedente).
  */
 const root = process.cwd();
 const patientsViewSource = readFileSync(join(root, "src/components/PatientsView.tsx"), "utf8");

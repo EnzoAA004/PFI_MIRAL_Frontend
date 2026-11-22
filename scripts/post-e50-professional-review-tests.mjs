@@ -4,10 +4,10 @@ import vm from "node:vm";
 import ts from "typescript";
 
 /**
- * Stage 78: professional review/correction workflow on top of the stage-77 product-analysis
- * panel. Same pattern as scripts/post-e50-product-analysis-v1-tests.mjs: transpile the pure .ts
- * modules to CommonJS and run them in a vm sandbox — no DOM/React renderer involved, so all the
- * logic worth testing (parsing, presentation, the reducer) lives in plain .ts files with no React
+ * Etapa 78: workflow de revisión/corrección profesional sobre el panel de product-analysis de la etapa 77.
+ * El mismo patrón que scripts/post-e50-product-analysis-v1-tests.mjs: transpilar los módulos .ts puros
+ * a CommonJS y correrlos en un sandbox vm — sin DOM/renderer de React involucrado, así que toda la
+ * lógica que vale la pena testear (parseo, presentación, el reducer) vive en archivos .ts planos sin React
  * import.
  */
 
@@ -242,7 +242,7 @@ check("15. una mutación exitosa limpia el error de mutación anterior", () => {
   assert.equal(succeeded.mutationError, undefined);
 });
 
-// ---- 16-17: 67C stays experimental / not validated regardless of review ----
+// ---- 16-17: 67C sigue siendo experimental / no validado sin importar la revisión ----
 check("16. 67C sigue mostrando experimental tras cualquier revisión", () => {
   const text = display.displayAxialPairingStatus("paired", { validated: false, experimental: true, reviewRequired: true });
   assert.match(text, /experimental/i);
@@ -253,7 +253,7 @@ check("17. 67C aceptado nunca se etiqueta como 'validado'", () => {
   assert.equal(/\bvalidado\b/i.test(text), false);
 });
 
-// ---- 18: P10.7 blocked never offers a review action of its own ----
+// ---- 18: P10.7 bloqueado nunca ofrece una acción de revisión propia ----
 check("18. P10.7 blocked es puramente descriptivo, sin llamado a revisar un hallazgo", () => {
   const text = display.displayDegenerativeFindingsStatus("blocked_preprocessing_parity");
   assert.equal(/aceptar|rechazar|revisar hallazgo/i.test(text), false);
@@ -274,7 +274,7 @@ check("19. cambiar de análisis no mezcla la revisión de otro run", () => {
   assert.equal(selectedB.selected.review.status, "pending");
 });
 
-// ---- 20: XSS comment never rendered as HTML ----
+// ---- 20: el comentario XSS nunca se renderiza como HTML ----
 check("20. el panel nunca usa dangerouslySetInnerHTML para mostrar un comentario", () => {
   const panelSource = readFileSync("src/features/reading/ProductAnalysisV1Panel.tsx", "utf8");
   assert.equal(panelSource.includes("dangerouslySetInnerHTML"), false);

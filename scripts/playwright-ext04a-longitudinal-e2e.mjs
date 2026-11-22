@@ -141,7 +141,7 @@ function resetStack() {
   try {
     compose(["down", "-v", "--remove-orphans"], { stdio: "inherit" });
   } catch {
-    // The first reset may run before the stack exists.
+    // El primer reset puede correr antes de que exista el stack.
   }
 }
 
@@ -289,8 +289,8 @@ async function assertBrowser(cycleToken) {
   const reportPanel = page.getByTestId("backend-study-report");
   const text = await reportPanel.textContent();
   assertOk(text.includes("Evolución") || text.includes("comparación con estudios previos"), "longitudinal section not visible");
-  // The panel renders previous studies by date/status/count (studyDisplay.displayStudyDate),
-  // never by raw case id — only the current study's own caseId is printed verbatim.
+  // El panel renderiza los estudios previos por fecha/estado/cantidad (studyDisplay.displayStudyDate),
+  // nunca por case id crudo — solo el caseId del propio estudio actual se imprime textualmente.
   for (const expected of ["EXT04-STUDY-C", "2026-01-10", "2026-03-10", "12.3", "12.9", "0.6", "mm"]) {
     assertOk(text.includes(expected), `browser report missing ${expected}`);
   }
@@ -331,7 +331,7 @@ main().catch((error) => {
   try {
     compose(["down", "--remove-orphans"], { stdio: "inherit" });
   } catch {
-    // Best effort only; do not touch volumes on failure outside explicit cycle reset.
+    // Solo best effort; no tocar volúmenes ante una falla fuera de un reset de ciclo explícito.
   }
   process.exit(1);
 });

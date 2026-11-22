@@ -1,18 +1,18 @@
 import { chromium } from "playwright";
 
 /**
- * Stage 87: full real-backend browser E2E of "Nuevo análisis" through the entire product flow --
- * the first time this can run all the way through in this Docker stack, now that `mock-ai.mjs`
- * implements the multiplanar/upload routes the drawer actually calls (see
- * `86_NEW_ANALYSIS_FRONTEND.md` §14 for the gap this closes).
+ * Etapa 87: E2E de browser con backend real de punta a punta de "Nuevo análisis" por todo el flujo del producto --
+ * la primera vez que esto puede correr hasta el final en este stack de Docker, ahora que `mock-ai.mjs`
+ * implementa las rutas multiplanar/upload que el drawer realmente llama (ver
+ * `86_NEW_ANALYSIS_FRONTEND.md` §14 para la brecha que esto cierra).
  *
- * Requires the Stage-87 fixture already seeded: `PAT-87-A` with 2 existing Studies (see
- * `87_FULL_DOCKER_E2E.md`). Uses a synthetic, non-medical `.dcm`-named text buffer as the upload
- * (87-U/87-V: no real DICOM structure needed -- the Backend only checks extension + non-empty,
- * and the mock never parses image content).
+ * Requiere el fixture de la Etapa 87 ya sembrado: `PAT-87-A` con 2 Studies existentes (ver
+ * `87_FULL_DOCKER_E2E.md`). Usa un buffer de texto sintético, no médico, con nombre `.dcm` como upload
+ * (87-U/87-V: no hace falta una estructura DICOM real -- el Backend solo chequea la extensión + no vacío,
+ * y el mock nunca parsea el contenido de la imagen).
  *
- * Not wired into `npm test` -- manual confirmation script, matching every other real-backend
- * Playwright script in this repo.
+ * No está conectado a `npm test` -- script de confirmación manual, igual que cualquier otro script
+ * de Playwright con backend real en este repo.
  */
 
 const frontendUrl = process.env.POST_E50_FRONTEND_URL ?? "http://localhost:8188";
@@ -193,18 +193,18 @@ async function main() {
   assertTruthy(legacyPatientRequests.length === 0, `se observaron requests legacy: ${legacyPatientRequests.join(", ")}`);
   console.log("ok 19 - legacyPatientRequests.length === 0 en toda la sesión");
 
-  // Core creation-path requests are asserted hard (these are what Stage 87 actually built/fixed).
+  // Los requests del camino de creación central se afirman de forma estricta (esto es lo que la Etapa 87 realmente construyó/corrigió).
   const coreExpected = { subjects: /\/api\/subjects$/, upload: /\/api\/ai\/inputs$/, run: /\/api\/ai\/multiplanar\/run$/, productAnalysis: /\/product-analysis$/, review: /\/review$/ };
   for (const [label, pattern] of Object.entries(coreExpected)) {
     assertTruthy(allApiRequests.some((entry) => pattern.test(entry)), `no se observó el request esperado: ${label}`);
   }
   console.log("ok 20 - requests esperados de creación (subjects/upload/run/product-analysis/review) observados");
 
-  // Comparison/chat requests are logged, not hard-asserted here -- both were independently
-  // verified end-to-end via direct API calls in this stage's own report (curl evidence), and this
-  // script's own selectors for their specific UI controls proved brittle across layout states;
-  // hard-failing the whole browser run on a selector flake for an already-proven code path would
-  // be a worse signal than an honest, logged partial.
+  // Los requests de comparación/chat se loguean, no se afirman de forma estricta acá -- ambos se
+  // verificaron de forma independiente de punta a punta mediante llamadas directas a la API en el propio reporte de esta etapa (evidencia con curl), y los
+  // selectores propios de este script para sus controles de UI específicos resultaron frágiles entre estados de layout;
+  // hacer fallar de forma estricta toda la corrida del browser por un flake de selector en un camino de código ya
+  // probado sería una peor señal que un resultado parcial honesto y logueado.
   const comparisonSeen = allApiRequests.some((entry) => /longitudinal-comparison/.test(entry));
   const chatSeen = allApiRequests.some((entry) => /\/chat$/.test(entry));
   console.log(`info - comparisonRequestSeenInBrowser=${comparisonSeen} chatRequestSeenInBrowser=${chatSeen} (both verified separately via curl regardless)`);

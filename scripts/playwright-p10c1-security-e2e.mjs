@@ -5,11 +5,11 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 /**
- * P10-C.1 security/session/observability E2E. Deterministic, fully mocked
- * HTTP backend (page.route) — no real backend, no real AI Module, no
- * personal data. Every scenario below runs against a MOCKED backend, not
- * the real one; see docs/P10_FRONTEND_SECURITY_OBSERVABILITY.md for the
- * (optional, env-gated) real-backend smoke test.
+ * E2E de seguridad/sesión/observabilidad P10-C.1. Determinístico, con backend
+ * HTTP completamente mockeado (page.route) — sin backend real, sin módulo de IA real, sin
+ * datos personales. Cada escenario de abajo corre contra un backend MOCKEADO, no contra
+ * el real; ver docs/P10_FRONTEND_SECURITY_OBSERVABILITY.md para el smoke test
+ * con backend real (opcional, habilitado por env).
  */
 
 const port = 5201;
@@ -263,9 +263,9 @@ async function run() {
                 measurementsByPlane: { sagittal: [] },
                 artifactsByPlane: {},
                 corrections: [],
-                // Malicious payload: an external host in the durable 3D asset URL.
-                // isDurableMeshAssetUrl must discard it during parsing, before any
-                // fetch is attempted and before Authorization is ever attached.
+                // Payload malicioso: un host externo en la URL del asset 3D durable.
+                // isDurableMeshAssetUrl debe descartarlo durante el parseo, antes de que se intente
+                // cualquier fetch y antes de que Authorization se adjunte alguna vez.
                 canonicalRun: {
                   threeD: {
                     enabled: true,
@@ -292,8 +292,8 @@ async function run() {
       await page.waitForSelector("text=Lista de trabajo", { timeout: 15000 });
       await page.locator("text=Estudios").first().click().catch(() => undefined);
       await page.waitForSelector(`text=${caseId}`, { timeout: 15000 }).catch(() => undefined);
-      // Give the app time to have attempted (and rejected) the malicious asset
-      // if it were ever going to; the request must never actually occur.
+      // Darle tiempo a la app para haber intentado (y rechazado) el asset malicioso
+      // si alguna vez iba a hacerlo; el request nunca debe ocurrir en realidad.
       await sleep(1500);
       assertTruthy(!externalHostHit, "la app nunca debe emitir una solicitud de red hacia el host externo malicioso, ni siquiera para descartarla");
       await context.close();

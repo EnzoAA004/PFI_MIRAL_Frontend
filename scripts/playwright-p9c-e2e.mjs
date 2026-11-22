@@ -5,11 +5,11 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 /**
- * P9-C.4 closure E2E. Deterministic, fully mocked HTTP backend (no real
- * Cloudflare tunnel, no real AI Module, no personal data). Exercises the
- * canonical multiplanar wire contract (pfi.multiplanar-run.v2) end to end:
- * login -> new analysis -> upload -> canonical run -> 9 measurements ->
- * edit -> save as observed -> stay on step 4 -> "Ver estudio guardado".
+ * E2E de cierre P9-C.4. Determinístico, con backend HTTP completamente mockeado (sin
+ * túnel real de Cloudflare, sin módulo de IA real, sin datos personales). Ejercita el
+ * contrato wire multiplanar canónico (pfi.multiplanar-run.v2) de punta a punta:
+ * login -> nuevo análisis -> upload -> corrida canónica -> 9 mediciones ->
+ * editar -> guardar como observed -> quedarse en el paso 4 -> "Ver estudio guardado".
  */
 
 const port = 5199;
@@ -301,7 +301,7 @@ async function run() {
       throw new Error("El delta before/after (+87.50) no se muestra al reabrir la revision");
     });
 
-    // 13-14. no ContractError, no errores JS
+    // 13-14. sin ContractError, sin errores JS
     const jsErrors = getJsErrors();
     const relevantErrors = jsErrors.filter((message) => !message.includes("Failed to load resource") && !message.includes("favicon"));
     assertTruthy(relevantErrors.length === 0, `no deben ocurrir errores de JavaScript: ${relevantErrors.join(" | ")}`);

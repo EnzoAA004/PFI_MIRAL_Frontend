@@ -1,7 +1,7 @@
 import { clearAuthSession } from "../authStorage";
 import { asyncRemoveItem } from "../browserStorage";
 
-/** Fired whenever the session is invalidated by a failed/absent refresh, so App.tsx can drop in-memory state and redirect to login. */
+/** Se dispara cada vez que la sesión se invalida por un refresh fallido/ausente, para que App.tsx pueda descartar el estado en memoria y redirigir al login. */
 export const SESSION_INVALIDATED_EVENT = "pfi:session-invalidated";
 
 const REVIEW_HISTORY_KEY = "lumbar-mri-review-history-v1";
@@ -13,9 +13,9 @@ const REVIEW_HISTORY_KEY = "lumbar-mri-review-history-v1";
 const SELECTED_STUDY_KEY = "pfi.selectedStudyDetail";
 const CROSS_TAB_CHANNEL = "pfi-session-sync";
 
-// IndexedDB (where the session lives, see authStorage.ts) doesn't fire the
-// native `storage` event across tabs the way localStorage does, so
-// BroadcastChannel propagates session invalidation across open tabs.
+// IndexedDB (donde vive la sesión, ver authStorage.ts) no dispara el evento
+// nativo `storage` entre pestañas como lo hace localStorage, así que
+// BroadcastChannel propaga la invalidación de sesión entre las pestañas abiertas.
 function crossTabChannel(): BroadcastChannel | undefined {
   if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return undefined;
   try {
@@ -25,7 +25,7 @@ function crossTabChannel(): BroadcastChannel | undefined {
   }
 }
 
-/** Called when a refresh attempt fails definitively: clears the session and notifies listeners (P10-C.1 §3). */
+/** Se llama cuando un intento de refresh falla de forma definitiva: limpia la sesión y notifica a los listeners (P10-C.1 §3). */
 export function notifySessionInvalidated() {
   clearAuthSession();
   if (typeof window !== "undefined") window.dispatchEvent(new Event(SESSION_INVALIDATED_EVENT));
@@ -33,10 +33,10 @@ export function notifySessionInvalidated() {
 }
 
 /**
- * Clears every protected data store on logout (manual or forced), per
- * P10-C.1 §4. Deliberately leaves non-sensitive visual preferences
- * (lumbar-mri-professional-settings-v1: language/density/notifications)
- * untouched.
+ * Limpia cada almacén de datos protegido al hacer logout (manual o forzado), según
+ * P10-C.1 §4. Deliberadamente deja intactas las preferencias visuales no sensibles
+ * (lumbar-mri-professional-settings-v1: idioma/densidad/notificaciones)
+ * sin tocar.
  */
 export async function clearAllProtectedData(options: { broadcast?: boolean } = {}): Promise<void> {
   clearAuthSession();
@@ -45,13 +45,13 @@ export async function clearAllProtectedData(options: { broadcast?: boolean } = {
     try {
       window.sessionStorage.removeItem(SELECTED_STUDY_KEY);
     } catch {
-      // sessionStorage unavailable (private mode, etc.) — best-effort cleanup.
+      // sessionStorage no disponible (modo privado, etc.) — limpieza best-effort.
     }
   }
   if (options.broadcast !== false) crossTabChannel()?.postMessage({ type: "logout" });
 }
 
-/** Subscribes to cross-tab logout/session-invalidation; returns an unsubscribe function. */
+/** Se suscribe al logout/invalidación de sesión entre pestañas; devuelve una función para cancelar la suscripción. */
 export function onCrossTabSessionSync(onSync: () => void): () => void {
   const channel = crossTabChannel();
   if (!channel) return () => undefined;

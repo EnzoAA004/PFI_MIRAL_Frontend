@@ -1,4 +1,4 @@
-/** Minimal, sanitizing console wrapper (P10-C.1 §7/§8). */
+/** Wrapper de consola mínimo y sanitizante (P10-C.1 §7/§8). */
 
 const isProd = Boolean(import.meta.env.PROD);
 
@@ -16,7 +16,7 @@ function sanitize(data: unknown): unknown {
 }
 
 export const frontendLogger = {
-  /** Diagnostic-only; disabled entirely in production builds. */
+  /** Solo para diagnóstico; deshabilitado por completo en los builds de producción. */
   debug(message: string, data?: unknown) {
     if (isProd) return;
     console.debug(message, sanitize(data));

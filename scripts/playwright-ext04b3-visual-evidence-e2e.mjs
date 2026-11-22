@@ -1,13 +1,13 @@
-// EXT-04B3.5: isolated Docker E2E for the visual-evidence base-image context.
+// EXT-04B3.5: E2E aislado en Docker para el contexto de imagen base de la evidencia visual.
 //
-// direct DB seed used only to prepare state; all read/render behavior under test uses real
-// product APIs (GET /api/studies/{caseId}/report, GET /api/ai/series/{inputId}/slices/{index},
-// the real browser React app). EvidenceRegionIngestionService still has no controller (by
-// design for this iteration — see EXT_04B_BACKEND_FOUNDATION.md "Decisiones a revisar"), so
-// `domain_ai_evidence_regions`/`domain_ai_evidence_region_corrections` rows are inserted with
-// raw SQL exactly the way scripts/playwright-ext04a-longitudinal-e2e.mjs already seeds
-// `domain_ai_analysis_runs` for the same reason — this is test setup, not a new productive
-// endpoint.
+// seed directo a la DB usado solo para preparar el estado; todo el comportamiento de lectura/renderizado bajo test usa las APIs
+// reales del producto (GET /api/studies/{caseId}/report, GET /api/ai/series/{inputId}/slices/{index},
+// la app React real en el browser). EvidenceRegionIngestionService todavía no tiene controller (por
+// diseño para esta iteración — ver EXT_04B_BACKEND_FOUNDATION.md "Decisiones a revisar"), por lo que
+// las filas de `domain_ai_evidence_regions`/`domain_ai_evidence_region_corrections` se insertan con
+// SQL crudo exactamente como scripts/playwright-ext04a-longitudinal-e2e.mjs ya siembra
+// `domain_ai_analysis_runs` por el mismo motivo — esto es preparación del test, no un nuevo
+// endpoint productivo.
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -148,7 +148,7 @@ function resetStack() {
   try {
     compose(["down", "-v", "--remove-orphans"], { stdio: "inherit" });
   } catch {
-    // The first reset may run before the stack exists.
+    // El primer reset puede correr antes de que exista el stack.
   }
 }
 
@@ -225,10 +225,10 @@ async function assertApi(cycleToken) {
   const outOfRangeResponse = await authorizedFetch(cycleToken, `/api/ai/series/${SAGITTAL_INPUT_ID}/slices/9999`);
   assertOk(outOfRangeResponse.status === 400, `out-of-range slice index must fail closed with 400, got ${outOfRangeResponse.status}`);
 
-  // --- security (section 16): malicious geometry seeded straight into Postgres must never
-  // be served back as a usable value. The report read path reconstructs AiEvidenceRegion via
-  // its own validating constructor, so a row that never should have existed fails the whole
-  // report request rather than leaking "../../etc/passwd" -- confirmed here, not assumed.
+  // --- seguridad (sección 16): la geometría maliciosa sembrada directo en Postgres nunca debe
+  // servirse de vuelta como un valor utilizable. El camino de lectura del reporte reconstruye AiEvidenceRegion mediante
+  // su propio constructor validante, así que una fila que nunca debería haber existido hace fallar todo el
+  // request del reporte en lugar de filtrar "../../etc/passwd" -- confirmado acá, no asumido.
   const maliciousResponse = await authorizedFetch(cycleToken, "/api/studies/EXT04B-VISUAL-MALICIOUS/report");
   if (maliciousResponse.ok) {
     const maliciousBody = await maliciousResponse.text();
@@ -277,22 +277,22 @@ async function openBackendReportPanel(page) {
 }
 
 /**
- * Asserts the full EXT04B-VISUAL-01 evidence section on whatever page state is currently on
- * screen (first load or post-reload) — factored out so the reload check (section 12) proves
- * the SAME things reappear from scratch, not a weaker subset.
+ * Afirma toda la sección de evidencia EXT04B-VISUAL-01 en cualquier estado de página que esté actualmente en
+ * pantalla (primera carga o posterior a recargar) — factorizado para que el chequeo de recarga (sección 12) pruebe que las
+ * MISMAS cosas reaparecen desde cero, no un subconjunto más débil.
  */
 async function assertEvidenceSection(page) {
   const evidenceList = page.getByTestId("visual-evidence-list");
   await evidenceList.waitFor({ timeout: 30000 });
 
-  // At least one region (A) resolves a real base image end to end.
+  // Al menos una región (A) resuelve una imagen base real de punta a punta.
   const firstImage = evidenceList.locator('[data-testid="evidence-region-base-img"]').first();
   await firstImage.waitFor({ timeout: 30000 });
   const naturalSize = await firstImage.evaluate((img) => ({ width: img.naturalWidth, height: img.naturalHeight }));
   assertOk(naturalSize.width > 0 && naturalSize.height > 0, `base image did not decode (naturalWidth=${naturalSize.width}, naturalHeight=${naturalSize.height})`);
 
-  // The SVG overlay must stay mounted inside the SAME frame as the image (never a separate
-  // container), and must keep the canonical 0..256 viewBox regardless of viewport size.
+  // El overlay SVG debe permanecer montado dentro del MISMO marco que la imagen (nunca un contenedor
+  // separado), y debe mantener el viewBox canónico 0..256 sin importar el tamaño del viewport.
   const frame = evidenceList.locator(".evidence-region-frame").first();
   const overlaySvg = frame.locator("svg.evidence-region-overlay");
   await overlaySvg.waitFor({ timeout: 10000 });
@@ -303,7 +303,7 @@ async function assertEvidenceSection(page) {
   const shapeCount = await overlaySvg.locator(".evidence-region-shape").count();
   assertOk(shapeCount >= 1, "no geometry shape rendered inside the overlay");
 
-  // Region D (no baseImage) shows the textual fallback, never a broken image.
+  // La región D (sin baseImage) muestra el fallback textual, nunca una imagen rota.
   const text = await evidenceList.textContent();
   assertOk(text.includes("Imagen base no disponible."), "missing base-image fallback for region D");
   assertOk(text.includes("Región sugerida por IA"), "missing ai_suggested label");
@@ -325,14 +325,14 @@ async function assertBrowserAtViewport(cycleToken, width, height) {
   await openBackendReportPanel(page);
   await assertEvidenceSection(page);
 
-  // Section 12 (persistencia/reload): the image, overlay, and data must all come back from a
-  // full page reload — never depend on transient React state that a reload would wipe. This
-  // re-navigates through the report panel from a cold page, not from cached component state.
+  // Sección 12 (persistencia/recarga): la imagen, el overlay y los datos deben volver todos de una
+  // recarga completa de la página — nunca depender de un estado transitorio de React que una recarga borraría. Esto
+  // vuelve a navegar por el panel de reporte desde una página en frío, no desde un estado de componente en caché.
   await page.reload({ waitUntil: "networkidle" });
   await openBackendReportPanel(page);
   await assertEvidenceSection(page);
 
-  // The empty-evidence study shows the neutral fallback message, not an error.
+  // El estudio con evidencia vacía muestra el mensaje de fallback neutral, no un error.
   await page.goto(`${frontendUrl}/estudio/EXT04B-VISUAL-EMPTY`, { waitUntil: "networkidle" });
   await openBackendReportPanel(page);
   await page.getByTestId("visual-evidence-empty").waitFor({ timeout: 30000 });
@@ -371,7 +371,7 @@ main().catch((error) => {
   try {
     compose(["down", "--remove-orphans"], { stdio: "inherit" });
   } catch {
-    // Best effort only; do not touch volumes on failure outside explicit cycle reset.
+    // Solo best effort; no tocar volúmenes ante una falla fuera de un reset de ciclo explícito.
   }
   process.exit(1);
 });

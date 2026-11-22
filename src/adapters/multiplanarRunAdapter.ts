@@ -21,7 +21,7 @@ import {
 const ALLOWED_ASSET_NAMES: CanonicalAssetName[] = ["input.png", "overlay.png", "mask-preview.png"];
 
 const BLOCKED_URL_PATTERNS: RegExp[] = [
-  /^[a-zA-Z]:\\/, // Windows drive path, e.g. C:\...
+  /^[a-zA-Z]:\\/, // path de unidad de Windows, p. ej. C:\...
   /^\/tmp\//,
   /^\/app\//,
   /mask\.npy/i,
@@ -137,11 +137,11 @@ function apiOrigin(): string | undefined {
 }
 
 /**
- * Stricter than isSanitizedPublicUrl: the workspace 3D mesh is fetched with
- * the doctor's Authorization header attached (see fetchThreeDProxyAsset in
- * multiplanarApi.ts), so — unlike plane preview images — it must never accept
- * an arbitrary https host. Only a Backend-relative `/api/...` path, or an
- * absolute URL whose origin matches API_BASE_URL exactly, qualifies.
+ * Más estricto que isSanitizedPublicUrl: la malla 3D del workspace se obtiene con
+ * el header Authorization del médico adjunto (ver fetchThreeDProxyAsset en
+ * multiplanarApi.ts), así que — a diferencia de las imágenes de preview de los planos — nunca debe aceptar
+ * un host https arbitrario. Solo califica un path `/api/...` relativo al Backend, o una
+ * URL absoluta cuyo origen coincida exactamente con API_BASE_URL.
  */
 export function isDurableMeshAssetUrl(value: unknown): string | undefined {
   const url = typeof value === "string" ? value.trim() : undefined;
@@ -342,18 +342,18 @@ function parseThreeDReconstruction(rawReconstruction: unknown): CanonicalThreeDR
 }
 
 /**
- * `threeD` is optional on purpose: legacy/sagittal-only responses never carry
- * it, and this must never be fabricated. Unknown or missing `status` values
- * are preserved as-is (never coerced into `experimental_ready` or a retired
- * status like `pending_registered_reconstruction`) — display-state
- * interpretation belongs to threeDProxyViewModel.ts, not this adapter.
+ * `threeD` es opcional a propósito: las respuestas legacy/solo sagitales nunca lo traen,
+ * y esto nunca debe fabricarse. Los valores de `status` desconocidos o faltantes
+ * se preservan tal cual (nunca se fuerzan a `experimental_ready` ni a un estado
+ * retirado como `pending_registered_reconstruction`) — la interpretación del estado de visualización
+ * le corresponde a threeDProxyViewModel.ts, no a este adaptador.
  */
 /**
- * Exported for reuse by studyReviewThreeD.ts: the Backend's persisted
- * `canonicalRun.threeD` / `metricsSnapshot.threeD` snapshot is written
- * verbatim from this same shape at persist time (see
- * MultiplanarRunPersistenceService.metricsSnapshot on the Backend) — only
- * `assets[].url` is rewritten to a durable path, everything else matches.
+ * Exportado para su reutilización por studyReviewThreeD.ts: el snapshot persistido por el Backend
+ * `canonicalRun.threeD` / `metricsSnapshot.threeD` se escribe
+ * textualmente con esta misma forma al momento de persistir (ver
+ * MultiplanarRunPersistenceService.metricsSnapshot en el Backend) — solo
+ * `assets[].url` se reescribe a un path durable, todo lo demás coincide.
  */
 export function parseThreeD(rawThreeD: unknown): CanonicalThreeD | undefined {
   const record = asRecord(rawThreeD);

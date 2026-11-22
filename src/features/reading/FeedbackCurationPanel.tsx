@@ -12,11 +12,11 @@ import {
 } from "../../professionalFeedbackCurationApi";
 
 /**
- * EXT-05: "Feedback / Curación" — turns the capture-only candidates EXT-07D/EXT-04B5 already
- * produce into an explicit human curation step. Never trains anything, never auto-elevates a
- * candidate's status; every action here is one deliberate click by an authenticated professional
- * (enforced Backend-side by `RoleAuthorizationService.requireProfessional`, not re-implemented
- * here) that appends to `ProfessionalFeedbackCaptureService`'s own append-only history.
+ * EXT-05: "Feedback / Curación" — convierte los candidatos de solo captura que EXT-07D/EXT-04B5 ya
+ * producen en un paso explícito de curación humana. Nunca entrena nada, nunca eleva automáticamente el estado de un
+ * candidato; cada acción acá es un clic deliberado de un profesional autenticado
+ * (aplicado del lado del Backend por `RoleAuthorizationService.requireProfessional`, no reimplementado
+ * acá) que se agrega al historial append-only propio de `ProfessionalFeedbackCaptureService`.
  */
 export function FeedbackCurationPanel({ caseId }: { caseId: string }) {
   const [candidates, setCandidates] = useState<ProfessionalFeedbackCandidate[]>([]);

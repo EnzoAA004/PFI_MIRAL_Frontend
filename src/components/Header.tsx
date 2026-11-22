@@ -3,7 +3,7 @@ import { fetchTechnicalReportPayload } from "../technicalReportApi";
 import { BarChart3, ChevronDown, LogOut, UserCircle, UserCog } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-/** Global navigation, identity, session and technical-report entry point. */
+/** Navegación global, identidad, sesión y punto de entrada al reporte técnico. */
 interface HeaderProps {
   activeView: ViewKey;
   onChangeView: (view: ViewKey) => void;
@@ -39,7 +39,7 @@ function writePreviewWindow(target: Window | null, title: string, detail: string
     target.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"/><title>${escapeHtml(title)}</title><style>body{font-family:Inter,Segoe UI,Arial,sans-serif;background:#eef4fb;color:#102033;margin:0;padding:32px}main{max-width:760px;margin:auto;background:white;border:1px solid #d8e6f4;border-radius:22px;padding:28px;box-shadow:0 20px 60px rgba(15,23,42,.14)}p{color:#60738a;line-height:1.5}</style></head><body><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></main></body></html>`);
     target.document.close();
   } catch {
-    // Some browsers restrict document access; the final blob navigation still works.
+    // Algunos navegadores restringen el acceso al documento; la navegación final al blob igual funciona.
   }
 }
 

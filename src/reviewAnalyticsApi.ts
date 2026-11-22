@@ -1,8 +1,8 @@
 import { multiplanarRequest } from "./multiplanarApi";
 
 /**
- * EXT-02: client for the read-only "review feedback telemetry" report. Deliberately no field or
- * label here claims clinical accuracy or safety — see `displayReviewAnalyticsDisclaimer`.
+ * EXT-02: cliente del reporte de solo lectura de "telemetría de feedback de revisión". Deliberadamente ningún campo ni
+ * etiqueta acá afirma precisión o seguridad clínica — ver `displayReviewAnalyticsDisclaimer`.
  */
 
 export type MeasurementGroup = {

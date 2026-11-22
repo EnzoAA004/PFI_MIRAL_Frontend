@@ -1,13 +1,13 @@
-// EXT-07F: Integrated Clinical Workflow Simulation — isolated Docker E2E.
+// EXT-07F: Simulación de flujo clínico integrado — E2E aislado en Docker.
 //
-// direct DB seed used only to prepare state (Study A/B/C, corrections, evidence regions); all
-// read/render/capture behavior under test uses real product APIs (report, longitudinal
-// comparison, feedback capture, series slices) and the real rendered browser app — same
-// convention already established and proven in EXT-04A/EXT-04B3.5.
+// seed directo a la DB usado solo para preparar el estado (Study A/B/C, correcciones, regiones de evidencia); todo el
+// comportamiento de lectura/renderizado/captura bajo test usa las APIs reales del producto (reporte, comparación
+// longitudinal, captura de feedback, slices de series) y la app real renderizada en el browser — la misma
+// convención ya establecida y probada en EXT-04A/EXT-04B3.5.
 //
-// NOT training: this script never touches the AI checkpoint, never calls anything
-// retraining-shaped. Feedback capture only persists structured candidates; their `status` stays
-// at "captured" unless a later, separate, human-issued call moves it.
+// NO es entrenamiento: este script nunca toca el checkpoint de IA, nunca llama a nada con forma
+// de reentrenamiento. La captura de feedback solo persiste candidatos estructurados; su `status` se mantiene
+// en "captured" salvo que una llamada posterior, separada y emitida por una persona lo mueva.
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -173,7 +173,7 @@ async function assertApi(cycleToken) {
   const historyText = JSON.stringify(await historyResponse.json());
   for (const id of ["EXT07-STUDY-A", "EXT07-STUDY-B", "EXT07-STUDY-C"]) assertOk(historyText.includes(id), `history missing ${id}`);
 
-  // --- Study A: no previous study (first chronologically) — must not crash ---
+  // --- Study A: sin estudio previo (el primero cronológicamente) — no debe fallar ---
   const reportA = await (await authorizedFetch(cycleToken, "/api/studies/EXT07-STUDY-A/report")).json();
   assertOk(reportA.longitudinalHistory?.available === false, "Study A must report no available history");
 
@@ -248,7 +248,7 @@ async function assertApi(cycleToken) {
   const candidatesSerialized = JSON.stringify(candidates);
   assertOk(!candidatesSerialized.includes("dr.reviewer@pfi.local"), "feedback candidate API must never leak reviewedBy");
 
-  // Reject ready_for_training explicitly (never modeled, never auto-assigned).
+  // Rechazar ready_for_training explícitamente (nunca modelado, nunca asignado automáticamente).
   const rejectStatusResponse = await authorizedFetch(cycleToken, `/api/feedback-candidates/${measurementCandidate.id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -285,7 +285,7 @@ async function assertApi(cycleToken) {
   const invalidInputIdResponse = await authorizedFetch(cycleToken, "/api/ai/series/not-a-real-input/slices/0");
   assertOk(invalidInputIdResponse.status === 400, `invalid inputId must fail closed with 400, got ${invalidInputIdResponse.status}`);
 
-  // No clinical wording anywhere in what a professional actually reads.
+  // Sin redacción clínica en ningún lugar de lo que un profesional realmente lee.
   const lowerAll = JSON.stringify({ reportB, reportC, candidates }).toLowerCase();
   for (const term of bannedClinicalTerms) assertOk(!lowerAll.includes(term.toLowerCase()), `clinical term leaked in API responses: ${term}`);
 
@@ -351,7 +351,7 @@ async function assertBrowser(cycleToken) {
   await openBackendReportPanel(page);
   await assertBeforeAfterAndEvidence(page);
 
-  // Persistence within the same session: reload and re-open the panel.
+  // Persistencia dentro de la misma sesión: recargar y volver a abrir el panel.
   await page.reload({ waitUntil: "networkidle" });
   await openBackendReportPanel(page);
   await assertBeforeAfterAndEvidence(page);
@@ -417,7 +417,7 @@ main().catch((error) => {
   try {
     compose(["down", "--remove-orphans"], { stdio: "inherit" });
   } catch {
-    // Best effort only; do not touch volumes on failure outside explicit cycle reset.
+    // Solo best effort; no tocar volúmenes ante una falla fuera de un reset de ciclo explícito.
   }
   process.exit(1);
 });

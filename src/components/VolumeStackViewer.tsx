@@ -3,8 +3,8 @@ import { useVolumeStack } from "../viewModels/volumeStackViewModel";
 import { StatusBadge } from "./StatusBadge";
 
 /**
- * Viewer shell for a volume stack. It renders only previews supplied by the
- * backend and uses an explicit placeholder instead of fabricating overlays.
+ * Shell de viewer para un stack de volumen. Renderiza solo los previews provistos por el
+ * backend y usa un placeholder explícito en lugar de fabricar overlays.
  */
 function planeLabel(plane: VolumeStack["plane"]): string {
   return plane === "sagittal" ? "Sagital" : "Axial";

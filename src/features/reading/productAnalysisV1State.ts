@@ -33,10 +33,10 @@ export type ProductAnalysisUiState = {
   selected?: ProductAnalysisResult;
   error?: ProductAnalysisError;
   /**
-   * Stage 78: true while a review/correction PATCH/POST is in flight. Kept separate from
-   * `phase` so reviewing a persisted run never gets confused with re-analyzing the Study (77's
-   * "Analizar estudio" flow) — they are independent actions with independent double-submit
-   * guards (`canSubmit` vs `canMutate`).
+   * Etapa 78: true mientras un PATCH/POST de revisión/corrección está en vuelo. Se mantiene separado de
+   * `phase` para que revisar una corrida persistida nunca se confunda con volver a analizar el Study (el
+   * flujo "Analizar estudio" de 77) — son acciones independientes con guards de doble envío
+   * independientes (`canSubmit` vs `canMutate`).
    */
   mutating: boolean;
   mutationError?: ProductAnalysisError;
@@ -99,7 +99,7 @@ export function canRetry(state: ProductAnalysisUiState): boolean {
   return state.phase === "error";
 }
 
-/** Stage 78-U: double-submit guard for review/correction actions, independent of `canSubmit`. */
+/** Etapa 78-U: guard de doble envío para las acciones de revisión/corrección, independiente de `canSubmit`. */
 export function canMutate(state: ProductAnalysisUiState): boolean {
   return !state.mutating;
 }

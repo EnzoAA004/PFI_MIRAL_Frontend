@@ -5,10 +5,10 @@ import vm from "node:vm";
 import ts from "typescript";
 
 /**
- * Stage 84: patient history / longitudinal timeline via `Study.subjectRef`. Follows the same
- * transpile-and-run-in-vm harness as every other post-e50 stage script, plus the existing
- * `p8e2-subject-history-tests.mjs` convention of string-assertions against `.tsx` files the
- * harness can't render (no DOM/React renderer here).
+ * Etapa 84: historial de pacientes / timeline longitudinal vía `Study.subjectRef`. Sigue el mismo
+ * arnés de transpile-and-run-in-vm que todo otro script de etapa post-e50, más la convención existente de
+ * `p8e2-subject-history-tests.mjs` de aserciones de string contra archivos `.tsx` que el
+ * arnés no puede renderizar (acá no hay DOM/renderer de React).
  */
 
 const root = process.cwd();

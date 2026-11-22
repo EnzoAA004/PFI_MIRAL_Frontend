@@ -1,18 +1,18 @@
 import { API_BASE_URL } from "../api";
 
 /**
- * Common origin policy for every authenticated backend call (P10-C.1 §2).
- * Mirrors the stricter validation already proven for the durable 3D mesh
- * asset in adapters/multiplanarRunAdapter.ts (isDurableMeshAssetUrl): only a
- * backend-relative `/api/...` path, or an absolute URL whose origin matches
- * API_BASE_URL exactly, is authorized to receive Authorization/credentials.
- * multiplanarRunAdapter.ts keeps its own copy (its sandboxed test transpiles
- * that file in isolation with imports stripped), so this module is the
- * canonical policy for every other HTTP module in the app.
+ * Política de origen común para cada llamada autenticada al backend (P10-C.1 §2).
+ * Replica la validación más estricta ya probada para el asset durable de la malla 3D
+ * en adapters/multiplanarRunAdapter.ts (isDurableMeshAssetUrl): solo un path `/api/...`
+ * relativo al backend, o una URL absoluta cuyo origen coincida exactamente con
+ * API_BASE_URL, está autorizado a recibir Authorization/credenciales.
+ * multiplanarRunAdapter.ts mantiene su propia copia (su test en sandbox transpila
+ * ese archivo de forma aislada con los imports eliminados), así que este módulo es la
+ * política canónica para todo otro módulo HTTP de la app.
  */
 
 const BLOCKED_URL_PATTERNS: RegExp[] = [
-  /^[a-zA-Z]:\\/, // Windows drive path
+  /^[a-zA-Z]:\\/, // path de unidad de Windows
   /^\/tmp\//,
   /^\/app\//,
   /\.internal(\/|$)/i,
@@ -45,22 +45,22 @@ function backendOrigin(): string | undefined {
 }
 
 /**
- * Returns the sanitized URL/path if it is authorized to receive the
- * doctor's Authorization header, otherwise undefined. Rejects before any
- * `fetch()` is attempted — callers must never fetch first and validate
- * after.
+ * Devuelve la URL/path sanitizado si está autorizado a recibir el
+ * header Authorization del médico, de lo contrario undefined. Rechaza antes de que se intente cualquier
+ * `fetch()` — quienes llaman nunca deben hacer fetch primero y validar
+ * después.
  */
 export function isAuthorizedBackendUrl(value: unknown): string | undefined {
   const url = typeof value === "string" ? value.trim() : undefined;
   if (!url) return undefined;
   if (UNSAFE_SCHEMES.test(url)) return undefined;
-  if (url.startsWith("//")) return undefined; // protocol-relative
+  if (url.startsWith("//")) return undefined; // relativa al protocolo
   if (url.includes("..")) return undefined; // path traversal
   if (BLOCKED_URL_PATTERNS.some((pattern) => pattern.test(url))) return undefined;
   if (url.startsWith("/api/")) return url;
   try {
     const parsed = new URL(url);
-    if (parsed.username || parsed.password) return undefined; // embedded credentials
+    if (parsed.username || parsed.password) return undefined; // credenciales embebidas
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return undefined;
     const origin = backendOrigin();
     const backendIsHttps = origin?.startsWith("https:");
@@ -75,7 +75,7 @@ export function isAuthorizedBackendUrl(value: unknown): string | undefined {
   return undefined;
 }
 
-/** Builds an absolute backend URL from a relative `/api/...` path, validating it first. */
+/** Arma una URL absoluta del backend a partir de un path relativo `/api/...`, validándolo primero. */
 export function buildBackendUrl(path: string): string {
   const sanitized = isAuthorizedBackendUrl(path);
   if (!sanitized) throw new Error("Ruta de backend no autorizada.");

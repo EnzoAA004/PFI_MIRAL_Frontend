@@ -2,7 +2,7 @@ type AuditEvent = { id: string; timestamp: string; actor: string; action: string
 
 export function AuditTrail({ events }: { events: AuditEvent[] }) {
   return (
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- axe requires keyboard focus for scrollable audit regions.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- axe requiere foco de teclado para las regiones de auditoría con scroll.
     <div className="audit-list" tabIndex={0} role="region" aria-label="Registro de auditoría">
       {events.slice(0, 8).map((event) => (
         <article key={event.id}>

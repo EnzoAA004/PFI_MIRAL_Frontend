@@ -4,11 +4,11 @@ import { ChevronLeft, ChevronRight, ListChecks, Moon, Settings, ShieldCheck, Sun
 import { setTheme, useTheme, type OperationsTheme } from "../design/theme";
 
 /**
- * Navigation follows the reading workflow, not the module structure.
+ * La navegación sigue el flujo de lectura, no la estructura de módulos.
  *
- * "Inicio", "Estudios" and "Cola de revisión" were three routes rendering the
- * same table with a different filter; they collapse into a single worklist whose
- * filter chips carry the counts. The pending badge moves onto that entry.
+ * "Inicio", "Estudios" y "Cola de revisión" eran tres rutas que renderizaban la
+ * misma tabla con un filtro distinto; se colapsan en un único worklist cuyos
+ * chips de filtro llevan los conteos. El badge de pendientes se mueve a esa entrada.
  */
 const navItems: Array<{ key: ViewKey; label: string; icon: ComponentType<{ size?: number; "aria-hidden"?: boolean }>; badge?: "reviewQueue" }> = [
   { key: "dashboard", label: "Lista de trabajo", icon: ListChecks, badge: "reviewQueue" },

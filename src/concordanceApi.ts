@@ -1,9 +1,9 @@
 import { multiplanarRequest } from "./multiplanarApi";
 
 /**
- * EXT-01: client for the stateless concordance endpoint. Never sends a diagnosis claim; the
- * request only ever carries evidence the caller already has (from disc-level batch findings,
- * on-demand subarticular-ROI classifications, measurements, or review status).
+ * EXT-01: cliente del endpoint de concordancia sin estado. Nunca envía una afirmación diagnóstica; el
+ * request solo lleva evidencia que quien llama ya tiene (de hallazgos por lote de niveles de disco,
+ * clasificaciones de ROI subarticular a demanda, mediciones o estado de revisión).
  */
 
 export type EvidenceItemInput = {
@@ -66,8 +66,8 @@ export function displayConcordanceReason(reasonCode: string): string {
 }
 
 /**
- * The neutral, non-diagnostic sentence this feature must always use — "concordante según la
- * regla X", never "confirmado por dos IAs" (EXT-01 explicit requirement).
+ * La oración neutral y no diagnóstica que esta funcionalidad siempre debe usar — "concordante según la
+ * regla X", nunca "confirmado por dos IAs" (requisito explícito de EXT-01).
  */
 export function displayConcordanceSentence(result: ConcordanceResult): string {
   return `Las fuentes de evidencia son ${displayConcordanceState(result.state).toLowerCase()} según la regla ${result.ruleVersion} (${displayConcordanceReason(result.reasonCode)}).`;

@@ -9,10 +9,10 @@ interface MeasurementsPanelProps {
 }
 
 /**
- * Legacy `Measurement` rows can carry the canonical key in `labelKey`, or an
- * already-degraded form in `label` ("vertebra group area", "vertebraGroupArea").
- * This recovers the canonical key so the single dictionary in clinicalDisplay.ts
- * can resolve it — there is no second translation table here on purpose.
+ * Las filas `Measurement` legacy pueden traer la clave canónica en `labelKey`, o una forma
+ * ya degradada en `label` ("vertebra group area", "vertebraGroupArea").
+ * Esto recupera la clave canónica para que el único diccionario de clinicalDisplay.ts
+ * pueda resolverla — acá no hay una segunda tabla de traducción, a propósito.
  */
 function canonicalMeasurementKey(measurement: Measurement) {
   if (measurement.labelKey) return measurement.labelKey;

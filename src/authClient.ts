@@ -109,9 +109,9 @@ export function refreshDoctorSession(): Promise<AuthSession> {
       const tokens = await authRequest<AuthTokenResponse>("/api/auth/refresh", { refreshToken: session.refreshToken });
       return saveAuthSession(tokens);
     } catch (error) {
-      // A failed refresh means the session is gone (expired/revoked refresh
-      // token) — clear it here so every call site, not just the one that
-      // happened to trigger the refresh, observes a logged-out state.
+      // Un refresh fallido significa que la sesión dejó de existir (refresh
+      // token vencido/revocado) — se limpia acá para que cada sitio de llamada, no solo el que
+      // disparó el refresh, observe un estado de sesión cerrada.
       notifySessionInvalidated();
       throw error;
     }

@@ -55,7 +55,7 @@ export async function asyncSetItem(key: string, value: string): Promise<void> {
   try {
     await withStore<IDBValidKey>("readwrite", (store) => store.put(value, key));
   } catch {
-    // Memory fallback keeps the app usable when IndexedDB is unavailable.
+    // El fallback en memoria mantiene la app usable cuando IndexedDB no está disponible.
   }
 }
 
@@ -64,6 +64,6 @@ export async function asyncRemoveItem(key: string): Promise<void> {
   try {
     await withStore<undefined>("readwrite", (store) => store.delete(key));
   } catch {
-    // Best-effort cleanup.
+    // Limpieza best-effort.
   }
 }

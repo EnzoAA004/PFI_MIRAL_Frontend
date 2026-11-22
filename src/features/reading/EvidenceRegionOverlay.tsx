@@ -13,24 +13,24 @@ import {
 } from "./visualEvidenceDisplay";
 
 /**
- * EXT-04B3/EXT-04B3.5: read-only rendering of one `VisualEvidenceItem` — BBOX/ELLIPSE/POLYGON as
- * SVG shapes over a real base slice image, MASK_REFERENCE as its own authenticated raster asset.
- * No drawing, drag, resize, or region-creation interaction of any kind (that is EXT-04B5); this
- * component never accepts an `onChange`-shaped prop.
+ * EXT-04B3/EXT-04B3.5: renderizado de solo lectura de un `VisualEvidenceItem` — BBOX/ELLIPSE/POLYGON como
+ * formas SVG sobre una imagen de slice base real, MASK_REFERENCE como su propio asset raster autenticado.
+ * Sin ninguna interacción de dibujo, arrastre, redimensionado o creación de regiones (eso es EXT-04B5); este
+ * componente nunca acepta una prop con forma de `onChange`.
  *
- * Reuses `MeasurementLayer.tsx`'s own convention for the canonical basis: an SVG with
- * `viewBox="0 0 256 256"` and `preserveAspectRatio="none"`, absolutely positioned over its
- * container (`.evidence-region-overlay` mirrors `.mri-measure-layer` in `reading.css`) — the
- * browser does the 0..256-to-viewport scaling, so this component never computes a CSS pixel
- * position itself and keeps working if the container is resized.
+ * Reutiliza la propia convención de `MeasurementLayer.tsx` para la base canónica: un SVG con
+ * `viewBox="0 0 256 256"` y `preserveAspectRatio="none"`, posicionado de forma absoluta sobre su
+ * contenedor (`.evidence-region-overlay` replica `.mri-measure-layer` en `reading.css`) — el
+ * navegador hace el escalado de 0..256 al viewport, así que este componente nunca calcula una posición
+ * en píxeles CSS por sí mismo y sigue funcionando si se redimensiona el contenedor.
  *
- * The base image (either the MASK_REFERENCE asset or the EXT-04B3.5 `baseImage` slice) is
- * fetched through `useAuthenticatedImageUrl` — the same authenticated-fetch/object-URL/cache
- * mechanism `MriSliceViewer.tsx` already uses for every other protected asset. A plain
- * `<img src={backendUrl}>` would send no `Authorization` header and simply fail against a real
- * Backend; reusing this hook instead of a bare `<img>` was a real bug fixed while wiring
- * EXT-04B3.5 (a raw `<img>` had shipped for MASK_REFERENCE in the EXT-04B3 iteration, before any
- * base image was reachable end-to-end enough to expose the gap).
+ * La imagen base (ya sea el asset MASK_REFERENCE o el slice `baseImage` de EXT-04B3.5) se
+ * obtiene mediante `useAuthenticatedImageUrl` — el mismo mecanismo de fetch autenticado/object-URL/caché
+ * que `MriSliceViewer.tsx` ya usa para todo otro asset protegido. Un
+ * `<img src={backendUrl}>` común no enviaría ningún header `Authorization` y simplemente fallaría contra un
+ * Backend real; reutilizar este hook en lugar de un `<img>` pelado fue un bug real corregido al conectar
+ * EXT-04B3.5 (se había enviado un `<img>` crudo para MASK_REFERENCE en la iteración de EXT-04B3, antes de que
+ * hubiera alguna imagen base alcanzable de punta a punta como para exponer la brecha).
  */
 export function EvidenceRegionOverlay({ item }: { item: VisualEvidenceItem }) {
   const group = evidenceVisualGroup(item.source);
@@ -77,11 +77,11 @@ export function EvidenceRegionOverlay({ item }: { item: VisualEvidenceItem }) {
 }
 
 /**
- * MASK_REFERENCE's own asset takes precedence when present — the mask IS the base image for
- * that geometry, per the existing EXT-04B2 design. Otherwise falls back to the EXT-04B3.5
- * `baseImage` slice reference when the Backend resolved one. Returns `undefined` (never a
- * guessed URL) when neither applies — `useAuthenticatedImageUrl(undefined)` reports `"idle"`,
- * which this component renders as the neutral fallback message.
+ * El propio asset de MASK_REFERENCE tiene prioridad cuando está presente — la máscara ES la imagen base de
+ * esa geometría, según el diseño existente de EXT-04B2. En caso contrario recurre a la referencia de slice
+ * `baseImage` de EXT-04B3.5 cuando el Backend resolvió una. Devuelve `undefined` (nunca una
+ * URL adivinada) cuando ninguna aplica — `useAuthenticatedImageUrl(undefined)` informa `"idle"`,
+ * que este componente renderiza como el mensaje de fallback neutral.
  */
 export function resolveEvidenceBaseImageUrl(item: VisualEvidenceItem): string | undefined {
   if (item.geometry.type === "MASK_REFERENCE") return evidenceMaskAssetUrl(item.geometry);
@@ -101,7 +101,7 @@ function EvidenceGeometryShape({ item }: { item: VisualEvidenceItem }) {
   if (geometry.type === "POLYGON") {
     return <polygon className={className} points={geometry.points.map((point) => `${point.x},${point.y}`).join(" ")} />;
   }
-  // MASK_REFERENCE: the mask itself is the already-composited raster image (`evidence-region-base-img`
-  // above) — there is no additional vector shape to draw on top of it here.
+  // MASK_REFERENCE: la máscara en sí ya es la imagen raster compuesta (`evidence-region-base-img`
+  // arriba) — no hay ninguna forma vectorial adicional para dibujar encima de ella acá.
   return null;
 }

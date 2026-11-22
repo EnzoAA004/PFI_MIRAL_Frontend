@@ -3,11 +3,11 @@ import type { EvidenceBaseImageRef, EvidenceGeometryMaskReference, EvidenceSourc
 import { displayReportPlane } from "./studyReportDisplay";
 
 /**
- * EXT-04B3: neutral, non-diagnostic labels for the four EXT-04B1 DERIVED origin/state
- * concepts. Never "patología confirmada"/"diagnóstico" — see
- * `EXT_04B_FRONTEND_VISUAL_EVIDENCE.md` "Visual language". An unrecognised `source` string
- * (future Backend value this Frontend doesn't know yet) falls back to the raw value rather
- * than guessing a label — still neutral, never invented clinical wording.
+ * EXT-04B3: etiquetas neutrales, no diagnósticas, para los cuatro conceptos DERIVADOS de origen/estado
+ * de EXT-04B1. Nunca "patología confirmada"/"diagnóstico" — ver
+ * `EXT_04B_FRONTEND_VISUAL_EVIDENCE.md` "Visual language". Un string `source` no reconocido
+ * (un valor futuro del Backend que este Frontend todavía no conoce) recurre al valor crudo en lugar
+ * de adivinar una etiqueta — sigue siendo neutral, nunca una redacción clínica inventada.
  */
 const EVIDENCE_SOURCE_LABELS: Record<EvidenceSource, string> = {
   ai_suggested: "Región sugerida por IA",
@@ -21,9 +21,9 @@ export function displayEvidenceSource(source: string): string {
 }
 
 /**
- * A visual-only grouping used for CSS colour, never a severity scale. "ai" vs "professional"
- * only distinguishes provenance for the reader's eye (EXT-04B3 "Colores": red/other colours
- * must never mean grave/patológico/peor).
+ * Una agrupación solo visual usada para el color CSS, nunca una escala de severidad. "ai" vs "professional"
+ * solo distingue la procedencia para el ojo del lector (EXT-04B3 "Colores": el rojo u otros colores
+ * nunca deben significar grave/patológico/peor).
  */
 export function evidenceVisualGroup(source: string): "ai" | "professional" {
   return source === "ai_suggested" ? "ai" : "professional";
@@ -38,8 +38,8 @@ export function displayEvidenceReviewStatus(status: string | null): string {
 }
 
 /**
- * Compact, screen-reader-first description for one region — EXT-04B3 accessibility
- * requirement ("Región sugerida por IA — L4-L5 — plano sagital"). Never depends on colour.
+ * Descripción compacta, pensada primero para lectores de pantalla, de una región — requisito de accesibilidad
+ * de EXT-04B3 ("Región sugerida por IA — L4-L5 — plano sagital"). Nunca depende del color.
  */
 export function evidenceAriaLabel(item: VisualEvidenceItem): string {
   const parts = [displayEvidenceSource(item.source), item.level ?? "sin nivel", displayReportPlane(item.plane)];
@@ -52,13 +52,13 @@ export const NO_VISUAL_EVIDENCE_MESSAGE = "No hay evidencia visual disponible pa
 export const EXPERIMENTAL_BADGE_TEXT = "Experimental";
 
 /**
- * The same authenticated-asset endpoint the multiplanar viewer already uses
- * (`aiAssetUrl` in `multiplanarApi.ts`, `/api/ai/assets/{runId}/{plane}/{assetName}`) —
- * duplicated here rather than imported because that helper's `assetName` parameter is typed
- * to the closed multiplanar-run asset vocabulary (`"input.png" | "overlay.png" |
- * "mask-preview.png"`), which a `MASK_REFERENCE`'s free-form (but path-traversal-guarded,
- * see `parseEvidenceGeometry`) `assetName` does not necessarily satisfy. Only ever built from
- * the three already-parsed, already-validated identifiers — never a raw URL from the report
+ * El mismo endpoint de asset autenticado que ya usa el viewer multiplanar
+ * (`aiAssetUrl` en `multiplanarApi.ts`, `/api/ai/assets/{runId}/{plane}/{assetName}`) —
+ * duplicado acá en lugar de importado porque el parámetro `assetName` de ese helper está tipado
+ * al vocabulario cerrado de assets de corrida multiplanar (`"input.png" | "overlay.png" |
+ * "mask-preview.png"`), que el `assetName` de forma libre de un `MASK_REFERENCE` (pero protegido contra path traversal,
+ * ver `parseEvidenceGeometry`) no necesariamente satisface. Solo se construye a partir de
+ * los tres identificadores ya parseados y ya validados — nunca una URL cruda del reporte
  * JSON (EXT-04B3 "Imagen base": no aceptar URL arbitraria del JSON).
  */
 export function evidenceMaskAssetUrl(geometry: EvidenceGeometryMaskReference): string {
@@ -68,12 +68,12 @@ export function evidenceMaskAssetUrl(geometry: EvidenceGeometryMaskReference): s
 export const NO_BASE_IMAGE_MESSAGE = "Imagen base no disponible.";
 
 /**
- * EXT-04B3.5: the same `GET /api/ai/series/{inputId}/slices/{index}` endpoint the multi-slice
- * viewer already calls (`analyzedSliceSource.ts#resolveAnalyzedSliceSource`) — duplicated as a
- * one-line template here rather than imported because that helper also encodes viewer-only
- * navigation rules (skipping the AI-analyzed index, falling back to legacy preview URLs) that
- * do not apply to a report evidence item. Only ever built from `baseImage`'s two already-parsed
- * fields — never a raw URL from the report JSON.
+ * EXT-04B3.5: el mismo endpoint `GET /api/ai/series/{inputId}/slices/{index}` que el viewer
+ * multi-slice ya llama (`analyzedSliceSource.ts#resolveAnalyzedSliceSource`) — duplicado como una
+ * plantilla de una línea acá en lugar de importado porque ese helper también codifica reglas de
+ * navegación solo del viewer (saltear el índice analizado por la IA, recurrir a URLs de preview legacy) que
+ * no aplican a un ítem de evidencia de un reporte. Solo se construye a partir de los dos
+ * campos ya parseados de `baseImage` — nunca una URL cruda del JSON del reporte.
  */
 export function evidenceBaseImageSliceUrl(baseImage: EvidenceBaseImageRef): string {
   return `${API_BASE_URL}/api/ai/series/${encodeURIComponent(baseImage.inputId)}/slices/${baseImage.sliceIndex}`;

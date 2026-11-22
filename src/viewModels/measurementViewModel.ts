@@ -2,10 +2,10 @@ import type { Measurement, Plane } from "../appTypes";
 import type { CanonicalMeasurement } from "../contracts/canonicalMultiplanarRun";
 
 /**
- * CanonicalMeasurement -> Measurement (visual view model). labelKey is the
- * stable, untranslated identity of the measurement; `label` mirrors it
- * unchanged (no Spanish translation happens here — that belongs exclusively
- * to clinicalDisplay.ts / displayMeasurementLabel() at render time).
+ * CanonicalMeasurement -> Measurement (view model visual). labelKey es la identidad
+ * estable y sin traducir de la medición; `label` la replica
+ * sin cambios (acá no ocurre ninguna traducción al español — eso pertenece exclusivamente
+ * a clinicalDisplay.ts / displayMeasurementLabel() al renderizar).
  */
 export function canonicalMeasurementToViewMeasurement(measurement: CanonicalMeasurement, plane: Plane, index: number): Measurement {
   const id = measurement.id || `${plane}-measurement-${index}`;

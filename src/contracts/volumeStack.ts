@@ -1,34 +1,34 @@
 import type { Plane } from "../appTypes";
 
 /**
- * Frontend domain for navigating a volume stack. Only assets explicitly supplied
- * for a slice may be rendered; every other index remains a placeholder.
+ * Dominio del Frontend para navegar un stack de volumen. Solo se pueden renderizar los assets
+ * provistos explícitamente para un slice; todo otro índice queda como placeholder.
  */
 export type VolumeSlice = {
-  /** 0-based index within the stack (0..sliceCount-1). */
+  /** Índice base 0 dentro del stack (0..sliceCount-1). */
   index: number;
-  /** True for the single slice the AI actually inferred (selectedSliceIndex). */
+  /** True para el único slice que la IA realmente infirió (selectedSliceIndex). */
   isSelected: boolean;
-  /** True when the slice has real results such as overlay or measurements. */
+  /** True cuando el slice tiene resultados reales como overlay o mediciones. */
   hasResult: boolean;
-  /** Preview image URL, present only where a real asset exists. */
+  /** URL de la imagen de preview, presente solo donde existe un asset real. */
   imageUrl?: string;
-  /** Overlay image URL, present only where a real asset exists. */
+  /** URL de la imagen de overlay, presente solo donde existe un asset real. */
   overlayUrl?: string;
 };
 
 export type VolumeStack = {
   plane: Plane;
-  /** Stable series/volume identifier (planeRunId from the canonical run). */
+  /** Identificador estable de serie/volumen (planeRunId de la corrida canónica). */
   seriesId: string;
   sliceCount: number;
-  /** The slice the AI inferred, clamped into [0, sliceCount-1]. */
+  /** El slice que la IA infirió, acotado a [0, sliceCount-1]. */
   selectedSliceIndex: number;
-  /** Canonical volume dimensions when available (canonicalShape). */
+  /** Dimensiones canónicas del volumen cuando están disponibles (canonicalShape). */
   dimensions?: number[];
-  /** In-plane spacing in millimetres when available. */
+  /** Spacing en el plano, en milímetros, cuando está disponible. */
   inPlaneSpacingMm?: number[];
-  /** Ordered slices 0..sliceCount-1. */
+  /** Slices ordenados 0..sliceCount-1. */
   slices: VolumeSlice[];
 };
 

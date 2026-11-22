@@ -90,9 +90,9 @@ const measurementLabels: Record<string, string> = {
 };
 
 /**
- * Short forms for dense tables, where the full label does not fit in a column.
- * The structure is already implied by the row grouping, so only the magnitude
- * needs to be spelled out.
+ * Formas cortas para tablas densas, donde la etiqueta completa no entra en una columna.
+ * La estructura ya está implícita en el agrupamiento de filas, así que solo
+ * hace falta detallar la magnitud.
  */
 const measurementShortLabels: Record<string, string> = {
   "vertebra_group area": "Área vertebral",
@@ -127,7 +127,7 @@ const measurementShortLabels: Record<string, string> = {
   "raw_200 height": "Región AP",
 };
 
-/** Segmentation class keys emitted by the sagittal model. */
+/** Claves de clase de segmentación emitidas por el modelo sagital. */
 const structureLabels: Record<string, string> = {
   /*
    * Clases del modelo axial (dataset Al-Kafri).
@@ -162,11 +162,11 @@ const landmarkLabels: Record<string, string> = {
 };
 
 /**
- * The spine as it is read: craniocaudal, alternating vertebral body and disc space.
+ * La columna tal como se lee: craneocaudal, alternando cuerpo vertebral y espacio discal.
  *
- * A report describes both — an L4 body height and an L4-L5 disc space are separate
- * findings at separate places — so both are levels here, in the order they appear on
- * the image.
+ * Un informe describe ambos — la altura del cuerpo de L4 y el espacio discal L4-L5 son hallazgos
+ * separados en lugares distintos — así que ambos son niveles acá, en el orden en que aparecen en
+ * la imagen.
  */
 export const SPINE_LEVELS = [
   "T8", "T8-T9", "T9", "T9-T10", "T10", "T10-T11", "T11", "T11-T12", "T12", "T12-L1",
@@ -176,12 +176,12 @@ export const SPINE_LEVELS = [
 export type SpineLevel = (typeof SPINE_LEVELS)[number];
 
 /**
- * The lumbar levels the findings panel always renders, with or without a finding.
+ * Los niveles lumbares que el panel de hallazgos siempre renderiza, con o sin hallazgo.
  *
- * "Nothing at L3-L4" is a clinical statement, and a level missing from the list is
- * indistinguishable from a level nobody looked at. Everything outside this range —
- * thoracic above, S1 below — appears only when the study reaches it: an always-empty
- * T9-T10 row would claim a level was examined that was never in the field of view.
+ * "Nada en L3-L4" es una afirmación clínica, y un nivel ausente de la lista es
+ * indistinguible de un nivel que nadie miró. Todo lo que queda fuera de este rango —
+ * torácico arriba, S1 abajo — aparece solo cuando el estudio llega hasta ahí: una fila T9-T10
+ * siempre vacía afirmaría que se examinó un nivel que nunca estuvo en el campo de visión.
  */
 export const ALWAYS_SHOWN_LEVELS: readonly SpineLevel[] = [
   "L1", "L1-L2", "L2", "L2-L3", "L3", "L3-L4", "L4", "L4-L5", "L5", "L5-S1",
@@ -190,12 +190,12 @@ export const ALWAYS_SHOWN_LEVELS: readonly SpineLevel[] = [
 const KNOWN_LEVELS: readonly string[] = SPINE_LEVELS;
 
 /**
- * Accepts l4_l5 / L4L5 / l4-l5 / "L4 L5" and normalizes to the canonical "L4-L5".
+ * Acepta l4_l5 / L4L5 / l4-l5 / "L4 L5" y normaliza al canónico "L4-L5".
  *
- * Vertebral bodies ("L4") and thoracic levels are accepted too. While only the five
- * lumbar disc spaces were, a level the AI had correctly identified as T12-L1 or as
- * the L4 body landed in the unassigned bucket, which reads as "the AI could not
- * tell" when in fact it could.
+ * También se aceptan cuerpos vertebrales ("L4") y niveles torácicos. Mientras solo se aceptaban los cinco
+ * espacios discales lumbares, un nivel que la IA había identificado correctamente como T12-L1 o como
+ * el cuerpo L4 caía en el bucket sin asignar, que se lee como "la IA no pudo
+ * distinguirlo" cuando en realidad sí pudo.
  */
 export function normalizeLevel(value: string | null | undefined): SpineLevel | null {
   if (!value) return null;

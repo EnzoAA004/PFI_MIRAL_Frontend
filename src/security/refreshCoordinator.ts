@@ -1,10 +1,10 @@
 /**
- * Single-flight coordination for session refresh (P10-C.1 §3). Every
- * refresh call site (api.ts, multiplanarApi.ts, studyApi.ts,
+ * Coordinación single-flight para el refresh de sesión (P10-C.1 §3). Cada
+ * sitio de llamada de refresh (api.ts, multiplanarApi.ts, studyApi.ts,
  * subjectHistoryApi.ts, pipelineContractApi.ts, reviewPersistenceApi.ts)
- * calls authClient.refreshDoctorSession(), which routes through this
- * coordinator so concurrent 401s share one in-flight refresh instead of
- * racing separate refresh-token exchanges.
+ * llama a authClient.refreshDoctorSession(), que pasa por este
+ * coordinador para que los 401 concurrentes compartan un único refresh en vuelo en lugar de
+ * competir en intercambios separados de refresh token.
  */
 
 let inFlight: Promise<unknown> | null = null;

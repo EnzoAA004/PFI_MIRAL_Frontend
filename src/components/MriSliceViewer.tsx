@@ -10,12 +10,12 @@ import { scaleBarFor } from "../features/reading/scaleBar";
 import type { MriViewerMask, MriViewerModel } from "../viewModels/mriViewerViewModel";
 
 /**
- * Pure presentation component. Knows nothing about either source domain
- * (multiplanar canonical plane runs or the legacy single-plane study
- * pipeline) — only MriViewerModel (src/viewModels/mriViewerViewModel.ts).
- * Domain adapters (canonicalPlaneToMriViewerModel / studyRunToMriViewerModel)
- * are responsible for producing that model, including resolving and
- * sanitizing asset URLs.
+ * Componente de presentación puro. No sabe nada de ninguno de los dos dominios de origen
+ * (corridas de planos multiplanares canónicas o el pipeline legacy
+ * de estudios de un solo plano) — solo de MriViewerModel (src/viewModels/mriViewerViewModel.ts).
+ * Los adaptadores de dominio (canonicalPlaneToMriViewerModel / studyRunToMriViewerModel)
+ * son responsables de producir ese modelo, incluida la resolución y
+ * sanitización de las URLs de assets.
  */
 
 type ViewerMode = "pan" | "window";
@@ -887,7 +887,7 @@ export function MriSliceViewer({
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
     } catch {
-      // Pointer capture may already be released by the browser.
+      // Es posible que el navegador ya haya liberado el pointer capture.
     }
   }
 

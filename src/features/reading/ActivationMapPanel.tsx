@@ -3,12 +3,12 @@ import { requestSubarticularExplanation, type SubarticularExplainResult } from "
 import type { SubarticularRoiDraft } from "./subarticularRoi";
 
 /**
- * EXT-03: "Mapa de activación" — Grad-CAM heatmap for the subarticular classifier's own
- * prediction on the ROI a professional already marked. Off by default (a professional must
- * deliberately toggle it on). Never labeled "zona de la patología" or "explicación causal" —
- * always "mapa de activación asociado a la predicción", plus the Backend's own two disclaimers
- * rendered verbatim (the general safety one and the layer-scope one explaining this only covers
- * the visual branch of the model, not the side/level embeddings).
+ * EXT-03: "Mapa de activación" — heatmap Grad-CAM para la predicción propia del clasificador subarticular
+ * sobre el ROI que un profesional ya marcó. Apagado por defecto (un profesional debe
+ * activarlo deliberadamente). Nunca se rotula "zona de la patología" ni "explicación causal" —
+ * siempre "mapa de activación asociado a la predicción", más los dos disclaimers propios del Backend
+ * renderizados textualmente (el de seguridad general y el de alcance de capa que explica que esto solo cubre
+ * la rama visual del modelo, no los embeddings de lado/nivel).
  */
 export function ActivationMapPanel({
   inputId, roiDraft,

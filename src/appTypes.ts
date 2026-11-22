@@ -115,7 +115,7 @@ export type RawMeasurements = {
 export type Measurement = {
   id: string;
   label: string;
-  /** Canonical, untranslated identifier (CanonicalMeasurement.labelKey). Spanish text is resolved only at render time via displayMeasurementLabel(). */
+  /** Identificador canónico, sin traducir (CanonicalMeasurement.labelKey). El texto en español se resuelve solo al renderizar vía displayMeasurementLabel(). */
   labelKey?: string;
   level?: string;
   /**
@@ -433,7 +433,7 @@ export type StudyRun = {
   artifactsByPlane?: Partial<Record<Plane, PersistedArtifact[]>>;
   corrections?: PersistedReviewCorrection[];
   metricsSnapshot?: Record<string, unknown>;
-  /** Backend P9-B.2.1 durable reopening contract (StudyRunDetailDto.canonicalRun). Carries `threeD` verbatim from persist time — see parseThreeD in multiplanarRunAdapter.ts. */
+  /** Contrato de reapertura durable del Backend P9-B.2.1 (StudyRunDetailDto.canonicalRun). Lleva `threeD` textualmente desde el momento de la persistencia — ver parseThreeD en multiplanarRunAdapter.ts. */
   canonicalRun?: Record<string, unknown>;
   artifactCount?: number;
   measurementCount?: number;

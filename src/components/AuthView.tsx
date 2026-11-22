@@ -16,8 +16,8 @@ type ChallengeState = {
   email: string;
 };
 
-// Demo access is an explicit build-time opt-in. Public/local evaluation builds
-// keep the demo endpoint and credentials out of the login screen by default.
+// El acceso demo es un opt-in explícito en tiempo de build. Los builds públicos/de evaluación local
+// mantienen el endpoint y las credenciales demo fuera de la pantalla de login por defecto.
 const authDemoEnabled = import.meta.env.VITE_DEMO_LOGIN_ENABLED === "true";
 
 function isSession(value: AuthPendingResponse | AuthSession): value is AuthSession {

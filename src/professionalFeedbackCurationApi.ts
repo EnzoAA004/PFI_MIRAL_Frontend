@@ -1,10 +1,10 @@
 import { multiplanarRequest } from "./multiplanarApi";
 
 /**
- * EXT-05: client for the professional feedback curation surface built on top of EXT-07D/EXT-04B5's
- * capture-only `ProfessionalFeedbackCandidate`. Deliberately never sends a `curatorId` — the
- * Backend always derives it from the JWT (`EvidenceRegionAnnotationController`'s own
- * identity-derivation pattern, reused verbatim by `ProfessionalFeedbackController.curate`).
+ * EXT-05: cliente de la superficie de curación de feedback profesional construida sobre el
+ * `ProfessionalFeedbackCandidate` de solo captura de EXT-07D/EXT-04B5. Deliberadamente nunca envía un `curatorId` — el
+ * Backend siempre lo deriva del JWT (el propio patrón de derivación de identidad de
+ * `EvidenceRegionAnnotationController`, reutilizado textualmente por `ProfessionalFeedbackController.curate`).
  */
 
 export const FEEDBACK_CANDIDATE_STATUSES = ["captured", "eligible_for_curation", "excluded", "curated"] as const;
@@ -100,7 +100,7 @@ export function exportFeedbackDataset(caseId: string, filter?: FeedbackCandidate
   return multiplanarRequest<FeedbackDatasetExport>(`/api/studies/${encodeURIComponent(caseId)}/feedback/export${query(filter)}`);
 }
 
-/** Numeric delta for a measurement-sourced candidate; null when either side is missing or the source isn't a measurement. */
+/** Delta numérico para un candidato originado en una medición; null cuando falta algún lado o la fuente no es una medición. */
 export function feedbackValueDelta(candidate: ProfessionalFeedbackCandidate): number | null {
   if (candidate.aiOriginalValue === null || candidate.professionalValue === null) return null;
   return candidate.professionalValue - candidate.aiOriginalValue;

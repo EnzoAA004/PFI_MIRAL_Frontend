@@ -13,15 +13,15 @@ import {
 import { displayStudyDate } from "../../studyDisplay";
 
 /**
- * EXT-07B: "Comparación con estudio previo" — Anterior vs Actual, side by side, reusing the
- * numeric rows the Backend already computes (`longitudinalHistory.comparisons`, EXT-04A) and,
- * when a matching region exists, the read-only `EvidenceRegionOverlay` from EXT-04B3 for each
- * side's image+overlay. Never a second computation of delta/percent on this side — the Backend
- * is the only source of truth for those numbers, same rule the "Evolución" table already
- * follows.
+ * EXT-07B: "Comparación con estudio previo" — Anterior vs Actual, lado a lado, reutilizando las
+ * filas numéricas que el Backend ya calcula (`longitudinalHistory.comparisons`, EXT-04A) y,
+ * cuando existe una región coincidente, el `EvidenceRegionOverlay` de solo lectura de EXT-04B3 para la
+ * imagen+overlay de cada lado. Nunca un segundo cálculo de delta/porcentaje de este lado — el Backend
+ * es la única fuente de verdad de esos números, la misma regla que ya sigue la tabla
+ * "Evolución".
  *
- * Vocabulary is deliberately neutral (`Anterior`/`Actual`/`Delta`/`Variación`), never
- * mejoró/empeoró/progresión — same rule 84-N already enforces for the "Evolución" table.
+ * El vocabulario es deliberadamente neutral (`Anterior`/`Actual`/`Delta`/`Variación`), nunca
+ * mejoró/empeoró/progresión — la misma regla que 84-N ya aplica a la tabla "Evolución".
  */
 export function BeforeAfterComparison({ current, previous }: { current: StudyReport; previous: StudyReport | null }) {
   const rows = beforeAfterRows(current.longitudinalHistory);

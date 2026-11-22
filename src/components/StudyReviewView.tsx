@@ -500,10 +500,10 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
     return () => { cancelled = true; };
   }, [panelTab, displayRun.caseId, studyReportRefresh]);
 
-  // EXT-07B: the previous study's own report is fetched only for its visualEvidence (to render
-  // the "Comparación con estudio previo" image+overlay side) — the numeric before/after values
-  // themselves already come from the CURRENT study's own longitudinalHistory.comparisons
-  // (Backend-computed, EXT-04A), never recomputed here.
+  // EXT-07B: el reporte del estudio previo se obtiene solo por su visualEvidence (para renderizar
+  // el lado imagen+overlay de "Comparación con estudio previo") — los valores numéricos antes/después
+  // ya vienen de los propios longitudinalHistory.comparisons del estudio ACTUAL
+  // (calculados por el Backend, EXT-04A), nunca se recalculan acá.
   const [previousStudyReport, setPreviousStudyReport] = useState<StudyReport | null>(null);
   const previousCaseId = studyReport?.longitudinalHistory?.previousStudies[0]?.caseId ?? null;
   useEffect(() => {

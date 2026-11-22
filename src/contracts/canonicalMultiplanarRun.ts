@@ -109,11 +109,11 @@ export type CanonicalPlaneRun = CanonicalGovernance & {
 };
 
 /**
- * Recognized statuses for the experimental 3D geometric proxy (see AI Module
- * P9-A.3.1/P9-A.3.1.1). `pending_registered_reconstruction` was retired by the
- * AI Module and must never be reintroduced here or interpreted specially — any
- * status outside this set is treated as unavailable by the view model layer,
- * never as a hidden "ready" state.
+ * Estados reconocidos para el proxy geométrico 3D experimental (ver AI Module
+ * P9-A.3.1/P9-A.3.1.1). `pending_registered_reconstruction` fue retirado por el
+ * AI Module y nunca debe reintroducirse acá ni interpretarse de forma especial — cualquier
+ * estado fuera de este conjunto se trata como no disponible por la capa de view model,
+ * nunca como un estado "listo" oculto.
  */
 export type CanonicalThreeDStatus =
   | "blocked_missing_axial"

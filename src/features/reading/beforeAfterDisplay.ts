@@ -8,19 +8,19 @@ export const NO_BEFORE_AFTER_MESSAGE = "No existen estudios previos comparables 
 export type BeforeAfterRow = StudyReportLongitudinalHistory["comparisons"][number];
 
 /**
- * EXT-07B: at most the first N rows — same cap the existing "Evolución" table already applies
- * (`studyReport.longitudinalHistory.comparisons.slice(0, 8)`), so this section never duplicates
- * work the report already limits deliberately.
+ * EXT-07B: como máximo las primeras N filas — el mismo tope que ya aplica la tabla "Evolución" existente
+ * (`studyReport.longitudinalHistory.comparisons.slice(0, 8)`), de modo que esta sección nunca duplica
+ * un trabajo que el reporte ya limita deliberadamente.
  */
 export function beforeAfterRows(history: StudyReportLongitudinalHistory | null, limit = 4): BeforeAfterRow[] {
   return (history?.comparisons ?? []).slice(0, limit);
 }
 
 /**
- * Best-effort match between a longitudinal comparison row and a `visualEvidence[]` item from
- * the corresponding report — by level/plane/structure, the only fields both shapes share. `null`
- * when no evidence item lines up; the caller renders a numeric-only card in that case, never a
- * guessed image.
+ * Emparejamiento best-effort entre una fila de comparación longitudinal y un ítem de `visualEvidence[]` del
+ * reporte correspondiente — por nivel/plano/estructura, los únicos campos que comparten ambas formas. `null`
+ * cuando ningún ítem de evidencia coincide; en ese caso quien llama renderiza una tarjeta solo numérica, nunca una
+ * imagen adivinada.
  */
 export function matchingEvidence(row: BeforeAfterRow, evidence: VisualEvidenceItem[]): VisualEvidenceItem | null {
   return evidence.find((item) => item.level === row.level && item.plane === row.plane && item.structure === row.structure) ?? null;
@@ -39,7 +39,7 @@ export function beforeAfterDeltaLine(row: BeforeAfterRow): string {
   return `${formatReportDelta(row.absoluteDelta, row.unit)} · ${formatReportPercent(row.percentageDelta)}`;
 }
 
-/** Whether the current study's own report has any usable comparison row at all. */
+/** Si el propio reporte del estudio actual tiene alguna fila de comparación utilizable en absoluto. */
 export function hasBeforeAfter(report: StudyReport | null): boolean {
   return beforeAfterRows(report?.longitudinalHistory ?? null).length > 0;
 }

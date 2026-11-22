@@ -116,10 +116,10 @@ export type StudyReport = {
   longitudinalComparison: LongitudinalComparisonResult | null;
   longitudinalHistory: StudyReportLongitudinalHistory | null;
   /**
-   * EXT-04B2: additive, always an array (empty when there is none — never omitted/undefined).
-   * A pre-EXT-04B2 report (or a legacy fixture the parser is fed) has no `visualEvidence` key
-   * at all; `parseVisualEvidence` in `studyReportApi.ts` treats that identically to `null` or
-   * `[]` — always `[]`, never a parse error (backward compatibility, EXT-04B3 test 20).
+   * EXT-04B2: aditivo, siempre un array (vacío cuando no hay ninguno — nunca omitido/undefined).
+   * Un reporte previo a EXT-04B2 (o un fixture legacy que se le pasa al parser) no tiene ninguna clave `visualEvidence`
+   * en absoluto; `parseVisualEvidence` en `studyReportApi.ts` lo trata idéntico a `null` o
+   * `[]` — siempre `[]`, nunca un error de parseo (retrocompatibilidad, test 20 de EXT-04B3).
    */
   visualEvidence: VisualEvidenceItem[];
   safety: StudyReportSafetySummary;

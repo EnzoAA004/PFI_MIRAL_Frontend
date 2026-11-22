@@ -3,12 +3,12 @@ import { ExperimentalProxyViewer } from "./ExperimentalProxyViewer";
 import { GenericAtlasPreview, type LegacyThreeDContract } from "./GenericAtlasPreview";
 
 /**
- * Router between the two 3D presentations. They are mutually exclusive by
- * design: when `proxy` is provided (a real ThreeDProxyViewModel, in any
- * state — available, blocked or errored) the generic atlas never renders,
- * so the clinical review flow can never show a non-patient-specific mesh as
- * if it were a result. `threeD` (legacy shape) is kept only for existing
- * callers that still provide only the legacy `threeD` payload.
+ * Router entre las dos presentaciones 3D. Son mutuamente excluyentes por
+ * diseño: cuando se provee `proxy` (un ThreeDProxyViewModel real, en cualquier
+ * estado — disponible, bloqueado o con error) el atlas genérico nunca se renderiza,
+ * de modo que el flujo de revisión clínica nunca pueda mostrar una malla no específica del paciente como
+ * si fuera un resultado. `threeD` (forma legacy) se conserva solo para los
+ * llamantes existentes que todavía proveen únicamente el payload `threeD` legacy.
  */
 type Props = {
   threeD?: LegacyThreeDContract | null;

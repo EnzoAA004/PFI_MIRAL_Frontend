@@ -48,10 +48,10 @@ function test(name, fn) {
 }
 
 /**
- * P9-C.5 Parte B — Backend snapshot's threeD is written verbatim from the same
- * shape the live AI Module response has (see MultiplanarRunPersistenceService
- * on the Backend), so the frontend reuses parseThreeD from
- * multiplanarRunAdapter.ts for both sources instead of duplicating a parser.
+ * P9-C.5 Parte B — el threeD del snapshot del Backend se escribe textualmente con la misma
+ * forma que tiene la respuesta en vivo del AI Module (ver MultiplanarRunPersistenceService
+ * en el Backend), por lo que el frontend reutiliza parseThreeD de
+ * multiplanarRunAdapter.ts para ambas fuentes en lugar de duplicar un parser.
  */
 
 test("1 parseThreeD reconstruye threeD desde un snapshot persistido (canonicalRun.threeD) igual que desde la respuesta en vivo", () => {

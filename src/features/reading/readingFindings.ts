@@ -1,21 +1,21 @@
 import { ALWAYS_SHOWN_LEVELS, SPINE_LEVELS, normalizeLevel, type SpineLevel } from "../../clinicalDisplay";
 
 /**
- * Groups findings by vertebral level — the axis a radiologist actually reads and
- * reports a lumbar MRI on, craniocaudal and alternating body with disc space.
+ * Agrupa los hallazgos por nivel vertebral — el eje sobre el que un radiólogo realmente lee e
+ * informa una RM lumbar, craneocaudal y alternando cuerpo con espacio discal.
  *
- * The ten lumbar levels are always rendered, with or without a finding: "nothing at
- * L3-L4" is a clinical statement, and a level silently missing from the panel is
- * indistinguishable from a level that was never looked at. Levels outside that range
- * appear only when the study reaches them, which is the same rule read the other
- * way: an always-present empty T9-T10 row would claim a level was examined that was
- * never in the field of view.
+ * Los diez niveles lumbares siempre se renderizan, con o sin hallazgo: "nada en
+ * L3-L4" es una afirmación clínica, y un nivel que falta en silencio en el panel es
+ * indistinguible de un nivel que nunca se miró. Los niveles fuera de ese rango
+ * aparecen solo cuando el estudio llega hasta ellos, que es la misma regla leída del otro
+ * lado: una fila T9-T10 siempre presente y vacía afirmaría que se examinó un nivel que
+ * nunca estuvo en el campo de visión.
  *
- * A finding without a level lands in one of two places, and the distinction is the
- * point: the canal area describes the whole study because its mask runs the length
- * of the spine, while a measurement whose level the AI could not determine is a gap.
- * Filing both under "sin nivel asignado" accused the model of a failure it did not
- * have. Neither is ever spread across levels by guesswork.
+ * Un hallazgo sin nivel cae en uno de dos lugares, y esa distinción es
+ * el punto: el área del canal describe el estudio entero porque su máscara recorre el largo
+ * de la columna, mientras que una medición cuyo nivel la IA no pudo determinar es una brecha.
+ * Archivar ambas bajo "sin nivel asignado" acusaba al modelo de una falla que no
+ * tuvo. Ninguna se reparte nunca entre niveles por conjetura.
  */
 
 export type LevelFinding = {
@@ -30,10 +30,10 @@ export type LevelFinding = {
 export type LevelGroupKind = "level" | "study" | "unassigned";
 
 export type LevelGroup = {
-  /** Canonical level, or null for the groups that are not a level. */
+  /** Nivel canónico, o null para los grupos que no son un nivel. */
   level: SpineLevel | null;
   kind: LevelGroupKind;
-  /** Stable identity for selection — two groups can share a null level. */
+  /** Identidad estable para la selección — dos grupos pueden compartir un nivel null. */
   key: string;
   label: string;
   findings: LevelFinding[];
@@ -43,7 +43,7 @@ export type LevelledInput = {
   id: string;
   label: string;
   level?: string | null;
-  /** "study" when the measurement does not describe a level. Defaults to "level". */
+  /** "study" cuando la medición no describe un nivel. Por defecto "level". */
   levelScope?: string | null;
   value?: number | string | null;
   unit?: string;
@@ -55,16 +55,16 @@ const GENERAL_KEY = "__general__";
 const UNASSIGNED_KEY = "__unassigned__";
 
 /**
- * Recovers the level from a measurement id, for runs persisted before the backend
- * stopped discarding levels outside L1-L2…L5-S1.
+ * Recupera el nivel a partir de un id de medición, para corridas persistidas antes de que el backend
+ * dejara de descartar los niveles fuera de L1-L2…L5-S1.
  *
- * This reads back what the AI Module wrote rather than inferring anything: the id is
- * built from the level it assigned (`sagittal-disc-t11-t12-width`), and a disc it
- * could not name gets a positional slug (`sagittal-disc-d1-width`) that no level
- * matches. So a level only comes back when there was one to begin with.
+ * Esto relee lo que escribió el módulo de IA en lugar de inferir nada: el id se
+ * arma con el nivel que asignó (`sagittal-disc-t11-t12-width`), y un disco que no
+ * pudo nombrar recibe un slug posicional (`sagittal-disc-d1-width`) que ningún nivel
+ * coincide. Así que un nivel solo vuelve cuando había uno desde el principio.
  *
- * Without this, a study whose legend reads "Disco T11-T12" listed that same disc
- * under "sin nivel asignado" two panels to the right.
+ * Sin esto, un estudio cuya leyenda dice "Disco T11-T12" listaba ese mismo disco
+ * bajo "sin nivel asignado" dos paneles más a la derecha.
  */
 export function levelFromMeasurementId(id: string): SpineLevel | null {
   const parts = id.split("-");
@@ -118,7 +118,7 @@ export function groupFindingsByLevel(items: LevelledInput[]): LevelGroup[] {
   return groups;
 }
 
-/** True when no finding reached a level — drives the panel's notice. */
+/** True cuando ningún hallazgo llegó a un nivel — maneja el aviso del panel. */
 export function allFindingsUnassigned(groups: LevelGroup[]) {
   const assigned = groups.filter((g) => g.kind === "level").reduce((total, g) => total + g.findings.length, 0);
   const unassigned = groups.find((g) => g.kind === "unassigned")?.findings.length ?? 0;

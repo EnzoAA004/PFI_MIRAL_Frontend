@@ -1,11 +1,11 @@
 import { chromium } from "playwright";
 
 /**
- * Stage 88: real Docker browser/API E2E for the backend-authoritative structured
- * Study report/export. This script intentionally does not intercept network
- * traffic: no page.route(), no route.fulfill(), and no frontend-side synthetic
- * report data. The uploaded file is the same minimal .dcm-shaped fixture used
- * by Stage 87; the running mock AI service owns the analysis contract.
+ * Etapa 88: E2E de browser/API en Docker real para el reporte/exportación estructurado de
+ * Study con autoridad en el backend. Este script intencionalmente no intercepta el tráfico de
+ * red: ni page.route(), ni route.fulfill(), ni datos de reporte sintéticos del lado del frontend.
+ * El archivo subido es el mismo fixture mínimo con forma de .dcm usado
+ * en la Etapa 87; el servicio mock de IA en ejecución es dueño del contrato de análisis.
  */
 
 const frontendUrl = process.env.POST_E50_FRONTEND_URL ?? "http://localhost:8188";

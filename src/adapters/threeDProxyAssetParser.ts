@@ -1,7 +1,7 @@
 /**
- * Strict parser/validator for the `pfi.lumbar-geometric-proxy.v1` mesh asset
- * (AI Module P9-A.3.1.1). This is untrusted JSON fetched from a URL — never
- * assume shape, never let it reach the Three.js component unvalidated.
+ * Parser/validador estricto del asset de malla `pfi.lumbar-geometric-proxy.v1`
+ * (AI Module P9-A.3.1.1). Este es JSON no confiable obtenido desde una URL — nunca
+ * asumir la forma, nunca dejar que llegue al componente Three.js sin validar.
  */
 
 export type ThreeDProxyAssetErrorCode =
@@ -77,8 +77,8 @@ const MAX_FACES = 20000;
 const MAX_STRUCTURES = 200;
 const MAX_LIMITATIONS = 50;
 
-// No URLs, no Windows/Unix internal paths, no HTML/script content in any
-// asset-provided text field (labels, limitations).
+// Ni URLs, ni paths internos de Windows/Unix, ni contenido HTML/script en ningún
+// campo de texto provisto por el asset (labels, limitations).
 const UNSAFE_STRING_PATTERN = /<script|<\/script|javascript:|^[a-zA-Z]:\\|\\\\|\/etc\/|\/tmp\/|\/app\/|127\.0\.0\.1|localhost|\.internal\b|https?:\/\//i;
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

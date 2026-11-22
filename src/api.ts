@@ -22,8 +22,8 @@ const runtimeConfig = typeof window !== "undefined" ? window.__PFI_CONFIG__ : un
 export const LOCAL_EVALUATION = runtimeConfig?.LOCAL_EVALUATION === true;
 export const API_BASE_URL = runtimeConfig?.API_BASE_URL || import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
-// P10-C.1 §12: fail loudly (but not fatally) if the resolved backend origin
-// looks unsafe. Never throws — a broken build must still be diagnosable.
+// P10-C.1 §12: fallar de forma ruidosa (pero no fatal) si el origen de backend resuelto
+// parece inseguro. Nunca lanza excepción — un build roto igual debe poder diagnosticarse.
 function validateApiBaseUrlAtStartup(url: string) {
   try {
     const parsed = new URL(url);
@@ -44,7 +44,7 @@ function validateApiBaseUrlAtStartup(url: string) {
 try {
   validateApiBaseUrlAtStartup(API_BASE_URL);
 } catch {
-  // Startup diagnostics must never break module evaluation.
+  // El diagnóstico de arranque nunca debe romper la evaluación del módulo.
 }
 
 export class ApiError extends Error {
@@ -445,7 +445,7 @@ async function readErrorBody(response: Response) {
 }
 
 function buildApiError(path: string, traceId: string, response?: Response, body?: unknown, cause?: unknown) {
-  void cause; // network-failure causes are never rendered directly (P10-C.1 §6) — the safe fallback below covers them.
+  void cause; // las causas de fallas de red nunca se renderizan directamente (P10-C.1 §6) — el fallback seguro de abajo las cubre.
   const bodyRecord = asRecord(body);
   const code = typeof bodyRecord?.code === "string" ? bodyRecord.code : undefined;
   const candidateMessage = typeof bodyRecord?.message === "string" ? bodyRecord.message : undefined;
@@ -487,9 +487,9 @@ async function request<T>(path: string, init?: RequestInit, fallback?: () => T |
   }
 }
 
-// /api/ai/health and /api/ai/models are protected endpoints (any authenticated,
-// non-pending professional) per the Backend's AuthFilter default gate — they
-// are NOT public. Authorization must always be attached here.
+// /api/ai/health y /api/ai/models son endpoints protegidos (cualquier profesional
+// autenticado y no pendiente) según el gate por defecto AuthFilter del Backend — NO
+// son públicos. Authorization siempre debe adjuntarse acá.
 export async function getHealth() {
   return request<{ status: string; service?: string }>("/api/ai/health", undefined, () => markDataOrigin({ status: "demo", service: "mock-local" }, "demo"));
 }
@@ -500,10 +500,10 @@ export async function getModels(): Promise<AiModel[]> {
 }
 
 /**
- * The only endpoint that is genuinely public (no Authorization) for a
- * pre-login liveness check, per the Backend's AuthFilter.PUBLIC_LIVENESS_PATHS.
- * Never use /api/ai/health for this — that endpoint requires an authenticated,
- * non-pending session and will 401 without one.
+ * El único endpoint realmente público (sin Authorization) para un
+ * chequeo de liveness previo al login, según AuthFilter.PUBLIC_LIVENESS_PATHS del Backend.
+ * Nunca uses /api/ai/health para esto — ese endpoint requiere una sesión autenticada
+ * y no pendiente, y devuelve 401 sin una.
  */
 export async function getPublicSystemHealth(): Promise<{ status: string }> {
   return request<{ status: string }>("/api/system/health", undefined, () => markDataOrigin({ status: "demo" }, "demo"), false);
@@ -514,13 +514,13 @@ export async function getStudies(): Promise<StudiesResponse> {
   return normalizeStudiesResponse(response);
 }
 
-// ADMIN-only per SystemController (RoleAuthorizationService.requireAdmin) —
-// still requires Authorization; the Backend enforces the role, not the client.
+// Solo ADMIN según SystemController (RoleAuthorizationService.requireAdmin) —
+// igual requiere Authorization; el Backend aplica el rol, no el cliente.
 export async function getSystemDiagnostics(): Promise<SystemDiagnostics> {
   return request<SystemDiagnostics>("/api/system/diagnostics", undefined, () => markDataOrigin({ status: "demo", checkedAt: new Date().toISOString(), backend: { available: true, status: "demo" }, aiModule: { available: true, status: "demo" }, database: { available: true, status: "demo", mode: "mock" }, auth: { enabled: true, status: "demo" }, persistence: { mode: "mock", postgresEnabled: false }, humanReviewRequired: true, notClinicalDiagnosis: true }, "demo"));
 }
 
-// Any authenticated, non-pending professional (AuthFilter default gate) — not public.
+// Cualquier profesional autenticado y no pendiente (gate por defecto de AuthFilter) — no es público.
 export async function getAiCompletion(): Promise<Record<string, unknown>> {
   return request<Record<string, unknown>>("/api/ai/completion", undefined, () => markDataOrigin({ status: "demo", completionPercent: 67, humanReviewRequired: true, notClinicalDiagnosis: true }, "demo"));
 }
@@ -537,7 +537,7 @@ export async function getAiEvaluationSummary(): Promise<Record<string, unknown>>
   return request<Record<string, unknown>>("/api/ai/evaluation/summary", undefined, () => markDataOrigin({ status: "demo", reportCount: 0 }, "demo"));
 }
 
-// ADMIN-only per SystemController (RoleAuthorizationService.requireAdmin).
+// Solo ADMIN según SystemController (RoleAuthorizationService.requireAdmin).
 export async function warmupSystem(): Promise<SystemDiagnostics> {
   return request<SystemDiagnostics>("/api/system/warmup", { method: "POST" }, () => markDataOrigin({ status: "demo", checkedAt: new Date().toISOString(), aiModule: { available: true, status: "demo", message: "warmup demo" } }, "demo"));
 }

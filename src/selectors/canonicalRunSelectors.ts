@@ -13,10 +13,10 @@ import type {
 } from "../contracts/canonicalMultiplanarRun";
 
 /**
- * Pure selectors over CanonicalMultiplanarRun / CanonicalPlaneRun. No v1/v2
- * interpretation, no alias resolution, no invented clinical defaults — that
- * belongs exclusively to src/adapters/multiplanarRunAdapter.ts. Empty arrays
- * / undefined are structural absence, not a clinical value.
+ * Selectores puros sobre CanonicalMultiplanarRun / CanonicalPlaneRun. Sin
+ * interpretación v1/v2, sin resolución de alias, sin defaults clínicos inventados — eso
+ * pertenece exclusivamente a src/adapters/multiplanarRunAdapter.ts. Los arrays
+ * vacíos / undefined son ausencia estructural, no un valor clínico.
  */
 
 export function getSagittalPlane(run: CanonicalMultiplanarRun | null | undefined): CanonicalPlaneRun | undefined {

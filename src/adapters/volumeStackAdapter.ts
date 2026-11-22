@@ -6,8 +6,8 @@ import { resolvePlaneAssetUrls } from "../inferenceReadiness";
 import { aiAssetUrl } from "../multiplanarApi";
 
 /**
- * Builds the viewer stack from a canonical run. Asset resolution is injected so
- * slices without published assets remain explicit placeholders.
+ * Arma el stack del viewer a partir de una corrida canónica. La resolución de assets se inyecta para que
+ * los slices sin assets publicados queden como placeholders explícitos.
  */
 export type PlaneSliceAssets = { image?: string; overlay?: string };
 export type PlaneAssetResolver = (planeRun: CanonicalPlaneRun, plane: Plane) => PlaneSliceAssets;
@@ -59,7 +59,7 @@ export function buildVolumeWorkspace(
   };
 }
 
-/** Default resolver used by the app; reuses the existing sanitized asset URLs. */
+/** Resolver por defecto usado por la app; reutiliza las URLs de assets ya sanitizadas existentes. */
 export const defaultPlaneAssetResolver: PlaneAssetResolver = (planeRun, plane) => {
   const urls = resolvePlaneAssetUrls(planeRun, plane, aiAssetUrl, API_BASE_URL);
   return { image: urls["input.png"], overlay: urls["overlay.png"] };

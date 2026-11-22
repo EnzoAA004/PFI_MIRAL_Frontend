@@ -50,7 +50,7 @@ function planeRun(overrides = {}) {
   assert.deepEqual(stack.dimensions, [24, 320, 320]);
   assert.deepEqual(stack.inPlaneSpacingMm, [0.7, 0.7]);
   assert.equal(stack.slices.length, 24);
-  // only the selected slice carries a real image/overlay + results
+  // solo el slice seleccionado lleva una imagen/overlay real + resultados
   const selected = stack.slices[12];
   assert.equal(selected.isSelected, true);
   assert.equal(selected.hasResult, true);

@@ -1,5 +1,5 @@
-// EXT-01: pure display helper tests for evidence concordance. Follows the same
-// transpile-and-vm-load convention as scripts/ext04b3-visual-evidence-tests.mjs.
+// EXT-01: tests de helpers de visualización puros para la concordancia de evidencia. Sigue la misma
+// convención de transpile-and-vm-load que scripts/ext04b3-visual-evidence-tests.mjs.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";

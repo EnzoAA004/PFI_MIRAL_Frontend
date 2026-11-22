@@ -53,10 +53,10 @@ function test(name, fn) {
   console.log(`ok ${count} - ${name}`);
 }
 
-// P9-C.2: inferenceReadiness.ts now consumes CanonicalPlaneRun / CanonicalMultiplanarRun
-// exclusively. Fixtures below are canonical-shaped (model/input/assets as lists, no
-// aiOutput/modelArtifact/metadata aliases) — the raw-payload alias resolution now lives
-// only in src/adapters/multiplanarRunAdapter.ts and is covered by its own test suite.
+// P9-C.2: inferenceReadiness.ts ahora consume CanonicalPlaneRun / CanonicalMultiplanarRun
+// exclusivamente. Los fixtures de abajo tienen forma canónica (model/input/assets como listas, sin
+// aliases aiOutput/modelArtifact/metadata) — la resolución de aliases del payload crudo ahora vive
+// solo en src/adapters/multiplanarRunAdapter.ts y la cubre su propia suite de tests.
 
 const realRuntimeInput = {
   inputId: "inp-sag",

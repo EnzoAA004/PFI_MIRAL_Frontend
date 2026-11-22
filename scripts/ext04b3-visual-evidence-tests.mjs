@@ -1,9 +1,9 @@
-// EXT-04B3: contract parser + display-helper tests for the visualEvidence block of
+// EXT-04B3: tests del parser de contrato + helpers de visualización para el bloque visualEvidence de
 // StudyReportDto (Backend EXT-04B2, extensions/ext-04-visual-evidence-backend @ 37bc4c1).
-// Follows the same transpile-and-vm-load convention as scripts/post-e50-structured-report-tests.mjs
-// (no jsdom/testing-library in this repo — component JSX itself is not rendered here; only the
-// pure parser/display functions the component consumes are unit-tested, same precedent as
-// MeasurementLayer.tsx's own logic being tested through measurements.ts, not the component).
+// Sigue la misma convención de transpile-and-vm-load que scripts/post-e50-structured-report-tests.mjs
+// (sin jsdom/testing-library en este repo — el JSX del componente en sí no se renderiza acá; solo las
+// funciones puras de parser/visualización que consume el componente se testean de forma unitaria, el mismo precedente que
+// la lógica propia de MeasurementLayer.tsx testeada a través de measurements.ts, no del componente).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -33,9 +33,9 @@ function load(path, exportNames, extraSandbox = {}) {
   return sandbox.exports;
 }
 
-// displayReportPlane is stubbed exactly as studyReportDisplay.ts defines it, since
-// visualEvidenceDisplay.ts imports it from that sibling module and the loader above
-// resolves imports via sandbox globals, not real cross-file module resolution.
+// displayReportPlane se stubbea exactamente como lo define studyReportDisplay.ts, ya que
+// visualEvidenceDisplay.ts lo importa de ese módulo hermano y el loader de arriba
+// resuelve los imports mediante globals del sandbox, no una resolución real de módulos entre archivos.
 function displayReportPlaneStub(plane) {
   if (plane === "sagittal") return "Sagital";
   if (plane === "axial") return "Axial";
@@ -62,12 +62,12 @@ function check(name, fn) {
   console.log(`ok ${passed} - ${name}`);
 }
 
-// vm.runInNewContext gives each loaded module its own realm (its own Array/Object
-// constructors), so a value returned across that boundary fails Node's strict
-// deepEqual (different prototype identity) even when structurally identical.
-// Comparing via JSON avoids that false negative — the same technique the existing
-// post-e50-structured-report-tests.mjs sidesteps by only ever comparing primitive
-// fields one at a time.
+// vm.runInNewContext le da a cada módulo cargado su propio realm (sus propios constructores
+// de Array/Object), por lo que un valor devuelto a través de ese límite falla el
+// deepEqual estricto de Node (identidad de prototipo distinta) incluso cuando es estructuralmente idéntico.
+// Comparar vía JSON evita ese falso negativo — la misma técnica que el
+// post-e50-structured-report-tests.mjs existente esquiva comparando solo campos
+// primitivos de a uno.
 function assertSameJson(actual, expected, message) {
   assert.equal(JSON.stringify(actual), JSON.stringify(expected), message);
 }

@@ -10,13 +10,13 @@ import { evidenceBaseImageSliceUrl, NO_BASE_IMAGE_MESSAGE } from "./visualEviden
 import { defaultBbox, defaultEllipse, geometryToRequestMap, moveBbox, moveEllipseCenter, pointFromClient } from "./evidenceRegionEditing";
 
 /**
- * EXT-04B5: "Nueva región" — a professional draws a fresh BBOX or ELLIPSE from scratch and saves
- * it as `origin=professional` (the Backend derives `origin`; this client never sends one). Draws
- * over the current slice of the active plane, the same authenticated slice endpoint the report's
- * own `baseImage` already resolves through (`evidenceBaseImageSliceUrl`) — no new asset mechanism.
+ * EXT-04B5: "Nueva región" — un profesional dibuja desde cero un BBOX o ELLIPSE nuevo y lo guarda
+ * como `origin=professional` (el Backend deriva `origin`; este cliente nunca envía uno). Dibuja
+ * sobre el slice actual del plano activo, el mismo endpoint autenticado de slices por el que ya se resuelve el
+ * `baseImage` del propio reporte (`evidenceBaseImageSliceUrl`) — sin un nuevo mecanismo de assets.
  *
  * Flow: elegir tipo → arrastrar para ubicar/ajustar → confirmar con etiqueta/nota opcional →
- * guardar. Nothing is sent until "Guardar región" — there is no autosave while dragging.
+ * guardar. No se envía nada hasta "Guardar región" — no hay autoguardado mientras se arrastra.
  */
 type Props = {
   caseId: string;

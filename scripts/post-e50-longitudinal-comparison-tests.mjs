@@ -4,10 +4,10 @@ import vm from "node:vm";
 import ts from "typescript";
 
 /**
- * Stage 79: longitudinal comparison between two Studies of the same patient. Same pattern as the
- * other post-e50 test scripts: transpile the pure .ts modules to CommonJS and run them in a vm
- * sandbox — no DOM/React renderer, so all the logic worth testing (parsing, presentation, state
- * transitions) lives in plain .ts files with no React import.
+ * Etapa 79: comparación longitudinal entre dos Studies del mismo paciente. El mismo patrón que los
+ * otros scripts de test post-e50: transpilar los módulos .ts puros a CommonJS y correrlos en un vm
+ * sandbox — sin DOM/renderer de React, así que toda la lógica que vale la pena testear (parseo, presentación, transiciones de
+ * estado) vive en archivos .ts planos sin imports de React.
  */
 
 function load(path, exportNames) {

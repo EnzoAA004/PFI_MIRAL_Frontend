@@ -25,7 +25,7 @@ function transpile(relativePath) {
   return ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 }
 
-/** Loads a .tsx component file as CJS, stubbing react/react-jsx-runtime and returning {} for every other import. Only used to reach pure, non-exported helper functions without a DOM. */
+/** Carga un archivo de componente .tsx como CJS, stubbeando react/react-jsx-runtime y devolviendo {} para cualquier otro import. Solo se usa para alcanzar helpers puros no exportados sin un DOM. */
 function loadComponentModule(path) {
   const source = readFileSync(join(root, path), "utf8");
   const compiled = ts.transpileModule(source, {
@@ -209,7 +209,7 @@ test("A3 NewAnalysisDrawer no contiene canonicalRunToLegacyViewModel ni sagittal
 });
 
 test("A4 sagittalLandmarksForViewer no existe en ningun archivo de src", () => {
-  // best-effort: only check the files known to have carried it historically
+  // best-effort: solo se chequean los archivos que se sabe que lo tuvieron históricamente
   for (const file of ["src/features/worklist/NewAnalysisDrawer.tsx", "src/adapters/multiplanarRunAdapter.ts", "src/inferenceReadiness.ts"]) {
     assert.ok(!readSource(file).includes("sagittalLandmarksForViewer"), `${file} no debe contener sagittalLandmarksForViewer`);
   }

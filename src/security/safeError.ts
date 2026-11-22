@@ -1,4 +1,4 @@
-/** Safe error presentation model (P10-C.1 §6). */
+/** Modelo de presentación de errores seguros (P10-C.1 §6). */
 
 export type SafeFrontendError = {
   message: string;
@@ -36,9 +36,9 @@ function suggestedActionForStatus(status?: number): SafeFrontendError["suggested
   return undefined;
 }
 
-// Patterns that indicate an upstream/raw exception, stack trace, SQL, path,
-// token, or markup leaked into a message instead of a curated one. Never
-// render a message matching these; fall back to the status-based mapping.
+// Patrones que indican que una excepción cruda de upstream, un stack trace, SQL, un path,
+// un token o markup se filtró en un mensaje en lugar de uno curado. Nunca
+// renderizar un mensaje que coincida con estos; recurrir al mapeo basado en el status.
 const UNSAFE_MESSAGE_PATTERNS: RegExp[] = [
   /Exception/i,
   /Traceback/i,
@@ -51,10 +51,10 @@ const UNSAFE_MESSAGE_PATTERNS: RegExp[] = [
   /\/tmp\//,
   /\/app\//,
   /\/content\//,
-  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, // JWT-shaped token
+  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, // token con forma de JWT
   /<html/i,
   /<!DOCTYPE/i,
-  /^\s*\{[\s\S]*"[a-zA-Z]+"\s*:/, // raw JSON body leaking through as text
+  /^\s*\{[\s\S]*"[a-zA-Z]+"\s*:/, // body JSON crudo filtrándose como texto
 ];
 
 export function isUnsafeErrorText(text: string): boolean {
@@ -86,7 +86,7 @@ function humanizeValidationMessage(candidate?: string): string | undefined {
   return label ? `Revisá el campo «${label}»: está vacío o no tiene un formato válido.` : undefined;
 }
 
-/** Picks a curated backend message when it's safe, otherwise the fixed status mapping. */
+/** Elige un mensaje curado del backend cuando es seguro, de lo contrario el mapeo fijo por status. */
 export function toSafeFrontendError(status: number | undefined, options: { code?: string; traceId?: string; candidateMessage?: string } = {}): SafeFrontendError {
   const { code, traceId, candidateMessage } = options;
   const safeCandidate = code === "VALIDATION_ERROR"

@@ -1,23 +1,23 @@
-// EXT-03: contract tests for the subarticular explainability API client. Follows the same
-// transpile-and-vm-load convention as scripts/ext04b3-visual-evidence-tests.mjs.
+// EXT-03: tests de contrato para el cliente de API de explicabilidad subarticular. Sigue la misma
+// convención de transpile-and-vm-load que scripts/ext04b3-visual-evidence-tests.mjs.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 
-// multiplanarApi.ts DEFINES `multiplanarRequest` itself (rather than importing it), so loading
-// the whole file the way ext04b3's own loader does would pull in generateTraceId/authHeaders/
-// ensureAuthSession/etc. too. This only needs the one exported function under test, so it is
-// extracted by name and evaluated against a stubbed `multiplanarRequest` instead of the file's
-// real networking implementation (which is exercised live in the Docker E2E, never unit-mocked).
+// multiplanarApi.ts DEFINE `multiplanarRequest` por sí mismo (en lugar de importarlo), así que cargar
+// el archivo completo como lo hace el loader propio de ext04b3 arrastraría también generateTraceId/authHeaders/
+// ensureAuthSession/etc. Esto solo necesita la única función exportada bajo test, así que se
+// extrae por nombre y se evalúa contra un `multiplanarRequest` stubbeado en lugar de la
+// implementación de red real del archivo (que se ejercita en vivo en el E2E de Docker, nunca con mocks unitarios).
 function loadSingleFunction(path, functionName, extraSandbox = {}) {
   const source = readFileSync(path, "utf8");
   const marker = `export async function ${functionName}`;
   const start = source.indexOf(marker);
   if (start === -1) throw new Error(`function ${functionName} not found in ${path}`);
-  // Find the parameter list's matching close-paren first (parens, not braces -- the params
-  // themselves may contain object-type braces), then the function body's own opening brace,
-  // which is the first "{" after that close-paren (skipping any ": ReturnType" in between).
+  // Encontrar primero el paréntesis de cierre correspondiente de la lista de parámetros (paréntesis, no llaves -- los parámetros
+  // mismos pueden contener llaves de tipos de objeto), luego la llave de apertura propia del cuerpo de la función,
+  // que es la primera "{" después de ese paréntesis de cierre (salteando cualquier ": ReturnType" intermedio).
   const parenStart = source.indexOf("(", start);
   let parenDepth = 0;
   let parenEnd = parenStart;

@@ -5,13 +5,13 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 /**
- * P9-C.5 smoke E2E. Deterministic, fully mocked HTTP backend (no real AI
- * Module, no real Backend, no personal data). Exercises the dual-plane
- * workspace: sagittal + axial upload -> canonical run with threeD.enabled ->
- * axial candidate badges -> experimental 3D proxy panel renders real
- * geometry -> coordinated 2D/3D selection -> edit an axial measurement ->
- * save review -> corrections payload includes the axial edit. Captures
- * screenshots into docs/evidence/p9c5/ as smoke-test evidence.
+ * E2E smoke de P9-C.5. Determinístico, con backend HTTP completamente mockeado (sin módulo
+ * de IA real, sin Backend real, sin datos personales). Ejercita el workspace de dos
+ * planos: upload sagital + axial -> corrida canónica con threeD.enabled ->
+ * badges de candidatos axiales -> el panel de proxy 3D experimental renderiza
+ * geometría real -> selección 2D/3D coordinada -> editar una medición axial ->
+ * guardar revisión -> el payload de correcciones incluye la edición axial. Captura
+ * screenshots en docs/evidence/p9c5/ como evidencia del smoke test.
  */
 
 const port = 5198;
@@ -78,7 +78,7 @@ function meshAsset() {
   };
 }
 
-/** Canonical public v2 response with dual-plane + threeD.enabled, matching AI Module P9-A.3.1.1 shape. */
+/** Respuesta v2 pública canónica con dos planos + threeD.enabled, con la forma del AI Module P9-A.3.1.1. */
 function canonicalRunResponse() {
   return {
     status: "completed",

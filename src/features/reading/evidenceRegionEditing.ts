@@ -6,38 +6,38 @@ import type {
 } from "../../contracts/visualEvidenceTypes";
 
 /**
- * EXT-04B5: pure geometry-editing math for the professional annotation/correction flow —
- * kept deliberately free of React/DOM so it can be unit-tested the same way this repo already
- * tests `measurements.ts`/`studyReportApi.ts` (see `scripts/ext04b5-professional-annotations-tests.mjs`),
- * without rendering the interactive component itself. `EvidenceRegionEditor.tsx` is a thin
- * wrapper over these functions: it never recomputes a clamp or a resize itself.
+ * EXT-04B5: matemática pura de edición de geometría para el flujo de anotación/corrección profesional —
+ * mantenida deliberadamente libre de React/DOM para poder testearla de forma unitaria igual que este repo ya
+ * testea `measurements.ts`/`studyReportApi.ts` (ver `scripts/ext04b5-professional-annotations-tests.mjs`),
+ * sin renderizar el componente interactivo en sí. `EvidenceRegionEditor.tsx` es un wrapper delgado
+ * sobre estas funciones: nunca recalcula por sí mismo un clamp ni un resize.
  *
- * Basis: the same canonical 0..256 square every other overlay in this reading room already uses
- * (`MeasurementLayer`, `EvidenceRegionOverlay`) — never CSS pixels.
+ * Base: el mismo cuadrado canónico 0..256 que ya usa todo otro overlay de esta sala de lectura
+ * (`MeasurementLayer`, `EvidenceRegionOverlay`) — nunca píxeles CSS.
  */
 
 export const CANONICAL_MIN = 0;
 export const CANONICAL_MAX = 256;
 
-/** Below this, a BBOX/ELLIPSE stops being something a professional could usefully grab or read. */
+/** Por debajo de esto, un BBOX/ELLIPSE deja de ser algo que un profesional pueda agarrar o leer con utilidad. */
 const MIN_SIZE = 4;
 
 export function clampCanonical(value: number): number {
   return Math.min(CANONICAL_MAX, Math.max(CANONICAL_MIN, value));
 }
 
-/** Only BBOX and ELLIPSE are graphically editable this stage — POLYGON stays read-only (documented
- * limitation) and MASK_REFERENCE is never editable (it is a raster asset, not a vector shape). */
+/** Solo BBOX y ELLIPSE son editables gráficamente en esta etapa — POLYGON queda de solo lectura (limitación
+ * documentada) y MASK_REFERENCE nunca es editable (es un asset raster, no una forma vectorial). */
 export function isGraphicallyEditable(geometryType: EvidenceGeometryType): boolean {
   return geometryType === "BBOX" || geometryType === "ELLIPSE";
 }
 
 /**
- * Converts a pointer event's client coordinates into the canonical 0..256 basis, given the
- * bounding rect of the image frame it was captured over. Mirrors `MriSliceViewer.tsx`'s own
- * `pointFromEvent` conversion exactly (`(clientX - rect.left) / rect.width * 256`, clamped) —
- * duplicated rather than imported because that helper is a closure over `MriSliceViewer`'s own
- * internal ref and is not exported.
+ * Convierte las coordenadas de cliente de un pointer event a la base canónica 0..256, dada la
+ * bounding rect del marco de imagen sobre el que se capturó. Replica exactamente la conversión
+ * `pointFromEvent` propia de `MriSliceViewer.tsx` (`(clientX - rect.left) / rect.width * 256`, con clamp) —
+ * duplicada en lugar de importada porque ese helper es un closure sobre el
+ * ref interno propio de `MriSliceViewer` y no se exporta.
  */
 export function pointFromClient(rect: { left: number; top: number; width: number; height: number }, clientX: number, clientY: number): { x: number; y: number } | null {
   if (rect.width <= 0 || rect.height <= 0) return null;
@@ -49,7 +49,7 @@ export function pointFromClient(rect: { left: number; top: number; width: number
 
 export type BboxHandle = "nw" | "ne" | "sw" | "se";
 
-/** Whole-box translate, clamped so the box never leaves the canonical square. */
+/** Traslación de la caja completa, con clamp para que la caja nunca salga del cuadrado canónico. */
 export function moveBbox(bbox: EvidenceGeometryBbox, dx: number, dy: number): EvidenceGeometryBbox {
   const x = Math.min(CANONICAL_MAX - bbox.width, Math.max(CANONICAL_MIN, bbox.x + dx));
   const y = Math.min(CANONICAL_MAX - bbox.height, Math.max(CANONICAL_MIN, bbox.y + dy));
@@ -57,10 +57,10 @@ export function moveBbox(bbox: EvidenceGeometryBbox, dx: number, dy: number): Ev
 }
 
 /**
- * Resize by dragging one corner handle to `point` (already in canonical coordinates). The
- * opposite corner stays fixed. Enforces `MIN_SIZE` by preventing the dragged corner from
- * crossing past the opposite corner, and clamps to the canonical square — never negative
- * width/height, never a coordinate outside 0..256.
+ * Redimensiona arrastrando un handle de esquina a `point` (ya en coordenadas canónicas). La
+ * esquina opuesta queda fija. Aplica `MIN_SIZE` impidiendo que la esquina arrastrada
+ * cruce más allá de la esquina opuesta, y hace clamp al cuadrado canónico — nunca
+ * ancho/alto negativos, nunca una coordenada fuera de 0..256.
  */
 export function resizeBboxHandle(bbox: EvidenceGeometryBbox, handle: BboxHandle, point: { x: number; y: number }): EvidenceGeometryBbox {
   const left = bbox.x;
@@ -88,7 +88,7 @@ export function resizeBboxHandle(bbox: EvidenceGeometryBbox, handle: BboxHandle,
   return { type: "BBOX", x: newLeft, y: newTop, width: Math.max(MIN_SIZE, newRight - newLeft), height: Math.max(MIN_SIZE, newBottom - newTop) };
 }
 
-/** Move the ellipse's center to `point`, clamped so the center itself stays on the canonical square. */
+/** Mueve el centro de la elipse a `point`, con clamp para que el propio centro permanezca en el cuadrado canónico. */
 export function moveEllipseCenter(ellipse: EvidenceGeometryEllipse, point: { x: number; y: number }): EvidenceGeometryEllipse {
   return { ...ellipse, centerX: clampCanonical(point.x), centerY: clampCanonical(point.y) };
 }
@@ -96,9 +96,9 @@ export function moveEllipseCenter(ellipse: EvidenceGeometryEllipse, point: { x: 
 export type EllipseAxis = "x" | "y";
 
 /**
- * Adjust one radius by dragging its handle to `point`. The radius is the distance from the
- * (fixed) center to `point` along that axis, floored at a minimum and capped so the ellipse
- * never extends past the canonical square on that axis.
+ * Ajusta un radio arrastrando su handle a `point`. El radio es la distancia desde el
+ * centro (fijo) hasta `point` a lo largo de ese eje, con un mínimo como piso y un tope para que la elipse
+ * nunca se extienda más allá del cuadrado canónico en ese eje.
  */
 export function resizeEllipseRadius(ellipse: EvidenceGeometryEllipse, axis: EllipseAxis, point: { x: number; y: number }): EvidenceGeometryEllipse {
   const MIN_RADIUS = 2;
@@ -112,7 +112,7 @@ export function resizeEllipseRadius(ellipse: EvidenceGeometryEllipse, axis: Elli
   return { ...ellipse, radiusY };
 }
 
-/** Bbox corner handle positions, for rendering the four drag handles. */
+/** Posiciones de los handles de esquina del bbox, para renderizar los cuatro handles de arrastre. */
 export function bboxHandlePositions(bbox: EvidenceGeometryBbox): Record<BboxHandle, { x: number; y: number }> {
   return {
     nw: { x: bbox.x, y: bbox.y },
@@ -122,7 +122,7 @@ export function bboxHandlePositions(bbox: EvidenceGeometryBbox): Record<BboxHand
   };
 }
 
-/** Shape-agnostic geometry-to-request-map conversion, mirroring what the Backend's `EvidenceGeometry.fromMap` expects. */
+/** Conversión de geometría a mapa de request independiente de la forma, replicando lo que espera el `EvidenceGeometry.fromMap` del Backend. */
 export function geometryToRequestMap(geometry: EvidenceGeometry): Record<string, unknown> {
   if (geometry.type === "BBOX") return { x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height };
   if (geometry.type === "ELLIPSE") return { centerX: geometry.centerX, centerY: geometry.centerY, radiusX: geometry.radiusX, radiusY: geometry.radiusY };

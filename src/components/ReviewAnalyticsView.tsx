@@ -10,8 +10,8 @@ import {
 } from "../reviewAnalyticsApi";
 
 /**
- * EXT-02: "Review Analytics" — neutral internal telemetry dashboard. Never a clinical safety
- * signal: no traffic-light coloring, no "modelo seguro"/"accuracy clínica" wording anywhere here.
+ * EXT-02: "Review Analytics" — dashboard de telemetría interna neutral. Nunca una señal clínica de seguridad
+ * — sin coloreado tipo semáforo, sin redacción "modelo seguro"/"accuracy clínica" en ningún lugar acá.
  */
 export function ReviewAnalyticsView({ onBack, isAdmin = true }: { onBack: () => void; isAdmin?: boolean }) {
   const [report, setReport] = useState<ReviewAnalyticsReport | null>(null);

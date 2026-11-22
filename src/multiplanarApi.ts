@@ -220,10 +220,10 @@ export type SubarticularExplainResult = {
 };
 
 /**
- * EXT-03: Grad-CAM explainability asset for the same ROI `requestSubarticularClassification`
- * already classifies — same request shape, plus an optional `targetClass`. Never persisted,
- * never a diagnosis: the heatmap is always rendered with `disclaimer`/`layerDisclaimer` alongside
- * it, never on its own.
+ * EXT-03: asset de explicabilidad Grad-CAM para el mismo ROI que `requestSubarticularClassification`
+ * ya clasifica — misma forma de request, más un `targetClass` opcional. Nunca se persiste,
+ * nunca es un diagnóstico: el heatmap siempre se renderiza con `disclaimer`/`layerDisclaimer` al lado,
+ * nunca solo.
  */
 export async function requestSubarticularExplanation(payload: {
   inputId: string;
@@ -251,17 +251,17 @@ export function aiAssetUrl(runId: string, plane: Plane, assetName: AssetName): s
 }
 
 /**
- * Fetches the raw 3D proxy mesh JSON from a URL already sanitized by
- * multiplanarRunAdapter.ts (parseThreeD/isDurableMeshAssetUrl never let an
- * internal path or arbitrary host through `threeD.assets[].url`). This does
- * not build or guess any backend route — it only follows whatever URL the
- * canonical run already carries. Callers must run the result through
- * parseThreeDProxyMeshAsset before trusting its shape.
+ * Obtiene el JSON crudo de la malla proxy 3D desde una URL ya sanitizada por
+ * multiplanarRunAdapter.ts (parseThreeD/isDurableMeshAssetUrl nunca dejan pasar un
+ * path interno ni un host arbitrario a través de `threeD.assets[].url`). Esto
+ * no construye ni adivina ninguna ruta del backend — solo sigue la URL que
+ * la corrida canónica ya trae. Quienes llaman deben pasar el resultado por
+ * parseThreeDProxyMeshAsset antes de confiar en su forma.
  *
- * Defense in depth: the origin is re-validated here, independently of the
- * adapter, before any network call — a malicious/mismatched origin is
- * rejected outright and the doctor's JWT (authHeaders()) is never attached
- * to it, not even a request without credentials is attempted.
+ * Defensa en profundidad: el origen se revalida acá, independientemente del
+ * adaptador, antes de cualquier llamada de red — un origen malicioso/que no coincide se
+ * rechaza de plano y el JWT del médico (authHeaders()) nunca se adjunta
+ * a él, ni siquiera se intenta un request sin credenciales.
  */
 export async function fetchThreeDProxyAsset(url: string): Promise<unknown> {
   const sanitizedUrl = isDurableMeshAssetUrl(url);

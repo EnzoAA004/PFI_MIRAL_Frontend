@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Generic, non-patient-specific lumbar atlas. Kept only as an isolated demo
- * (see DashboardView) — must never be shown as a result in the clinical
- * review flow. Real per-patient 3D output is ExperimentalProxyViewer.
+ * Atlas lumbar genérico, no específico de un paciente. Se conserva solo como demo aislada
+ * (ver DashboardView) — nunca debe mostrarse como resultado en el flujo
+ * de revisión clínica. La salida 3D real por paciente es ExperimentalProxyViewer.
  */
 
 export type LegacyThreeDContract = {
@@ -189,7 +189,7 @@ export function GenericAtlasPreview({ threeD }: Props) {
           try {
             canvasElement.releasePointerCapture(event.pointerId);
           } catch {
-            // Browser may release capture during tab changes.
+            // El navegador puede liberar la captura durante los cambios de pestaña.
           }
         }
 

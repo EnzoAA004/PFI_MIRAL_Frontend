@@ -5,12 +5,12 @@ import vm from "node:vm";
 import ts from "typescript";
 
 /**
- * P10-C.1 hotfix: /api/ai/health and /api/ai/models are protected endpoints
- * (any authenticated, non-pending professional per the Backend's AuthFilter
- * default gate) — not public, not ADMIN-only. getHealth()/getModels() must
- * always attach Authorization and participate in the coordinated refresh on
- * 401, same as every other protected call. This exercises that behavior by
- * loading the real src/api.ts logic into a sandbox with a scriptable fetch.
+ * Hotfix P10-C.1: /api/ai/health y /api/ai/models son endpoints protegidos
+ * (cualquier profesional autenticado y no pendiente según el gate por defecto
+ * AuthFilter del Backend) — no públicos, no solo ADMIN. getHealth()/getModels() deben
+ * adjuntar siempre Authorization y participar en el refresh coordinado ante
+ * un 401, igual que toda otra llamada protegida. Esto ejercita ese comportamiento
+ * cargando la lógica real de src/api.ts en un sandbox con un fetch scripteable.
  */
 
 const root = process.cwd();

@@ -1,20 +1,20 @@
 import { chromium } from "playwright";
 
 /**
- * Stage 81-F: the first Post-E50 browser E2E run against a REAL running stack -- real Frontend
- * (nginx-served production build), real Spring Boot Backend, real Postgres, deterministic mock
- * AI/LLM (`docker-compose.post-e50.yml`). Every previous post-e50 stage (77-80) deferred this,
- * citing the cost of constructing a valid "canonical multiplanar run" fixture; Stage 81 traced
- * the actual precondition (`GET /api/studies/{caseId}` needs one `domain_study_runs` row with a
- * non-empty `sagittalModelKey`/`runId`) and found it's plain JSON metadata -- no real image
- * assets required (`resolvePersistedPlaneWorkspace` tolerates a missing asset URL gracefully).
+ * Etapa 81-F: el primer E2E de browser Post-E50 corrido contra un stack REAL en ejecución -- Frontend real
+ * (build de producción servido por nginx), Backend Spring Boot real, Postgres real, mock determinístico de
+ * AI/LLM (`docker-compose.post-e50.yml`). Cada etapa post-e50 anterior (77-80) lo difirió,
+ * citando el costo de construir un fixture válido de "canonical multiplanar run"; la Etapa 81 rastreó
+ * la precondición real (`GET /api/studies/{caseId}` necesita una fila `domain_study_runs` con un
+ * `sagittalModelKey`/`runId` no vacío) y encontró que es simple metadata JSON -- no hacen falta assets
+ * de imagen reales (`resolvePersistedPlaneWorkspace` tolera con gracia una URL de asset faltante).
  *
- * This is NOT wired into `npm test` -- it requires the Post-E50 Docker stack running externally
- * (`docker compose -f docker-compose.post-e50.yml up -d`) plus a pre-seeded Study (see
- * `docs/post_e50/81_PRODUCT_HARDENING_FRONTEND.md` for the exact fixture SQL used). It is a
- * manually-run confirmation script, matching this stage's "no meter framework enorme" constraint
- * -- one script, no new E2E framework, reusing Playwright (already a devDependency, already used
- * by `scripts/playwright-*.mjs` for pre-post-e50 stages).
+ * Esto NO está conectado a `npm test` -- requiere el stack Docker Post-E50 corriendo externamente
+ * (`docker compose -f docker-compose.post-e50.yml up -d`) más un Study pre-sembrado (ver
+ * `docs/post_e50/81_PRODUCT_HARDENING_FRONTEND.md` para el SQL exacto del fixture usado). Es un
+ * script de confirmación corrido manualmente, en línea con la restricción de esta etapa de "no meter framework enorme"
+ * -- un script, sin un nuevo framework de E2E, reutilizando Playwright (ya es una devDependency, ya usado
+ * por `scripts/playwright-*.mjs` para las etapas previas a post-e50).
  */
 
 const frontendUrl = process.env.POST_E50_FRONTEND_URL ?? "http://localhost:8188";

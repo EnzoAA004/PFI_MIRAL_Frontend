@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { VolumeSlice, VolumeStack } from "../contracts/volumeStack";
 
 /**
- * Slice-navigation state for the stack viewer. Pure index helpers stay outside
- * the React hook so clamping and selection remain independently testable.
+ * Estado de navegación de slices para el viewer de stack. Los helpers puros de índice quedan fuera
+ * del hook de React para que el clamp y la selección sigan siendo testeables de forma independiente.
  */
 export function clampSliceIndex(index: number, sliceCount: number): number {
   const max = Math.max(0, sliceCount - 1);
@@ -38,7 +38,7 @@ export type VolumeStackController = {
 export function useVolumeStack(stack: VolumeStack): VolumeStackController {
   const [currentIndex, setCurrentIndex] = useState(() => initialSliceIndex(stack));
 
-  // Re-center on the AI slice whenever the underlying series changes.
+  // Volver a centrar en el slice de la IA cada vez que cambia la serie subyacente.
   useEffect(() => {
     setCurrentIndex(initialSliceIndex(stack));
   }, [stack.seriesId, stack.sliceCount, stack.selectedSliceIndex]);

@@ -1,7 +1,7 @@
-// EXT-05: pure display/delta helper tests for professional feedback curation. Follows the same
-// transpile-and-vm-load convention as scripts/ext04b3-visual-evidence-tests.mjs (no jsdom/
-// testing-library in this repo — the interactive `FeedbackCurationPanel.tsx` is a thin wrapper
-// over these functions and is not rendered here).
+// EXT-05: tests de helpers puros de visualización/delta para la curación de feedback profesional. Sigue la misma
+// convención de transpile-and-vm-load que scripts/ext04b3-visual-evidence-tests.mjs (sin jsdom/
+// testing-library en este repo — el `FeedbackCurationPanel.tsx` interactivo es un wrapper delgado
+// sobre estas funciones y no se renderiza acá).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";

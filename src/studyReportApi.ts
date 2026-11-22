@@ -198,10 +198,10 @@ function numberField(raw: Record<string, unknown>, field: string): number | null
 }
 
 /**
- * Mirrors `EvidenceGeometry.fromMap` (Backend) field-for-field, including the same 0..256
- * range check `EvidenceCoordinateNormalizer` guarantees on write. Never throws: an unknown
- * `geometryType`, a malformed map, or an out-of-range coordinate returns `null` so the caller
- * can drop just that one region (89-CONT-style fail-safe — EXT-04B3 tests 7/12).
+ * Replica `EvidenceGeometry.fromMap` (Backend) campo por campo, incluido el mismo chequeo de rango
+ * 0..256 que `EvidenceCoordinateNormalizer` garantiza al escribir. Nunca lanza excepción: un
+ * `geometryType` desconocido, un mapa malformado o una coordenada fuera de rango devuelve `null` para que quien llama
+ * pueda descartar solo esa región (fail-safe estilo 89-CONT — tests 7/12 de EXT-04B3).
  */
 export function parseEvidenceGeometry(geometryType: unknown, geometry: unknown): EvidenceGeometry | null {
   const raw = asRecord(geometry);
@@ -240,8 +240,8 @@ export function parseEvidenceGeometry(geometryType: unknown, geometry: unknown):
     const plane = raw.plane === "sagittal" || raw.plane === "axial" ? raw.plane : null;
     const assetName = typeof raw.assetName === "string" && raw.assetName.trim() ? raw.assetName : null;
     if (!runId || !plane || !assetName) return null;
-    // Same path-traversal guard as `EvidenceGeometry.MaskReference`'s compact constructor —
-    // this value later feeds a URL path segment, never a raw URL from the JSON.
+    // El mismo guard contra path traversal que el compact constructor de `EvidenceGeometry.MaskReference` —
+    // este valor luego alimenta un segmento de path de URL, nunca una URL cruda del JSON.
     if ([runId, assetName].some((value) => value.includes("..") || value.includes("/") || value.includes("\\"))) return null;
     return { type: "MASK_REFERENCE", runId, plane, assetName };
   }
@@ -249,10 +249,10 @@ export function parseEvidenceGeometry(geometryType: unknown, geometry: unknown):
 }
 
 /**
- * EXT-04B3.5: tolerant by the same rule as the rest of this parser — a missing key (pre-
- * EXT-04B3.5 report), an explicit `null`, or a malformed shape (non-integer `sliceIndex`,
- * blank `inputId`) all resolve to `null`, never a thrown error. A region with no usable
- * `baseImage` still renders (its geometry, label, source, etc. are independent of this).
+ * EXT-04B3.5: tolerante con la misma regla que el resto de este parser — una clave faltante (reporte previo a
+ * EXT-04B3.5), un `null` explícito o una forma malformada (`sliceIndex` no entero,
+ * `inputId` en blanco) se resuelven todos a `null`, nunca a un error lanzado. Una región sin
+ * `baseImage` utilizable igual se renderiza (su geometría, etiqueta, fuente, etc. son independientes de esto).
  */
 export function parseEvidenceBaseImage(value: unknown): EvidenceBaseImageRef | null {
   const raw = asRecord(value);
@@ -264,9 +264,9 @@ export function parseEvidenceBaseImage(value: unknown): EvidenceBaseImageRef | n
 }
 
 /**
- * EXT-04B3: one `visualEvidence[]` item. Returns `null` (never throws) for a region whose
- * geometry does not parse — that region is silently dropped by `parseVisualEvidence`, never
- * the whole report (test 7: "geometry desconocida fail-safe").
+ * EXT-04B3: un ítem de `visualEvidence[]`. Devuelve `null` (nunca lanza excepción) para una región cuya
+ * geometría no parsea — esa región se descarta en silencio por `parseVisualEvidence`, nunca
+ * todo el reporte (test 7: "geometria desconocida fail-safe").
  */
 function parseVisualEvidenceItem(value: unknown): VisualEvidenceItem | null {
   const raw = asRecord(value);
@@ -292,9 +292,9 @@ function parseVisualEvidenceItem(value: unknown): VisualEvidenceItem | null {
 }
 
 /**
- * Tolerant by design (EXT-04B3 "el parser debe ser tolerante"): a missing key (pre-EXT-04B2
- * report), an explicit `null`, or anything that isn't an array all resolve to `[]` — never a
- * thrown `StudyReportContractError`. Only individual malformed items are dropped.
+ * Tolerante por diseño (EXT-04B3 "el parser debe ser tolerante"): una clave faltante (reporte previo a EXT-04B2),
+ * un `null` explícito o cualquier cosa que no sea un array se resuelven todos a `[]` — nunca un
+ * `StudyReportContractError` lanzado. Solo se descartan los ítems individuales malformados.
  */
 export function parseVisualEvidence(value: unknown): VisualEvidenceItem[] {
   if (value == null) return [];

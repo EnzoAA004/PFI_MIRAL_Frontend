@@ -2,10 +2,10 @@ import type { CanonicalThreeD } from "../contracts/canonicalMultiplanarRun";
 import type { ThreeDProxyMeshAsset } from "../adapters/threeDProxyAssetParser";
 
 /**
- * Pure conversion from canonical `threeD` + an already-fetched/validated mesh
- * asset into the shape the Three.js component consumes. No fetching, no HTTP,
- * no schemaVersion interpretation happens here or downstream in the
- * component — that belongs to the adapter/asset parser exclusively.
+ * Conversión pura de `threeD` canónico + un asset de malla ya obtenido/validado
+ * a la forma que consume el componente Three.js. Acá no ocurre ningún fetching, HTTP,
+ * ni interpretación de schemaVersion, ni aguas abajo en el
+ * componente — eso pertenece exclusivamente al adaptador/parser de assets.
  */
 
 export type ThreeDProxyVisualState =
@@ -125,10 +125,10 @@ export function canonicalThreeDToProxyViewModel(
     };
   }
 
-  // threeD.enabled=true but no usable asset survived sanitization/parsing
-  // (e.g. a rejected host, or the AI Module declaring the mesh without an
-  // asset entry) — there is nothing to fetch, so this must resolve
-  // immediately instead of leaving the caller stuck in "loading" forever.
+  // threeD.enabled=true pero ningún asset utilizable sobrevivió a la sanitización/parseo
+  // (p. ej. un host rechazado, o el AI Module declarando la malla sin una
+  // entrada de asset) — no hay nada que obtener, así que esto debe resolverse
+  // de inmediato en lugar de dejar a quien llama atascado en "loading" para siempre.
   if (threeD.assets.length === 0) {
     return {
       state: "asset_invalid",

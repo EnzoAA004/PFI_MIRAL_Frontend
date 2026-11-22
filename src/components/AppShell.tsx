@@ -23,7 +23,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ activeView, activeNavView, onChangeView, children, aiModuleAvailable, degradedMode, currentRunId, userName, onLogout, reviewQueueCount, isAdmin = false, immersive = false }: AppShellProps) {
-  // Collapsing the rail is a workspace preference, so it survives reloads.
+  // Colapsar el rail es una preferencia del workspace, por lo que sobrevive a las recargas.
   const [collapsed, setCollapsed] = useState(() => {
     try { return window.localStorage.getItem(RAIL_STORAGE_KEY) === "1"; } catch { return false; }
   });
