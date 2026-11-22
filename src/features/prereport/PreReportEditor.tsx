@@ -1,3 +1,4 @@
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { explainStale } from "./staleExplanation";
 import { VARIANT_LABEL, buildPreReportHtml, type DocumentMeta, type ExportVariant } from "./prereportHtml";
@@ -201,6 +202,19 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
   return (
     <div aria-label="Preparar preinforme" aria-modal="true" className="pre-overlay" data-testid="prereport-editor" ref={dialogRef} role="dialog">
       <header className="pre-bar">
+        <button
+          aria-controls="prereport-editor-column"
+          aria-pressed={!previewOnly}
+          className="pre-panel-toggle"
+          data-testid="prereport-toggle-panel"
+          disabled={!model}
+          onClick={() => setPreviewOnly((value) => !value)}
+          title={previewOnly ? "Mostrar el panel de edición" : "Ocultar el panel de edición y ver el documento a pantalla completa"}
+          type="button"
+        >
+          {previewOnly ? <PanelLeftOpen aria-hidden="true" size={18} /> : <PanelLeftClose aria-hidden="true" size={18} />}
+          <span>Panel de edición</span>
+        </button>
         <div className="pre-bar-title">
           <strong>{DRAFT_BANNER}</strong>
           <span className="pre-sub">
@@ -212,9 +226,6 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
         <div className="pre-bar-actions">
           <button className="rr-primary" data-testid="prereport-save" disabled={!view || busy !== null || (!dirty && !!view.draft)} onClick={() => void save()} type="button">
             {busy === "save" ? "Guardando…" : "Guardar borrador"}
-          </button>
-          <button data-testid="prereport-preview" disabled={!model} onClick={() => setPreviewOnly((value) => !value)} type="button">
-            {previewOnly ? "Volver a editar" : "Vista previa"}
           </button>
           <label className="pre-variant">
             <span>Contenido</span>
@@ -299,7 +310,7 @@ function EditorColumn({
   const research = model.findings.filter((f) => f.section === "investigacion");
   const levels = model.levels.filter((entry) => entry.lumbar || entry.evaluated);
   return (
-    <aside aria-label="Contenido del preinforme" className="pre-editor" data-testid="prereport-editor-column">
+    <aside aria-label="Contenido del preinforme" className="pre-editor" id="prereport-editor-column" data-testid="prereport-editor-column">
       <section className="pre-card">
         <h3>Contenido</h3>
         <p className="pre-hint" data-testid="prereport-summary">

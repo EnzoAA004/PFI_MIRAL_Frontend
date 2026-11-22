@@ -106,3 +106,19 @@
   justify-content: flex-end;
 }
 }
+
+/* Barra del preinforme: sin capa para ganar al estilo global de button, que en modo oscuro quedaba claro. */
+.pre-bar { gap: 8px 12px; }
+.pre-bar-title { flex: 1 1 240px; }
+.pre-bar button, .pre-bar select {
+  min-height: 32px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: var(--surface-raised, var(--surface-subtle)); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-btn, 8px);
+}
+.pre-bar button:hover:not(:disabled) { border-color: var(--primary); }
+.pre-bar button:focus-visible, .pre-bar select:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.pre-bar button:disabled { opacity: .45; cursor: default; }
+.pre-bar button.rr-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.pre-bar .pre-variant { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 13px; }
+.pre-panel-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.pre-panel-toggle[aria-pressed="true"] { border-color: var(--primary); }
