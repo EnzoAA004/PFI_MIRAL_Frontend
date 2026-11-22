@@ -20,6 +20,7 @@ import {
   type LevelSelection,
 } from "./prereportModel";
 import type { ComposedImage } from "./prereportImages";
+import { levelAnchor, levelReviewState } from "./prereportModel";
 import type { PreReportEdits, PreReportGenerated, PreReportMeasurement } from "./prereportTypes";
 
 /**
@@ -120,6 +121,7 @@ tr { break-inside: avoid; }
 .ficha-block { break-inside: avoid; border: 1px solid #d5e1ee; border-radius: 8px; padding: 5pt 9pt; margin-bottom: 5pt; }
 .ficha-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8pt; border-bottom: 1px solid #e2e8f0; padding-bottom: 2pt; margin-bottom: 3pt; }
 .ficha-head .tag { font-size: 7.8pt; color: #92400e; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 99px; padding: 0 7px; white-space: nowrap; }
+.ficha-head .tag-reviewed { color: #166534; background: #f0fdf4; border-color: #86efac; }
 .ficha-head h3 .sub { font-weight: 400; color: #475569; }
 .pred { margin: 1.5pt 0; padding-left: 10pt; position: relative; }
 .pred::before { content: "▸"; position: absolute; left: 0; color: #0f3d63; }
@@ -263,7 +265,8 @@ function measurementRows(selection: LevelSelection, edits: PreReportEdits, trace
     const trace = traceBlock?.traces.find((t) => t.ref === m.key);
     const origin = m.corrected !== null ? `Corrección profesional (IA: ${formatValue(m.original, m.unit)})` : "IA";
     const evidence = trace ? ` · imagen ${trace.n}` : m.imagePath ? "" : " · sin trazo guardado";
-    return `<tr><td>${escapeHtml(m.label)}</td><td><strong>${escapeHtml(formatValue(m.effective, m.unit))}</strong></td><td>${escapeHtml(origin)}</td><td>${m.sliceIndex === null ? "—" : `corte ${m.sliceIndex + 1}`}${escapeHtml(evidence)}</td></tr>`;
+    const decisionTag = m.decision ? `<span class="decision decision-${m.decision}">${escapeHtml(DECISION_DOC_LABEL[m.decision])}</span>` : "";
+    return `<tr><td>${escapeHtml(m.label)}</td><td><strong>${escapeHtml(formatValue(m.effective, m.unit))}</strong></td><td>${escapeHtml(origin)}${decisionTag}</td><td>${m.sliceIndex === null ? "—" : `corte ${m.sliceIndex + 1}`}${escapeHtml(evidence)}</td></tr>`;
   }).join("");
 }
 
@@ -290,12 +293,12 @@ function fichaHtml(model: PreReportGenerated, edits: PreReportEdits, selection: 
     parts.push(traces.length ? `<div class="keep">${table}${traces[0]}</div>` : table, ...traces.slice(1));
   }
   if (selection.findings.length) {
-    parts.push(`<div class="ficha-block">${head("Clasificación degenerativa por IA", hasPositive ? '<span class="tag">Predicción para revisar</span>' : "")}${selection.measurements.length ? "" : verification}${predictions}${missing.join("")}</div>`);
+    parts.push(`<div class="ficha-block">${head("Clasificación degenerativa por IA", levelReviewState(selection.findings) === "reviewed" ? '<span class="tag tag-reviewed">Revisado por el profesional</span>' : hasPositive ? '<span class="tag">Predicción para revisar</span>' : "")}${selection.measurements.length ? "" : verification}${predictions}${missing.join("")}</div>`);
     if (regionBlocks.length) parts.push(regionEvidenceHtml(selection.level, regionBlocks, images));
   }
   if (note) parts.push(`<div class="ficha-block">${head("Observaciones")}<div class="obs"><strong>Observaciones del profesional</strong>${para(note)}</div></div>`);
   if (!parts.length) parts.push(`<div class="ficha-block">${head("")}<p class="muted">Sin elementos seleccionados en este nivel.</p></div>`);
-  return `<div class="ficha">${parts.join("")}</div>`;
+  return `<div class="ficha" id="${levelAnchor(selection.level)}">${parts.join("")}</div>`;
 }
 
 function researchSection(model: PreReportGenerated, edits: PreReportEdits): string {

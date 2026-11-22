@@ -3075,3 +3075,10 @@
 .rr-decision-btn.is-dudoso[aria-pressed="true"] { background: #b45309; }
 .rr-decision-btn.is-rechazado[aria-pressed="true"] { background: #b91c1c; }
 .rr-decision-help { font-size: 12px; color: var(--text-muted); margin: 4px 0 8px; }
+
+/* Estado de la decision con color propio (no depende del tema: el texto usa el color de texto del tema). */
+.rr-decision-state { font-size: 11px; padding: 1px 9px; border-radius: 99px; border: 1px solid var(--border-strong); color: var(--text-muted); white-space: nowrap; }
+.rr-decision-state.is-aceptado { background: rgba(22, 163, 74, .2); border-color: #16a34a; color: var(--text); }
+.rr-decision-state.is-dudoso { background: rgba(234, 88, 12, .2); border-color: #ea580c; color: var(--text); }
+.rr-decision-state.is-rechazado { background: rgba(220, 38, 38, .2); border-color: #dc2626; color: var(--text); }
+.rr-measure .rr-decision { margin-top: 4px; }

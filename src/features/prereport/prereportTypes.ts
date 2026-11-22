@@ -36,6 +36,8 @@ export type PreReportMeasurement = {
   /** Imagen del plano de la corrida a la que están alineadas las coordenadas del trazo. `null` si no hay trazo ubicable. */
   imagePath: string | null;
   defaultInclude: boolean;
+  /** Decisión del profesional (se agrega en el cliente; no viene del servidor). */
+  decision?: "aceptado" | "rechazado" | "dudoso";
 };
 
 export type PreReportRegion = {

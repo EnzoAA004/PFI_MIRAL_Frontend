@@ -2123,6 +2123,10 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                     const measurement = resultRows.find((item) => item.id === row.id);
                     if (measurement) updateReviewerValue(measurement, value);
                   }}
+                  decisionBusyKey={findingDecisions.busyKey}
+                  decisions={findingDecisions.decisions}
+                  decisionsLocked={reviewLocked}
+                  onDecide={demoMode ? undefined : (key, value) => void findingDecisions.decide(key, value)}
                   onDelete={removeAnnotation}
                   onHighlight={setHighlightedMeasurementId}
                   onSelect={setSelectedMeasurementId}
@@ -2692,7 +2696,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
       </ReadingWorkspaceToolbar>
 
       {preReportOpen && displayRun.caseId && run.runId && (
-        <PreReportEditor caseId={displayRun.caseId} onClose={() => setPreReportOpen(false)} runId={run.runId} />
+        <PreReportEditor caseId={displayRun.caseId} decisions={findingDecisions} decisionsLocked={reviewLocked} onClose={() => setPreReportOpen(false)} runId={run.runId} />
       )}
 
       {dualReference !== null && displayRun.caseId && (

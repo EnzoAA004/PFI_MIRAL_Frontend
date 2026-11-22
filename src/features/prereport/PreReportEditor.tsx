@@ -1,7 +1,8 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { explainStale } from "./staleExplanation";
-import { useFindingDecisions } from "../reading/findingDecisions";
+import { DecisionControl } from "../reading/DecisionControl";
+import type { FindingDecisionsState } from "../reading/findingDecisions";
 import { VARIANT_LABEL, buildPreReportHtml, type DocumentMeta, type ExportVariant } from "./prereportHtml";
 import {
   DRAFT_BANNER,
@@ -14,7 +15,9 @@ import {
   isEdited,
   isIncluded,
   levelIncluded,
+  levelAnchor,
   levelKey,
+  levelReviewState,
   measurementIncluded,
   missingEvidence,
   plural,
@@ -36,7 +39,13 @@ type Props = {
   runId: string;
   /** Vuelve al visor. El visor sigue montado por debajo: corte, zoom, W/L y selección se conservan. */
   onClose: () => void;
+  /** Decisiones del profesional (aceptado / dudoso / rechazado), compartidas con el visor. */
+  decisions: FindingDecisionsState;
+  /** La revisión está cerrada: se ven las decisiones pero no se cambian. */
+  decisionsLocked?: boolean;
 };
+
+type Badge = { text: string; kind: "pending" | "experimental" | "research" | "reviewed" };
 
 function ItemRow({
   edits,
@@ -46,14 +55,18 @@ function ItemRow({
   badge,
   detail,
   onChange,
+  decisions,
+  decisionsLocked,
 }: {
   edits: PreReportEdits;
   itemKey: string;
   generatedText: string;
   included: boolean;
-  badge?: string;
+  badge?: Badge;
   detail?: string;
   onChange: (next: PreReportEdits) => void;
+  decisions?: FindingDecisionsState;
+  decisionsLocked?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const text = effectiveText(edits, itemKey, generatedText);
@@ -64,7 +77,7 @@ function ItemRow({
         <input aria-label={`Incluir: ${generatedText}`} checked={included} onChange={(event) => onChange(withInclude(edits, itemKey, event.target.checked))} type="checkbox" />
         {editing ? null : <span className="pre-item-text">{text}</span>}
       </label>
-      {badge && <span className="pre-badge">{badge}</span>}
+      {badge && <span className={`pre-badge is-${badge.kind}`}>{badge.text}</span>}
       {edited && !editing && <span className="pre-edited">editado</span>}
       {editing && (
         <textarea
@@ -80,17 +93,27 @@ function ItemRow({
         {edited && <button className="pre-link" onClick={() => onChange(withText(edits, itemKey, "", generatedText))} type="button">Restaurar</button>}
       </span>
       {detail && <span className="pre-item-detail">{detail}</span>}
+      {decisions && (
+        <span className="pre-item-decision">
+          <DecisionControl
+            busy={decisions.busyKey === itemKey}
+            label={generatedText}
+            locked={decisionsLocked}
+            onDecide={(decision) => void decisions.decide(itemKey, decision)}
+            value={decisions.decisions[itemKey]}
+          />
+        </span>
+      )}
     </li>
   );
 }
 
-const DECISION_BADGE = { aceptado: "Aceptado", dudoso: "Dudoso", rechazado: "Rechazado" } as const;
-
-function sectionBadge(finding: PreReportFinding): string | undefined {
-  if (finding.decision) return `${DECISION_BADGE[finding.decision]} por el profesional`;
-  if (finding.section === "experimental") return "Experimental";
-  if (finding.section === "investigacion") return "Investigación";
-  return finding.positive ? "Predicción para revisar" : undefined;
+function sectionBadge(finding: PreReportFinding): Badge | undefined {
+  // Con decisión del profesional, el estado lo muestra el control de decisión (con su propio color).
+  if (finding.decision) return undefined;
+  if (finding.section === "experimental") return { text: "Experimental", kind: "experimental" };
+  if (finding.section === "investigacion") return { text: "Investigación", kind: "research" };
+  return finding.positive ? { text: "Predicción para revisar", kind: "pending" } : undefined;
 }
 
 function measurementDetail(m: PreReportMeasurement): string {
@@ -98,10 +121,9 @@ function measurementDetail(m: PreReportMeasurement): string {
   return m.imagePath ? "Con trazo guardado" : "Sin trazo guardado: solo el valor";
 }
 
-export function PreReportEditor({ caseId, runId, onClose }: Props) {
+export function PreReportEditor({ caseId, runId, onClose, decisions: findingDecisions, decisionsLocked }: Props) {
   const state = usePreReport(caseId, runId);
   const { model: rawModel, view, edits, setEdits, dirty, pendingEdits, busy, notice, imageStates, settleImages, save, updateSources } = state;
-  const findingDecisions = useFindingDecisions(caseId, runId);
   const model = useMemo(() => (rawModel ? withFindingDecisions(rawModel, findingDecisions.decisions) : rawModel), [rawModel, findingDecisions.decisions]);
   const [previewOnly, setPreviewOnly] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -122,6 +144,12 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
     // Si el contenido todavía no tiene su alto final (imágenes), se reintenta en el cuadro siguiente.
     win.requestAnimationFrame(() => { if (Math.abs(win.scrollY - target) > 1) win.scrollTo(0, target); });
     win.addEventListener("scroll", () => { previewScrollRef.current = win.scrollY; }, { passive: true });
+  }
+
+  /** Lleva el documento a la ficha del nivel. Solo se desplaza: no cambia nada de lo incluido. */
+  function goToLevel(level: string) {
+    const target = frameRef.current?.contentDocument?.getElementById(levelAnchor(level));
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   const meta = useMemo<DocumentMeta | null>(() => (view ? {
@@ -289,7 +317,7 @@ export function PreReportEditor({ caseId, runId, onClose }: Props) {
           )}
 
           <div className={`pre-body${previewOnly ? " is-preview" : ""}`}>
-            {!previewOnly && <EditorColumn edits={edits} model={model} onChange={setEdits} imageStates={imageStates} />}
+            {!previewOnly && <EditorColumn decisions={findingDecisions} decisionsLocked={decisionsLocked} edits={edits} imageStates={imageStates} model={model} onChange={setEdits} onGoToLevel={goToLevel} />}
             <section aria-label="Vista previa del documento" className="pre-preview">
               <iframe className="pre-frame" data-testid="prereport-frame" onLoad={restorePreviewScroll} ref={frameRef} sandbox="allow-same-origin" srcDoc={html} title="Vista previa del preinforme" />
             </section>
@@ -305,10 +333,16 @@ function EditorColumn({
   edits,
   onChange,
   imageStates,
+  decisions,
+  decisionsLocked,
+  onGoToLevel,
 }: {
   model: PreReportGenerated;
   edits: PreReportEdits;
   onChange: (next: PreReportEdits) => void;
+  decisions: FindingDecisionsState;
+  decisionsLocked?: boolean;
+  onGoToLevel: (level: string) => void;
   imageStates: ReturnType<typeof usePreReport>["imageStates"];
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -346,12 +380,20 @@ function EditorColumn({
         return (
           <section className="pre-card" data-testid={`pre-level-${entry.level}`} key={entry.level}>
             <div className="pre-level-row">
-            <label className="pre-level-head">
-              <input aria-label={`Incluir la ficha de ${entry.level}`} checked={included} disabled={!entry.evaluated} onChange={(event) => onChange(withInclude(edits, levelKey(entry.level), event.target.checked))} type="checkbox" />
+            <input aria-label={`Incluir la ficha de ${entry.level}`} checked={included} disabled={!entry.evaluated} onChange={(event) => onChange(withInclude(edits, levelKey(entry.level), event.target.checked))} type="checkbox" />
+            <button
+              className="pre-level-head pre-level-goto"
+              data-testid={`pre-level-goto-${entry.level}`}
+              disabled={!included}
+              onClick={() => onGoToLevel(entry.level)}
+              title={included ? "Ir a esta ficha en el documento" : "Incluí la ficha para verla en el documento"}
+              type="button"
+            >
               <h3>{entry.level}</h3>
               {!entry.evaluated && <span className="pre-hint">Sin resultados en este nivel (no evaluado)</span>}
-              {entry.evaluated && findings.some((f) => f.positive && f.section === "principal") && <span className="pre-badge">Predicción para revisar</span>}
-            </label>
+              {entry.evaluated && levelReviewState(findings) === "reviewed" && <span className="pre-badge is-reviewed">Revisado por el profesional</span>}
+              {entry.evaluated && levelReviewState(findings) === "pending" && <span className="pre-badge is-pending">Predicción para revisar</span>}
+            </button>
             {included && (
               <button
                 aria-controls={`pre-level-body-${entry.level}`}
@@ -373,7 +415,7 @@ function EditorColumn({
                     <h4>Predicciones del modelo</h4>
                     <ul className="pre-list">
                       {findings.map((f) => (
-                        <ItemRow edits={edits} generatedText={f.text} included={findingIncluded(edits, f)} itemKey={f.key} key={f.key} badge={sectionBadge(f)} onChange={onChange} />
+                        <ItemRow edits={edits} generatedText={f.text} included={findingIncluded(edits, f)} itemKey={f.key} key={f.key} badge={sectionBadge(f)} decisions={decisions} decisionsLocked={decisionsLocked} onChange={onChange} />
                       ))}
                     </ul>
                   </>
@@ -383,7 +425,7 @@ function EditorColumn({
                     <h4>Mediciones</h4>
                     <ul className="pre-list">
                       {measurements.map((m) => (
-                        <ItemRow edits={edits} generatedText={m.text} included={measurementIncluded(edits, m)} itemKey={m.key} key={m.key} detail={measurementDetail(m)} onChange={onChange} />
+                        <ItemRow edits={edits} generatedText={m.text} included={measurementIncluded(edits, m)} itemKey={m.key} key={m.key} detail={measurementDetail(m)} decisions={decisions} decisionsLocked={decisionsLocked} onChange={onChange} />
                       ))}
                     </ul>
                   </>
@@ -433,7 +475,7 @@ function EditorColumn({
           <p className="pre-hint">No son una capacidad soportada para producto. Si los incluís, van en un apartado identificado.</p>
           <ul className="pre-list">
             {research.map((f) => (
-              <ItemRow edits={edits} generatedText={`${f.level} · ${f.text}`} included={findingIncluded(edits, f)} itemKey={f.key} key={f.key} badge="Investigación" onChange={onChange} />
+              <ItemRow edits={edits} generatedText={`${f.level} · ${f.text}`} included={findingIncluded(edits, f)} itemKey={f.key} key={f.key} badge={{ text: "Investigación", kind: "research" }} decisions={decisions} decisionsLocked={decisionsLocked} onChange={onChange} />
             ))}
           </ul>
           <p className="pre-hint">{includedResearch(model, edits).length === 1 ? "1 incluido." : `${includedResearch(model, edits).length} incluidos.`}</p>

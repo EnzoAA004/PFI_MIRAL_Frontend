@@ -17,10 +17,8 @@ import {
   displayDiscFindingConfidence,
   displayDiscFindingValue,
 } from "./discFindingDisplay";
+import { DecisionControl } from "./DecisionControl";
 import {
-  FINDING_DECISION_ACTION_LABELS,
-  FINDING_DECISION_STATE_LABELS,
-  FINDING_DECISION_VALUES,
   findingDecisionKey,
   type FindingDecisionMap,
   type FindingDecisionValue,
@@ -133,29 +131,14 @@ function DecisionButtons({
   locked?: boolean;
 }) {
   const key = findingDecisionKey(finding.findingId);
-  const current = decisions?.[key];
-  const busy = busyKey === key;
   return (
-    <div aria-label={`Decisión sobre ${DISC_FINDING_LABELS[finding.findingType]}`} className="rr-decision" role="group">
-      <span className="rr-decision-state" role="status">
-        {current ? FINDING_DECISION_STATE_LABELS[current] : "Sin revisar"}
-      </span>
-      <span className="rr-decision-actions">
-        {FINDING_DECISION_VALUES.map((value) => (
-          <button
-            aria-pressed={current === value}
-            className={`rr-decision-btn is-${value}`}
-            disabled={busy || locked}
-            key={value}
-            onClick={() => onDecide(key, current === value ? null : value)}
-            title={current === value ? "Volver a «sin revisar»" : undefined}
-            type="button"
-          >
-            {FINDING_DECISION_ACTION_LABELS[value]}
-          </button>
-        ))}
-      </span>
-    </div>
+    <DecisionControl
+      busy={busyKey === key}
+      label={DISC_FINDING_LABELS[finding.findingType]}
+      locked={locked}
+      onDecide={(decision) => onDecide(key, decision)}
+      value={decisions?.[key]}
+    />
   );
 }
 

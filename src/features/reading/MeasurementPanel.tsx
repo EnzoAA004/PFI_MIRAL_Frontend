@@ -1,5 +1,7 @@
 import { displayMeasurementLabel, displayMeasurementLabelShort, displayUnit } from "../../clinicalDisplay";
 import type { MeasurementGroup } from "./measurementGrouping";
+import { DecisionControl } from "./DecisionControl";
+import type { FindingDecisionMap, FindingDecisionValue } from "./findingDecisions";
 import { checkRange, rangeBadge } from "./referenceRanges";
 
 /**
@@ -47,6 +49,12 @@ type Props = {
   readonly: boolean;
   /** Por qué no hay filas: no es lo mismo un nivel sin medir que un plano que no mide. */
   emptyNote?: string;
+  /** Decisiones del profesional por elemento (clave `m:` + id de la medición). Sin entrada = sin revisar. */
+  decisions?: FindingDecisionMap;
+  /** Guarda la decisión de una medición de la IA; `null` la quita. Si falta, no se muestran los botones. */
+  onDecide?: (key: string, decision: FindingDecisionValue | null) => void;
+  decisionBusyKey?: string | null;
+  decisionsLocked?: boolean;
 };
 
 function asNumber(value: number | string | null | undefined) {
@@ -58,6 +66,7 @@ function asNumber(value: number | string | null | undefined) {
 
 export function MeasurementPanel({
   rows, selectedId, onSelect, onHighlight, onChangeValue, onDelete, readonly, emptyNote,
+  decisions, onDecide, decisionBusyKey, decisionsLocked,
 }: Props) {
   if (!rows.length) return <p className="rr-note">{emptyNote ?? "Sin mediciones en este nivel."}</p>;
 
@@ -150,6 +159,15 @@ export function MeasurementPanel({
                 </span>
               )}
             </div>
+            {onDecide && row.source === "ai" && (
+              <DecisionControl
+                busy={decisionBusyKey === `m:${row.id}`}
+                label={displayMeasurementLabel(row.label)}
+                locked={decisionsLocked}
+                onDecide={(decision) => onDecide(`m:${row.id}`, decision)}
+                value={decisions?.[`m:${row.id}`]}
+              />
+            )}
           </div>
         );
       })}

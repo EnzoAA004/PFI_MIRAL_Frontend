@@ -451,12 +451,34 @@ export function annexMeasurements(model: PreReportGenerated): PreReportMeasureme
  */
 export function withFindingDecisions(model: PreReportGenerated, decisions: Record<string, string>): PreReportGenerated {
   if (!Object.keys(decisions).length) return model;
+  const valid = (value: string | undefined): value is "aceptado" | "rechazado" | "dudoso" =>
+    value === "aceptado" || value === "rechazado" || value === "dudoso";
   return {
     ...model,
     findings: model.findings.map((finding) => {
       const decision = decisions[finding.key];
-      if (decision !== "aceptado" && decision !== "rechazado" && decision !== "dudoso") return finding;
+      if (!valid(decision)) return finding;
       return { ...finding, decision, defaultInclude: decision === "rechazado" ? false : finding.defaultInclude };
     }),
+    measurements: model.measurements.map((measurement) => {
+      const decision = decisions[measurement.key];
+      if (!valid(decision)) return measurement;
+      return { ...measurement, decision, defaultInclude: decision === "rechazado" ? false : measurement.defaultInclude };
+    }),
   };
+}
+
+/** Ancla de la ficha de un nivel dentro del documento (para ir directo a esa sección desde el editor). */
+export function levelAnchor(level: string): string {
+  return `ficha-${level.replace(/[^A-Za-z0-9-]/g, "")}`;
+}
+
+/**
+ * Estado de revisión de un nivel según sus predicciones positivas del conjunto principal:
+ * `null` si no hay ninguna, `"reviewed"` si el profesional decidió todas, `"pending"` si falta alguna.
+ */
+export function levelReviewState(findings: PreReportFinding[]): "pending" | "reviewed" | null {
+  const positives = findings.filter((f) => f.section === "principal" && f.positive);
+  if (!positives.length) return null;
+  return positives.every((f) => f.decision) ? "reviewed" : "pending";
 }
