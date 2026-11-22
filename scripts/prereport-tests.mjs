@@ -21,7 +21,7 @@ const m = load(["src/features/prereport/prereportModel.ts"], [
   "plural", "modalityLabel", "resultsSummary", "SECTION_ORDER",
   "isIncluded", "levelIncluded", "effectiveText", "isEdited", "withInclude", "withText", "withLevelNote", "withObservations", "sameEdits",
   "selectedLevels", "includedResearch", "summaryMatrix", "evidenceBlocks", "missingEvidence", "documentSummary", "annexMeasurements",
-  "formatNumber", "formatValue", "formatPercent", "DRAFT_BANNER", "levelKey",
+  "formatNumber", "formatValue", "formatPercent", "DRAFT_BANNER", "levelKey", "withFindingDecisions",
 ]);
 const html = load(["src/features/prereport/prereportModel.ts", "src/features/prereport/prereportHtml.ts"], ["buildPreReportHtml", "DRAFT_BANNER", "VARIANT_LABEL", "CORRESPONDENCE_NOTICE"]);
 const img = load(["src/features/prereport/prereportImages.ts"], ["zoomCropFor"]);
@@ -397,6 +397,28 @@ check("la leyenda de regiones es única por nivel: cada resultado conserva su n�
   const numbers = blocks.map((b) => b.regions.map((r) => `${r.ref}=${r.n}`).sort().join(","));
   assert.equal(numbers[0], numbers[1], "mismos números en T2 y T1");
   assert.deepEqual([...new Set(blocks.flatMap((b) => b.regions.map((r) => r.n)))].sort(), [1, 2]);
+});
+
+check("las decisiones del profesional se aplican a los hallazgos: rechazado deja de incluirse por defecto, aceptado y dudoso se señalan", () => {
+  const g = model();
+  const keys = g.findings.map((f) => f.key);
+  const decided = m.withFindingDecisions(g, { [keys[0]]: "rechazado", [keys[1]]: "aceptado", "f:inexistente": "dudoso", [keys[2]]: "quizas" });
+  assert.equal(decided.findings[0].decision, "rechazado");
+  assert.equal(decided.findings[0].defaultInclude, false);
+  assert.equal(decided.findings[1].decision, "aceptado");
+  assert.equal(decided.findings[1].defaultInclude, g.findings[1].defaultInclude);
+  assert.equal(decided.findings[2].decision, undefined, "un valor desconocido se ignora");
+  assert.equal(g.findings[0].decision, undefined, "no muta el modelo original");
+  assert.equal(m.withFindingDecisions(g, {}), g, "sin decisiones devuelve el mismo modelo");
+});
+
+check("el documento indica la decision del profesional junto a cada prediccion incluida", () => {
+  const g = model();
+  const included = g.findings.find((f) => f.defaultInclude && f.section !== "investigacion");
+  const decided = m.withFindingDecisions(g, { [included.key]: "dudoso" });
+  const doc = html.buildPreReportHtml(decided, {}, {}, meta);
+  assert.match(doc, /dudoso para el profesional/);
+  assert.doesNotMatch(html.buildPreReportHtml(g, {}, {}, meta), /por el profesional<\/span>|dudoso para el profesional/);
 });
 
 console.log(`Preinforme visual: ${passed} pruebas pasaron`);

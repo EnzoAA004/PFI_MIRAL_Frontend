@@ -42,6 +42,7 @@ import { EvidenceRegionEditor } from "../features/reading/EvidenceRegionEditor";
 import { NewEvidenceRegionCreator } from "../features/reading/NewEvidenceRegionCreator";
 import { EvidenceConcordancePanel } from "../features/reading/EvidenceConcordancePanel";
 import { FeedbackCurationPanel } from "../features/reading/FeedbackCurationPanel";
+import { useFindingDecisions } from "../features/reading/findingDecisions";
 import { BeforeAfterComparison, BEFORE_AFTER_TITLE } from "../features/reading/BeforeAfterComparison";
 import { NO_VISUAL_EVIDENCE_MESSAGE } from "../features/reading/visualEvidenceDisplay";
 import { PreReportEditor } from "../features/prereport/PreReportEditor";
@@ -1273,6 +1274,7 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
   const outlierCount = resultRows.filter((row) => row.outlier).length;
 
   const confirmDisabled = saving || reviewStatus === "pendiente";
+  const findingDecisions = useFindingDecisions(demoMode ? undefined : displayRun.caseId, demoMode ? undefined : run.runId);
 
   function selectSeries(series: any) {
     setSelectedSeriesId(series.id);
@@ -2138,7 +2140,12 @@ export function StudyReviewView({ run, studyReview, measurements, auditTrail, sa
                   <DiscDegenerativeFindingsPanel
                     contractError={discDegenerativeSnapshot.contractError}
                     findings={discDegenerativeSnapshot.findings}
+                    decisionBusyKey={findingDecisions.busyKey}
+                    decisionError={findingDecisions.error}
+                    decisions={findingDecisions.decisions}
+                    decisionsLocked={reviewLocked}
                     markedLevel={markedDiscLevel}
+                    onDecide={demoMode ? undefined : (key, value) => void findingDecisions.decide(key, value)}
                     onGoToRegion={goToDiscRegion}
                     regionNotice={discRegionNotice}
                     unavailableReason={discDegenerativeSnapshot.unavailable}

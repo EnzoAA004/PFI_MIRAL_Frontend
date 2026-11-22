@@ -443,3 +443,20 @@ export function annexMeasurements(model: PreReportGenerated): PreReportMeasureme
     return la - lb || a.plane.localeCompare(b.plane) || a.label.localeCompare(b.label);
   });
 }
+
+/**
+ * Aplica las decisiones del profesional (tomadas en el visor) a los hallazgos del preinforme.
+ * Un hallazgo rechazado deja de incluirse por defecto (se puede volver a tildar); aceptado y dudoso se incluyen y quedan señalados.
+ * No toca el texto generado ni la predicción: solo agrega la decisión.
+ */
+export function withFindingDecisions(model: PreReportGenerated, decisions: Record<string, string>): PreReportGenerated {
+  if (!Object.keys(decisions).length) return model;
+  return {
+    ...model,
+    findings: model.findings.map((finding) => {
+      const decision = decisions[finding.key];
+      if (decision !== "aceptado" && decision !== "rechazado" && decision !== "dudoso") return finding;
+      return { ...finding, decision, defaultInclude: decision === "rechazado" ? false : finding.defaultInclude };
+    }),
+  };
+}

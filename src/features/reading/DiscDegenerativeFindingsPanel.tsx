@@ -17,6 +17,14 @@ import {
   displayDiscFindingConfidence,
   displayDiscFindingValue,
 } from "./discFindingDisplay";
+import {
+  FINDING_DECISION_ACTION_LABELS,
+  FINDING_DECISION_STATE_LABELS,
+  FINDING_DECISION_VALUES,
+  findingDecisionKey,
+  type FindingDecisionMap,
+  type FindingDecisionValue,
+} from "./findingDecisions";
 
 type Props = {
   findings: DiscFinding[];
@@ -30,6 +38,15 @@ type Props = {
   markedLevel?: DiscLevel | null;
   /** Por qué no se pudo ubicar un nivel. Se dice en vez de no hacer nada. */
   regionNotice?: string;
+  /** Decisiones del profesional por hallazgo (clave `f:` + findingId). Sin entrada = sin revisar. */
+  decisions?: FindingDecisionMap;
+  /** Guarda la decisión de un hallazgo; `null` la quita. Si falta, los botones no se muestran. */
+  onDecide?: (findingKey: string, decision: FindingDecisionValue | null) => void;
+  /** Clave del hallazgo que se está guardando ahora. */
+  decisionBusyKey?: string | null;
+  /** La revisión está cerrada: se ven las decisiones pero no se cambian. */
+  decisionsLocked?: boolean;
+  decisionError?: string;
 };
 
 /**
@@ -102,17 +119,66 @@ function compactDiscSummary(findings: DiscFinding[]): string {
   return positives === 1 ? "1 hallazgo" : `${positives} hallazgos`;
 }
 
+function DecisionButtons({
+  finding,
+  decisions,
+  onDecide,
+  busyKey,
+  locked,
+}: {
+  finding: DiscFinding;
+  decisions?: FindingDecisionMap;
+  onDecide: (findingKey: string, decision: FindingDecisionValue | null) => void;
+  busyKey?: string | null;
+  locked?: boolean;
+}) {
+  const key = findingDecisionKey(finding.findingId);
+  const current = decisions?.[key];
+  const busy = busyKey === key;
+  return (
+    <div aria-label={`Decisión sobre ${DISC_FINDING_LABELS[finding.findingType]}`} className="rr-decision" role="group">
+      <span className="rr-decision-state" role="status">
+        {current ? FINDING_DECISION_STATE_LABELS[current] : "Sin revisar"}
+      </span>
+      <span className="rr-decision-actions">
+        {FINDING_DECISION_VALUES.map((value) => (
+          <button
+            aria-pressed={current === value}
+            className={`rr-decision-btn is-${value}`}
+            disabled={busy || locked}
+            key={value}
+            onClick={() => onDecide(key, current === value ? null : value)}
+            title={current === value ? "Volver a «sin revisar»" : undefined}
+            type="button"
+          >
+            {FINDING_DECISION_ACTION_LABELS[value]}
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 function FindingRows({
   findings,
   homogeneousStatuses,
+  decisions,
+  onDecide,
+  decisionBusyKey,
+  decisionsLocked,
 }: {
   findings: DiscFinding[];
   homogeneousStatuses: Map<DiscFindingType, HomogeneousStatus>;
+  decisions?: FindingDecisionMap;
+  onDecide?: (findingKey: string, decision: FindingDecisionValue | null) => void;
+  decisionBusyKey?: string | null;
+  decisionsLocked?: boolean;
 }) {
   return (
     <div className="rr-disc-finding-rows">
       {findings.map((finding) => (
-        <article className="rr-disc-finding" key={finding.findingId}>
+        <div className="rr-disc-finding-block" key={finding.findingId}>
+        <article className="rr-disc-finding">
           <span>{DISC_FINDING_LABELS[finding.findingType]}</span>
           <span className="rr-disc-finding-result">
             {homogeneousStatuses.get(finding.findingType) === "mixed" && (
@@ -133,6 +199,10 @@ function FindingRows({
             </span>
           </span>
         </article>
+        {onDecide && (
+          <DecisionButtons busyKey={decisionBusyKey} decisions={decisions} finding={finding} locked={decisionsLocked} onDecide={onDecide} />
+        )}
+        </div>
       ))}
     </div>
   );
@@ -146,6 +216,11 @@ export function DiscDegenerativeFindingsPanel({
   onGoToRegion,
   markedLevel,
   regionNotice,
+  decisions,
+  onDecide,
+  decisionBusyKey,
+  decisionsLocked,
+  decisionError,
 }: Props) {
   const groups = new Map(groupDiscFindingsByLevel(findings).map((group) => [group.level, group.findings]));
   const homogeneousStatuses = statusByFindingType(findings);
@@ -170,6 +245,12 @@ export function DiscDegenerativeFindingsPanel({
       {!contractError && findings.length > 0 && (
         <>
           {regionNotice && <p className="rr-findings-warning" role="status">{regionNotice}</p>}
+          {onDecide && (
+            <p className="rr-decision-help">
+              Para cada hallazgo elegí <strong>Aceptar</strong>, <strong>Dudoso</strong> o <strong>Rechazar</strong>. Es tu decisión: no cambia la predicción de la IA y queda reflejada en el preinforme.
+            </p>
+          )}
+          {decisionError && <p className="rr-findings-warning" role="alert">{decisionError}</p>}
 
           <div className="rr-disc-overview" role="group" aria-label="Resumen de hallazgos discales por nivel">
             <div className="rr-disc-overview-head" aria-hidden="true">
@@ -198,7 +279,7 @@ export function DiscDegenerativeFindingsPanel({
                         onGoToRegion={onGoToRegion}
                         viewedInputId={viewedInputId}
                       />
-                      <FindingRows findings={levelFindings} homogeneousStatuses={homogeneousStatuses} />
+                      <FindingRows decisionBusyKey={decisionBusyKey} decisions={decisions} decisionsLocked={decisionsLocked} findings={levelFindings} homogeneousStatuses={homogeneousStatuses} onDecide={onDecide} />
                     </>
                   ) : (
                     <p className="rr-findings-empty">Sin findings informados para este nivel.</p>
@@ -223,7 +304,7 @@ export function DiscDegenerativeFindingsPanel({
                 return (
                   <section className="rr-disc-research-level" key={level}>
                     <h4>{level}</h4>
-                    <FindingRows findings={levelFindings} homogeneousStatuses={homogeneousStatuses} />
+                    <FindingRows decisionBusyKey={decisionBusyKey} decisions={decisions} decisionsLocked={decisionsLocked} findings={levelFindings} homogeneousStatuses={homogeneousStatuses} onDecide={onDecide} />
                   </section>
                 );
               })}

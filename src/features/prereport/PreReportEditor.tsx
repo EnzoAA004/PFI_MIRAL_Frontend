@@ -1,6 +1,7 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { explainStale } from "./staleExplanation";
+import { useFindingDecisions } from "../reading/findingDecisions";
 import { VARIANT_LABEL, buildPreReportHtml, type DocumentMeta, type ExportVariant } from "./prereportHtml";
 import {
   DRAFT_BANNER,
@@ -8,6 +9,7 @@ import {
   effectiveText,
   evidenceBlocks,
   findingIncluded,
+  withFindingDecisions,
   includedResearch,
   isEdited,
   isIncluded,
@@ -82,7 +84,10 @@ function ItemRow({
   );
 }
 
+const DECISION_BADGE = { aceptado: "Aceptado", dudoso: "Dudoso", rechazado: "Rechazado" } as const;
+
 function sectionBadge(finding: PreReportFinding): string | undefined {
+  if (finding.decision) return `${DECISION_BADGE[finding.decision]} por el profesional`;
   if (finding.section === "experimental") return "Experimental";
   if (finding.section === "investigacion") return "Investigación";
   return finding.positive ? "Predicción para revisar" : undefined;
@@ -95,7 +100,9 @@ function measurementDetail(m: PreReportMeasurement): string {
 
 export function PreReportEditor({ caseId, runId, onClose }: Props) {
   const state = usePreReport(caseId, runId);
-  const { model, view, edits, setEdits, dirty, pendingEdits, busy, notice, imageStates, settleImages, save, updateSources } = state;
+  const { model: rawModel, view, edits, setEdits, dirty, pendingEdits, busy, notice, imageStates, settleImages, save, updateSources } = state;
+  const findingDecisions = useFindingDecisions(caseId, runId);
+  const model = useMemo(() => (rawModel ? withFindingDecisions(rawModel, findingDecisions.decisions) : rawModel), [rawModel, findingDecisions.decisions]);
   const [previewOnly, setPreviewOnly] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showChanges, setShowChanges] = useState(false);

@@ -75,6 +75,8 @@ export type PreReportFinding = {
   text: string;
   defaultInclude: boolean;
   sources: PreReportFindingSource[];
+  /** Decisión del profesional en el visor (se agrega en el cliente; no viene del servidor). */
+  decision?: "aceptado" | "rechazado" | "dudoso";
 };
 
 export type PreReportAnnotation = {

@@ -53,6 +53,12 @@ export type DocumentMeta = {
 
 export const CORRESPONDENCE_NOTICE = "La correspondencia anatómica entre estas mediciones y clasificaciones requiere verificación profesional.";
 
+const DECISION_DOC_LABEL = {
+  aceptado: "aceptado por el profesional",
+  dudoso: "dudoso para el profesional",
+  rechazado: "rechazado por el profesional",
+} as const;
+
 export function escapeHtml(value: unknown): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -118,6 +124,10 @@ tr { break-inside: avoid; }
 .pred { margin: 1.5pt 0; padding-left: 10pt; position: relative; }
 .pred::before { content: "▸"; position: absolute; left: 0; color: #0f3d63; }
 .edited { font-size: 7.5pt; color: #6d28d9; margin-left: 4pt; }
+.decision { font-size: 7.5pt; margin-left: 4pt; font-weight: bold; }
+.decision-aceptado { color: #166534; }
+.decision-dudoso { color: #92400e; }
+.decision-rechazado { color: #991b1b; }
 .evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 76mm)); gap: 2.5mm 6mm; margin-top: 3pt; }
 .evidence figure { margin: 0; break-inside: avoid; }
 .evidence img { width: 100%; height: auto; display: block; border: 1px solid #94a3b8; border-radius: 3px; background: #000; }
@@ -263,7 +273,7 @@ function fichaHtml(model: PreReportGenerated, edits: PreReportEdits, selection: 
   const regionBlocks = blocks.filter((b) => b.kind === "region");
   const note = edits.levelNotes?.[selection.level]?.trim();
   const predictions = selection.findings.slice().sort((a, b) => SECTION_ORDER[a.section] - SECTION_ORDER[b.section]).map((f) =>
-    `<p class="pred">${para(effectiveText(edits, f.key, f.text))}${isEdited(edits, f.key, f.text) ? '<span class="edited">texto editado</span>' : ""}</p>`).join("");
+    `<p class="pred">${para(effectiveText(edits, f.key, f.text))}${isEdited(edits, f.key, f.text) ? '<span class="edited">texto editado</span>' : ""}${f.decision ? `<span class="decision decision-${f.decision}">${escapeHtml(DECISION_DOC_LABEL[f.decision])}</span>` : ""}</p>`).join("");
   const hasPositive = selection.findings.some((f) => f.section === "principal" && f.positive);
   const missing = selection.findings.flatMap((f) => f.sources.filter((s) => s.available && !s.region).map((s) =>
     `<p class="missing"><strong>Sin región evaluada</strong> · ${escapeHtml(f.typeLabel)} (${escapeHtml(s.roleLabel)}): ${escapeHtml(s.regionIssue ? `la corrida guardó una región inválida (${s.regionIssue}); se conserva la clasificación sin localización.` : "la corrida no guardó la región evaluada.")}</p>`));
