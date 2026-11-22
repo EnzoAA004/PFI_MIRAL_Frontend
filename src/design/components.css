@@ -4532,3 +4532,8 @@ body,
 .local-guide ol { margin: 8px 0 8px 18px; padding: 0; display: grid; gap: 4px; }
 .local-guide p, .local-guide li { color: var(--text); }
 .local-guide code { font-family: var(--font-mono, ui-monospace, monospace); }
+
+/* «Olvidé mi contraseña»: enlace discreto bajo el formulario y ayuda corta. */
+.auth-link { background: transparent; border: 0; padding: 4px 0; color: var(--primary); text-decoration: underline; cursor: pointer; font: inherit; font-size: 13px; text-align: center; }
+.auth-link:hover { color: var(--primary-hover, var(--primary)); }
+.auth-hint { color: var(--text-muted); font-size: 12px; }

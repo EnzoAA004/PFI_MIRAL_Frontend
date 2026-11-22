@@ -70,6 +70,16 @@ export async function loginDoctor(email: string, password: string) {
   return isTokenResponse(response) ? saveAuthSession(response) : response;
 }
 
+/** «Olvidé mi contraseña»: responde igual exista o no la cuenta; el código llega por correo (en local, queda en el registro del backend). */
+export async function requestPasswordReset(email: string) {
+  return authRequest<AuthPendingResponse>("/api/auth/forgot-password", { email });
+}
+
+/** Define la contraseña nueva con el código. No inicia sesión: hay que ingresar de nuevo. */
+export async function resetPassword(challengeId: string, code: string, newPassword: string) {
+  await authRequest<{ status: string }>("/api/auth/reset-password", { challengeId, code, newPassword });
+}
+
 export async function verifyRegistration(challengeId: string, code: string) {
   const tokens = await authRequest<AuthTokenResponse>("/api/auth/verify-registration", { challengeId, code });
   return saveAuthSession(tokens);

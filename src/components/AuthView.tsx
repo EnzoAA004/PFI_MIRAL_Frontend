@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { ApiError, LOCAL_EVALUATION } from "../api";
-import { createDemoDoctorSession, loginDoctor, registerDoctor, verifyLogin, verifyRegistration } from "../authClient";
+import { createDemoDoctorSession, loginDoctor, registerDoctor, requestPasswordReset, resetPassword, verifyLogin, verifyRegistration } from "../authClient";
 import type { AuthPendingResponse, AuthSession, RegisterRequest } from "../appTypes";
 
 interface AuthViewProps {
   onAuthenticated: (session: AuthSession) => void;
 }
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "forgot";
 
 type ChallengeState = {
   mode: Mode;
@@ -18,6 +18,14 @@ type ChallengeState = {
 // Demo access is an explicit build-time opt-in. Public/local evaluation builds
 // keep the demo endpoint and credentials out of the login screen by default.
 const authDemoEnabled = import.meta.env.VITE_DEMO_LOGIN_ENABLED === "true";
+
+/** Misma política que el backend: 10 a 128 caracteres, con letras y números. */
+export function newPasswordProblem(value: string): string | null {
+  if (value.length < 10) return "La contraseña nueva debe tener al menos 10 caracteres.";
+  if (value.length > 128) return "La contraseña nueva no puede superar los 128 caracteres.";
+  if (!/\p{L}/u.test(value) || !/\d/.test(value)) return "La contraseña nueva debe combinar letras y números.";
+  return null;
+}
 
 function isSession(value: AuthPendingResponse | AuthSession): value is AuthSession {
   return typeof (value as AuthSession).accessToken === "string";
@@ -42,6 +50,58 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
   const [sendingCode, setSendingCode] = useState(false);
   /** Solo versión local: correo recién registrado, a la espera de que el administrador lo apruebe. */
   const [registeredEmail, setRegisteredEmail] = useState("");
+  /** «Olvidé mi contraseña»: el desafío del código pedido, la contraseña nueva y su repetición. */
+  const [resetChallengeId, setResetChallengeId] = useState<string | null>(null);
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPassword2, setNewPassword2] = useState("");
+
+  function goTo(next: Mode) {
+    setMode(next);
+    setChallengeState(null);
+    setResetChallengeId(null);
+    setResetCode("");
+    setNewPassword("");
+    setNewPassword2("");
+    setError("");
+    setMessage("");
+  }
+
+  async function askResetCode() {
+    if (!form.email.trim()) { setError("Ingresá tu correo profesional."); return; }
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await requestPasswordReset(form.email.trim());
+      setResetChallengeId(response.challengeId ?? null);
+      setMessage(LOCAL_EVALUATION
+        ? "Pedido registrado. En esta versión local no se envía correo: el código se lee en el registro del backend (pasos abajo)."
+        : "Si el correo corresponde a una cuenta verificada, te enviamos un código. Revisá tu bandeja de entrada (y el spam).");
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "No se pudo pedir el código");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function confirmReset() {
+    if (!resetChallengeId) return;
+    const problem = newPasswordProblem(newPassword) ?? (newPassword !== newPassword2 ? "Las dos contraseñas nuevas no coinciden." : null);
+    if (problem) { setError(problem); return; }
+    setLoading(true);
+    setError("");
+    try {
+      await resetPassword(resetChallengeId, resetCode.trim(), newPassword);
+      goTo("login");
+      setForm((current) => ({ ...current, password: "" }));
+      setMessage("Contraseña actualizada. Ingresá con la contraseña nueva.");
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "No se pudo restablecer la contraseña");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function updateField(key: keyof RegisterRequest, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -134,12 +194,12 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
         </div>
         <div className="auth-copy">
           <p>Secure doctor access</p>
-          <h1>{mode === "register" ? "Registrar profesional" : "Ingresar como profesional"}</h1>
+          <h1>{mode === "register" ? "Registrar profesional" : mode === "forgot" ? "Restablecer contraseña" : "Ingresar como profesional"}</h1>
           <span>El acceso protege el flujo de revision, historial y endpoints del pipeline asistivo.</span>
         </div>
         <div className="auth-tabs">
-          <button className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setChallengeState(null); }} type="button">Ingresar</button>
-          <button className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setChallengeState(null); }} type="button">Registro</button>
+          <button className={mode === "login" ? "active" : ""} onClick={() => goTo("login")} type="button">Ingresar</button>
+          <button className={mode === "register" ? "active" : ""} onClick={() => goTo("register")} type="button">Registro</button>
         </div>
         {LOCAL_EVALUATION && registeredEmail && mode === "login" && !challengeState && (
           <div className="verification-panel local-guide" role="status">
@@ -162,7 +222,36 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
               : <p>Si ya tenés una cuenta aprobada, ingresá. Si sos el administrador, usá las credenciales que mostró <code>iniciar.ps1</code>. Para registrar un médico nuevo, usá la pestaña <b>Registro</b>.</p>}
           </div>
         )}
-        {!challengeState ? (
+        {mode === "forgot" ? (
+          <div className="auth-form">
+            {LOCAL_EVALUATION && (
+              <div className="verification-panel local-guide" role="note">
+                <strong>Contraseña olvidada · versión local</strong>
+                <p>Esta versión no envía correos. Pedí el código acá y leelo del registro del backend:</p>
+                <ol>
+                  <li>Ingresá tu correo y tocá <b>Pedir código</b>.</li>
+                  <li>En PowerShell, dentro de la carpeta del paquete, ejecutá <code>.\codigo-restablecer.ps1</code>: muestra el código de 6 dígitos.</li>
+                  <li>Escribilo acá, elegí la contraseña nueva y tocá <b>Cambiar contraseña</b>.</li>
+                </ol>
+                <p>El código vence a los 10 minutos y se puede probar hasta 5 veces. Si olvidaste la contraseña del <b>administrador</b>, está en el mensaje que mostró <code>iniciar.ps1</code>.</p>
+              </div>
+            )}
+            <label>Correo profesional<input autoComplete="email" disabled={!!resetChallengeId} value={form.email} onChange={(event) => updateField("email", event.target.value)} /></label>
+            {!resetChallengeId ? (
+              <button className="primary-button" disabled={loading} onClick={() => void askResetCode()} type="button">{loading ? "Procesando..." : "Pedir código"}</button>
+            ) : (
+              <>
+                <label>Código de 6 dígitos<input inputMode="numeric" maxLength={6} value={resetCode} onChange={(event) => setResetCode(event.target.value)} /></label>
+                <label>Contraseña nueva<input autoComplete="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+                <label>Repetir contraseña nueva<input autoComplete="new-password" type="password" value={newPassword2} onChange={(event) => setNewPassword2(event.target.value)} /></label>
+                <small className="auth-hint">Mínimo 10 caracteres, con letras y números.</small>
+                <button className="primary-button" disabled={loading || resetCode.trim().length !== 6} onClick={() => void confirmReset()} type="button">{loading ? "Procesando..." : "Cambiar contraseña"}</button>
+                <button className="ghost-button" disabled={loading} onClick={() => { setResetChallengeId(null); setResetCode(""); setMessage(""); setError(""); }} type="button">Pedir otro código</button>
+              </>
+            )}
+            <button className="ghost-button" onClick={() => goTo("login")} type="button">Volver a ingresar</button>
+          </div>
+        ) : !challengeState ? (
           <div className="auth-form">
             {mode === "register" && (
               <>
@@ -175,6 +264,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
             <label>Correo profesional<input value={form.email} onChange={(event) => updateField("email", event.target.value)} /></label>
             <label>Contraseña<input type="password" value={form.password} onChange={(event) => updateField("password", event.target.value)} /></label>
             <button className="primary-button" disabled={loading} onClick={() => void submit()} type="button">{sendingCode ? "Enviando código…" : loading ? "Procesando..." : mode === "register" ? (LOCAL_EVALUATION ? "Crear cuenta" : "Crear cuenta y verificar") : "Ingresar"}</button>
+            <button className="auth-link" onClick={() => goTo("forgot")} type="button">¿Olvidaste tu contraseña?</button>
             {authDemoEnabled && <button className="ghost-button" disabled={loading} onClick={() => void startDemo()} type="button">Entrar con doctor demo</button>}
           </div>
         ) : (
